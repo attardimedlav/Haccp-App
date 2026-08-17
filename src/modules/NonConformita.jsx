@@ -3,9 +3,10 @@ import { Plus, Trash2, AlertTriangle, CheckCircle2, Paperclip, FileText, Downloa
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
-import { SAN_AREAS } from "./Sanificazione";
+
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
+const NC_CATEGORIES = ["Cucina", "Sala", "Bagni", "Magazzino", "Attrezzature", "Frigoriferi", "Alimenti", "Allerta sanitaria"];
 
 function AttachmentLink({ path }) {
   const [url, setUrl] = useState(null);
@@ -21,7 +22,7 @@ function AttachmentLink({ path }) {
 export default function NonConformita() {
   const { company } = useAuth();
   const { items, add, remove, update, loading } = useTable("non_conformities", company?.id);
-  const [area, setArea] = useState(SAN_AREAS[0]);
+  const [area, setArea] = useState(NC_CATEGORIES[0]);
   const [description, setDescription] = useState("");
   const [detectedDate, setDetectedDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [responsible, setResponsible] = useState("");
@@ -86,7 +87,7 @@ export default function NonConformita() {
       <form onSubmit={submit} className="traccia-form">
         <div className="row-form">
           <select value={area} onChange={(e) => setArea(e.target.value)}>
-            {SAN_AREAS.map((a) => <option key={a} value={a}>{a}</option>)}
+            {NC_CATEGORIES.map((a) => <option key={a} value={a}>{a}</option>)}
           </select>
           <label className="field-label">Data rilevazione
             <input type="date" value={detectedDate} onChange={(e) => setDetectedDate(e.target.value)} />
