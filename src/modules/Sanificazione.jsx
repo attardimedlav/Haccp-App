@@ -14,15 +14,21 @@ function fmtDate(ts) {
 export default function Sanificazione() {
   const { company } = useAuth();
   const { items, add, remove, loading } = useTable("sanitization_logs", company?.id);
+  const { items: sanitizers, loading: sanitizersLoading } = useTable("sanitizers", company?.id);
   const [area, setArea] = useState(SAN_AREAS[0]);
+  const [sanitizer, setSanitizer] = useState("");
   const [operator, setOperator] = useState("");
   const [busy, setBusy] = useState(false);
+
+  React.useEffect(() => {
+    if (sanitizers.length > 0 && !sanitizer) setSanitizer(sanitizers[0].name);
+  }, [sanitizers, sanitizer]);
 
   const submit = async (e) => {
     e.preventDefault();
     if (!operator.trim()) return;
     setBusy(true);
-    await add({ area, operator });
+    await add({ area, operator, sanitizer: sanitizer || null });
     setOperator("");
     setBusy(false);
   };
@@ -40,9 +46,18 @@ export default function Sanificazione() {
         <select value={area} onChange={(e) => setArea(e.target.value)}>
           {SAN_AREAS.map((a) => <option key={a} value={a}>{a}</option>)}
         </select>
+        {!sanitizersLoading && sanitizers.length > 0 && (
+          <select value={sanitizer} onChange={(e) => setSanitizer(e.target.value)}>
+            {sanitizers.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
+          </select>
+        )}
         <input type="text" placeholder="Operatore" required value={operator} onChange={(e) => setOperator(e.target.value)} className="note-input" />
         <button type="submit" className="btn-primary" disabled={busy}><Plus size={16} /> Registra</button>
       </form>
+
+      {!sanitizersLoading && sanitizers.length === 0 && (
+        <p className="range-hint">Nessun sanificante configurato: vai su "Sanificanti" nel menu per aggiungerne uno (opzionale, puoi comunque registrare senza specificarlo).</p>
+      )}
 
       {loading ? (
         <p className="sub">Caricamento…</p>
@@ -54,6 +69,7 @@ export default function Sanificazione() {
             <li key={item.id} className="log-row">
               <CheckCircle2 size={15} color="#2F6F4E" />
               <span className="log-main"><strong>{item.area}</strong></span>
+              {item.sanitizer && <span className="log-unit">{item.sanitizer}</span>}
               <span className="log-note">{item.operator}</span>
               <span className="log-time">{fmtDate(item.created_at)}</span>
               <button className="icon-btn" onClick={() => remove(item.id)} aria-label="Elimina"><Trash2 size={14} /></button>
