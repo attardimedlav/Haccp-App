@@ -38,5 +38,12 @@ export function useTable(tableName, companyId) {
     return true;
   }, [tableName, reload]);
 
-  return { items, add, remove, loading, error, reload };
+  const update = useCallback(async (id, fields) => {
+    const { error: updateError } = await supabase.from(tableName).update(fields).eq("id", id);
+    if (updateError) { setError(updateError.message); return false; }
+    await reload();
+    return true;
+  }, [tableName, reload]);
+
+  return { items, add, remove, update, loading, error, reload };
 }
