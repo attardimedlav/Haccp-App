@@ -1,8 +1,9 @@
 import React from "react";
-import { Thermometer, SprayCan, Bug, AlertTriangle, CheckCircle2, Droplet } from "lucide-react";
+import { Thermometer, SprayCan, Bug, AlertTriangle, CheckCircle2, Droplet, FolderOpen } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { WATER_TANK_CONTROL_TYPE } from "./AcquePotabili";
+import { PLAN_TYPE } from "./Documenti";
 
 const CHECK_PERIODICITY = [
   { id: "temperature_logs", tab: "temperature", label: "Temperature", days: 1, icon: Thermometer },
@@ -28,6 +29,7 @@ export default function Dashboard({ goTo }) {
   const san = useTable("sanitization_logs", company?.id);
   const pest = useTable("pest_logs", company?.id);
   const water = useTable("water_controls", company?.id);
+  const docs = useTable("haccp_documents", company?.id);
 
   const compliance = CHECK_PERIODICITY.map((c) => {
     const items = c.id === "temperature_logs" ? temp.items : c.id === "sanitization_logs" ? san.items : pest.items;
@@ -43,6 +45,18 @@ export default function Dashboard({ goTo }) {
     };
     compliance.push(tankCompliance);
   }
+
+  // Revisione del piano di autocontrollo: usa review_date (non created_at) come riferimento
+  const planItems = docs.items.filter((i) => i.document_type === PLAN_TYPE);
+  let planCompliance = { id: "haccp_plan", tab: "documenti", label: "Revisione piano di autocontrollo", days: 365, icon: FolderOpen, status: "missing" };
+  if (planItems.length > 0) {
+    const lastReview = planItems.reduce((max, i) => Math.max(max, new Date(i.review_date).getTime()), 0);
+    const elapsed = daysSince(lastReview);
+    planCompliance = elapsed > 365
+      ? { ...planCompliance, status: "late", lastTs: lastReview, daysLate: Math.floor(elapsed - 365) }
+      : { ...planCompliance, status: "ok", lastTs: lastReview };
+  }
+  compliance.push(planCompliance);
 
   const lateChecks = compliance.filter((c) => c.status !== "ok");
 
