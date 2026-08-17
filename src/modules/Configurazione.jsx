@@ -4,7 +4,7 @@ import { useAuth } from "../AuthContext";
 import { downloadReminderICS } from "../hooks/useReminders";
 
 export default function Configurazione() {
-  const { company, updateCompany } = useAuth();
+  const { company, updateCompany, error } = useAuth();
   const [name, setName] = useState("");
   const [consultantName, setConsultantName] = useState("");
   const [consultantEmail, setConsultantEmail] = useState("");
@@ -67,6 +67,7 @@ export default function Configurazione() {
           <CheckCircle2 size={16} /> Salva configurazione
         </button>
         {saved && <span className="saved-note"><CheckCircle2 size={13} /> Salvato</span>}
+        {!saved && error && <p className="login-error" style={{ marginTop: 4 }}>Errore nel salvataggio: {error}</p>}
       </form>
 
       <div className="reminder-block">
