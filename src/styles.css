@@ -156,3 +156,7 @@ nav { display: flex; flex-direction: column; gap: 2px; }
 /* ---- Checkbox in configurazione ---- */
 .checkbox-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #4C5A52; cursor: pointer; }
 .checkbox-row input[type="checkbox"] { width: 16px; height: 16px; accent-color: #2F6F4E; cursor: pointer; }
+
+/* ---- Card allerta (es. vasca di accumulo scaduta) ---- */
+.stat-card-alert { background: #FBEEEC !important; border-color: #EFC9C1 !important; }
+.stat-value-date { font-size: 18px !important; }
