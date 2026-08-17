@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Thermometer, SprayCan, Bug, ChevronRight, LogOut, ShieldCheck, Wrench, Droplets, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet } from "lucide-react";
+import { Thermometer, SprayCan, Bug, ChevronRight, LogOut, ShieldCheck, Wrench, Droplets, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle } from "lucide-react";
 import { AuthProvider, useAuth } from "./AuthContext";
 import Login from "./Login";
 import ResetPassword from "./ResetPassword";
@@ -17,6 +17,7 @@ import Configurazione from "./modules/Configurazione";
 import PrintHeader from "./PrintHeader";
 import NonConformita from "./modules/NonConformita";
 import AcquePotabili from "./modules/AcquePotabili";
+import MieiClienti from "./modules/MieiClienti";
 
 const TABS = [
   { id: "dashboard", label: "Panoramica", icon: ChevronRight },
@@ -36,7 +37,9 @@ const TABS = [
 const SETTINGS_TAB = { id: "config", label: "Configurazione", icon: Settings };
 
 function Shell() {
-  const { company, signOut } = useAuth();
+  const { company, signOut, homeCompanyId, consultantCompanies, switchCompany } = useAuth();
+  const isViewingClient = homeCompanyId && company && company.id !== homeCompanyId;
+  const hasMultipleClients = consultantCompanies.length > 0;
   const [tab, setTab] = useState("dashboard");
 
   return (
@@ -46,6 +49,11 @@ function Shell() {
           <span className="brand-mark"><ShieldCheck size={16} /></span>
           <span className="brand-name">{company?.name || "Autocontrollo"}</span>
         </div>
+        {hasMultipleClients && (
+          <button className={"nav-item nav-item-clients" + (tab === "clienti" ? " active" : "")} onClick={() => setTab("clienti")}>
+            <Users size={16} /> I miei clienti
+          </button>
+        )}
         <nav>
           {TABS.map((t) => (
             <button key={t.id} className={"nav-item" + (tab === t.id ? " active" : "")} onClick={() => setTab(t.id)}>
@@ -63,6 +71,14 @@ function Shell() {
         </button>
       </aside>
       <main className="content">
+        {isViewingClient && (
+          <div className="viewing-client-banner">
+            <span>Stai visualizzando i dati di <strong>{company.name}</strong> come consulente.</span>
+            <button className="link-btn" onClick={() => switchCompany(homeCompanyId)}>
+              <ArrowLeftCircle size={13} /> Torna alla tua vista
+            </button>
+          </div>
+        )}
         <div className="content-toolbar">
           <button type="button" className="print-btn" onClick={() => window.print()}>
             <Printer size={14} /> Esporta PDF
@@ -82,6 +98,7 @@ function Shell() {
         {tab === "nonconformita" && <NonConformita />}
         {tab === "acquepotabili" && <AcquePotabili />}
         {tab === "config" && <Configurazione />}
+        {tab === "clienti" && <MieiClienti goTo={setTab} />}
       </main>
     </div>
   );

@@ -6,6 +6,9 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(undefined); // undefined = ancora da caricare
   const [company, setCompany] = useState(null);
+  const [homeCompanyId, setHomeCompanyId] = useState(null); // l'azienda "propria" dell'utente (se dipendente/titolare)
+  const [homeCompanyName, setHomeCompanyName] = useState("");
+  const [consultantCompanies, setConsultantCompanies] = useState([]); // aziende clienti accessibili come consulente
   const [loadingCompany, setLoadingCompany] = useState(false);
   const [error, setError] = useState("");
   const [recoveryMode, setRecoveryMode] = useState(false);
@@ -13,13 +16,29 @@ export function AuthProvider({ children }) {
   const loadCompany = useCallback(async (userId) => {
     setLoadingCompany(true);
     setError("");
-    const { data: profile, error: profileError } = await supabase
+
+    const { data: profile } = await supabase
       .from("profiles")
       .select("company_id, full_name")
       .eq("id", userId)
       .single();
 
-    if (profileError || !profile) {
+    const ownCompanyId = profile?.company_id || null;
+    setHomeCompanyId(ownCompanyId);
+
+    const { data: ccRows } = await supabase
+      .from("consultant_companies")
+      .select("company_id, companies(id, name)")
+      .eq("consultant_id", userId);
+
+    const clientList = (ccRows || [])
+      .map((r) => r.companies)
+      .filter(Boolean);
+    setConsultantCompanies(clientList);
+
+    const initialId = ownCompanyId || (clientList[0] && clientList[0].id) || null;
+
+    if (!initialId) {
       setError("Il tuo utente non è ancora collegato a nessuna azienda. Contatta il consulente.");
       setCompany(null);
       setLoadingCompany(false);
@@ -29,10 +48,16 @@ export function AuthProvider({ children }) {
     const { data: companyRow } = await supabase
       .from("companies")
       .select("*")
-      .eq("id", profile.company_id)
+      .eq("id", initialId)
       .single();
 
     setCompany(companyRow || null);
+    if (ownCompanyId && companyRow && companyRow.id === ownCompanyId) {
+      setHomeCompanyName(companyRow.name || "");
+    } else if (ownCompanyId) {
+      const { data: ownRow } = await supabase.from("companies").select("name").eq("id", ownCompanyId).single();
+      setHomeCompanyName(ownRow?.name || "");
+    }
     setLoadingCompany(false);
   }, []);
 
@@ -48,10 +73,24 @@ export function AuthProvider({ children }) {
         loadCompany(newSession.user.id);
       } else {
         setCompany(null);
+        setConsultantCompanies([]);
+        setHomeCompanyId(null);
       }
     });
     return () => listener.subscription.unsubscribe();
   }, [loadCompany]);
+
+  const switchCompany = async (companyId) => {
+    setError("");
+    const { data, error: fetchError } = await supabase
+      .from("companies")
+      .select("*")
+      .eq("id", companyId)
+      .single();
+    if (fetchError || !data) { setError("Non hai accesso a questa azienda."); return false; }
+    setCompany(data);
+    return true;
+  };
 
   const signIn = async (email, password) => {
     setError("");
@@ -100,7 +139,10 @@ export function AuthProvider({ children }) {
   };
 
   return (
-    <AuthContext.Provider value={{ session, company, loadingCompany, error, signIn, signOut, updateCompany, recoveryMode, requestPasswordReset, setNewPassword }}>
+    <AuthContext.Provider value={{
+      session, company, homeCompanyId, homeCompanyName, consultantCompanies, loadingCompany, error,
+      signIn, signOut, updateCompany, recoveryMode, requestPasswordReset, setNewPassword, switchCompany,
+    }}>
       {children}
     </AuthContext.Provider>
   );

@@ -163,3 +163,16 @@ nav { display: flex; flex-direction: column; gap: 2px; }
 
 /* ---- Non conformità: lotto collegato ---- */
 .nc-lot-tag { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #2F6F4E; background: #E6EFE8; padding: 4px 10px; border-radius: 6px; margin-bottom: 8px; width: fit-content; }
+
+/* ---- Vista consulente multi-azienda ---- */
+.nav-item-clients { background: #24352B; color: #fff; margin-bottom: 6px; }
+.nav-item-clients:hover { background: #2C3D33; }
+.viewing-client-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  background: #FFF6E5; border: 1px solid #F0DDAE; color: #7A5A1E;
+  padding: 9px 14px; border-radius: 8px; font-size: 12.5px; margin-bottom: 14px;
+}
+.viewing-client-banner .link-btn { color: #7A5A1E; display: inline-flex; align-items: center; gap: 5px; text-decoration: none; font-weight: 500; }
+.client-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.client-row-info { display: flex; align-items: center; gap: 10px; }
+.client-row-active { border-color: #2F6F4E; background: #F1F7F3; }
