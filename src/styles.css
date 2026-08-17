@@ -136,3 +136,13 @@ nav { display: flex; flex-direction: column; gap: 2px; }
   .card-grid { display: block; }
   .stat-card { display: inline-block; width: auto; margin: 0 10px 10px 0; }
 }
+
+/* ---- Login: link e messaggi ---- */
+.link-btn { background: none; border: none; color: #2F6F4E; font: inherit; font-size: 12.5px; cursor: pointer; padding: 4px 0; text-align: left; text-decoration: underline; }
+.login-info { display: flex; align-items: flex-start; gap: 6px; font-size: 12.5px; color: #2F6F4E; background: #E6EFE8; padding: 10px 12px; border-radius: 8px; margin: 0; }
+
+/* ---- Modifica riga inline ---- */
+.log-row.editing { background: #F1F4F0; border-color: #C9D9CD; }
+.edit-input { padding: 6px 9px !important; }
+.icon-btn-ok { color: #2F6F4E; }
+.icon-btn-ok:hover { background: #E6EFE8; color: #2F6F4E; }

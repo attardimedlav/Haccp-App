@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Thermometer, SprayCan, Bug, ChevronRight, LogOut, ShieldCheck, Wrench, Droplets, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer } from "lucide-react";
 import { AuthProvider, useAuth } from "./AuthContext";
 import Login from "./Login";
+import ResetPassword from "./ResetPassword";
 import Dashboard from "./modules/Dashboard";
 import Temperature from "./modules/Temperature";
 import Sanificazione from "./modules/Sanificazione";
@@ -81,8 +82,9 @@ function Shell() {
 }
 
 function Gate() {
-  const { session, company, loadingCompany, error } = useAuth();
+  const { session, company, loadingCompany, error, recoveryMode } = useAuth();
 
+  if (recoveryMode) return <ResetPassword />;
   if (session === undefined) return <div className="loading-screen">Caricamento…</div>;
   if (!session) return <Login />;
   if (loadingCompany) return <div className="loading-screen">Caricamento azienda…</div>;
