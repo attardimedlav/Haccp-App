@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Thermometer, SprayCan, Bug, ChevronRight, LogOut, ShieldCheck, Wrench, Droplets, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer } from "lucide-react";
+import { Thermometer, SprayCan, Bug, ChevronRight, LogOut, ShieldCheck, Wrench, Droplets, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet } from "lucide-react";
 import { AuthProvider, useAuth } from "./AuthContext";
 import Login from "./Login";
 import ResetPassword from "./ResetPassword";
@@ -15,6 +15,8 @@ import Tracciabilita from "./modules/Tracciabilita";
 import RegistrazioneSanitaria from "./modules/RegistrazioneSanitaria";
 import Configurazione from "./modules/Configurazione";
 import PrintHeader from "./PrintHeader";
+import NonConformita from "./modules/NonConformita";
+import AcquePotabili from "./modules/AcquePotabili";
 
 const TABS = [
   { id: "dashboard", label: "Panoramica", icon: ChevronRight },
@@ -27,6 +29,8 @@ const TABS = [
   { id: "formazione", label: "Formazione", icon: GraduationCap },
   { id: "tracciabilita", label: "Tracciabilità", icon: Package },
   { id: "registrazione", label: "Registrazione sanitaria", icon: Building2 },
+  { id: "nonconformita", label: "Non conformità", icon: ClipboardX },
+  { id: "acquepotabili", label: "Acque potabili", icon: Droplet },
 ];
 
 const SETTINGS_TAB = { id: "config", label: "Configurazione", icon: Settings };
@@ -75,6 +79,8 @@ function Shell() {
         {tab === "formazione" && <Formazione />}
         {tab === "tracciabilita" && <Tracciabilita />}
         {tab === "registrazione" && <RegistrazioneSanitaria />}
+        {tab === "nonconformita" && <NonConformita />}
+        {tab === "acquepotabili" && <AcquePotabili />}
         {tab === "config" && <Configurazione />}
       </main>
     </div>
