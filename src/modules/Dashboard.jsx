@@ -1,7 +1,8 @@
 import React from "react";
-import { Thermometer, SprayCan, Bug, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Thermometer, SprayCan, Bug, AlertTriangle, CheckCircle2, Droplet } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
+import { WATER_TANK_CONTROL_TYPE } from "./AcquePotabili";
 
 const CHECK_PERIODICITY = [
   { id: "temperature_logs", tab: "temperature", label: "Temperature", days: 1, icon: Thermometer },
@@ -26,11 +27,25 @@ export default function Dashboard({ goTo }) {
   const temp = useTable("temperature_logs", company?.id);
   const san = useTable("sanitization_logs", company?.id);
   const pest = useTable("pest_logs", company?.id);
+  const water = useTable("water_controls", company?.id);
 
   const compliance = CHECK_PERIODICITY.map((c) => {
     const items = c.id === "temperature_logs" ? temp.items : c.id === "sanitization_logs" ? san.items : pest.items;
     return { ...c, ...checkCompliance(c.days, items) };
   });
+
+  if (company?.has_water_tank) {
+    const tankItems = water.items.filter((i) => i.control_type === WATER_TANK_CONTROL_TYPE);
+    compliance.push({
+      id: "water_tank",
+      tab: "acquepotabili",
+      label: "Ispezione vasca di accumulo",
+      days: 180,
+      icon: Droplet,
+      ...checkCompliance(180, tankItems),
+    });
+  }
+
   const lateChecks = compliance.filter((c) => c.status !== "ok");
 
   const deviations = temp.items.filter((i) => i.value < 0 || i.value > 4).length; // semplificato, vedi nota sotto

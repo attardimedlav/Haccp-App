@@ -9,6 +9,7 @@ export default function Configurazione() {
   const [consultantName, setConsultantName] = useState("");
   const [consultantEmail, setConsultantEmail] = useState("");
   const [ownerEmail, setOwnerEmail] = useState("");
+  const [hasWaterTank, setHasWaterTank] = useState(false);
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -18,6 +19,7 @@ export default function Configurazione() {
       setConsultantName(company.consultant_name || "");
       setConsultantEmail(company.consultant_email || "");
       setOwnerEmail(company.owner_email || "");
+      setHasWaterTank(!!company.has_water_tank);
     }
   }, [company]);
 
@@ -29,6 +31,7 @@ export default function Configurazione() {
       consultant_name: consultantName,
       consultant_email: consultantEmail,
       owner_email: ownerEmail,
+      has_water_tank: hasWaterTank,
     });
     setBusy(false);
     if (ok) { setSaved(true); setTimeout(() => setSaved(false), 2500); }
@@ -48,6 +51,10 @@ export default function Configurazione() {
           <legend>Attività</legend>
           <input type="text" placeholder="Ragione sociale / nome attività" value={name} onChange={(e) => setName(e.target.value)} className="full-input" />
           <input type="email" placeholder="Email del titolare" value={ownerEmail} onChange={(e) => setOwnerEmail(e.target.value)} className="full-input" style={{ marginTop: 10 }} />
+          <label className="checkbox-row" style={{ marginTop: 12 }}>
+            <input type="checkbox" checked={hasWaterTank} onChange={(e) => setHasWaterTank(e.target.checked)} />
+            L'attività ha una vasca di accumulo dell'acqua
+          </label>
         </fieldset>
 
         <fieldset className="config-group">

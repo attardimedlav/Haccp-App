@@ -5,7 +5,8 @@ import { useAuth } from "../AuthContext";
 import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
-const CONTROL_TYPES = ["Cloro residuo", "Analisi chimico-microbiologica", "Ispezione visiva impianto", "Manutenzione filtri/addolcitori", "Altro"];
+const CONTROL_TYPES = ["Cloro residuo", "Analisi chimico-microbiologica", "Ispezione visiva impianto", "Manutenzione filtri/addolcitori", "Ispezione e pulizia vasca di accumulo", "Altro"];
+export const WATER_TANK_CONTROL_TYPE = "Ispezione e pulizia vasca di accumulo";
 const RESULTS = ["Conforme", "Non conforme"];
 
 function fmtDate(ts) {
