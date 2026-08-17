@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Thermometer, SprayCan, Bug, ChevronRight, LogOut, ShieldCheck, Wrench, Droplets, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle } from "lucide-react";
+import { Thermometer, SprayCan, Bug, ChevronRight, LogOut, ShieldCheck, Wrench, Droplets, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen } from "lucide-react";
 import { AuthProvider, useAuth } from "./AuthContext";
 import Login from "./Login";
 import ResetPassword from "./ResetPassword";
@@ -18,6 +18,7 @@ import PrintHeader from "./PrintHeader";
 import NonConformita from "./modules/NonConformita";
 import AcquePotabili from "./modules/AcquePotabili";
 import MieiClienti from "./modules/MieiClienti";
+import Documenti from "./modules/Documenti";
 
 const TABS = [
   { id: "dashboard", label: "Panoramica", icon: ChevronRight },
@@ -32,6 +33,7 @@ const TABS = [
   { id: "registrazione", label: "Registrazione sanitaria", icon: Building2 },
   { id: "nonconformita", label: "Non conformità", icon: ClipboardX },
   { id: "acquepotabili", label: "Acque potabili", icon: Droplet },
+  { id: "documenti", label: "Documenti", icon: FolderOpen },
 ];
 
 const SETTINGS_TAB = { id: "config", label: "Configurazione", icon: Settings };
@@ -97,6 +99,7 @@ function Shell() {
         {tab === "registrazione" && <RegistrazioneSanitaria />}
         {tab === "nonconformita" && <NonConformita />}
         {tab === "acquepotabili" && <AcquePotabili />}
+        {tab === "documenti" && <Documenti />}
         {tab === "config" && <Configurazione />}
         {tab === "clienti" && <MieiClienti goTo={setTab} />}
       </main>
