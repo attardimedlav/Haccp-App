@@ -1,9 +1,8 @@
 import React, { useState } from "react";
-import { Plus, Trash2, AlertTriangle, CheckCircle2, Paperclip, FileText, Download, Pencil, X, Check } from "lucide-react";
+import { Plus, Trash2, AlertTriangle, CheckCircle2, Paperclip, FileText, Download, Pencil, X, Check, Package } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
-
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
 const NC_CATEGORIES = ["Cucina", "Sala", "Bagni", "Magazzino", "Attrezzature", "Frigoriferi", "Alimenti", "Allerta sanitaria"];
@@ -22,10 +21,12 @@ function AttachmentLink({ path }) {
 export default function NonConformita() {
   const { company } = useAuth();
   const { items, add, remove, update, loading } = useTable("non_conformities", company?.id);
+  const { items: lots } = useTable("traceability_logs", company?.id);
   const [area, setArea] = useState(NC_CATEGORIES[0]);
   const [description, setDescription] = useState("");
   const [detectedDate, setDetectedDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [responsible, setResponsible] = useState("");
+  const [lotId, setLotId] = useState("");
   const [file, setFile] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -33,6 +34,8 @@ export default function NonConformita() {
   const [editingId, setEditingId] = useState(null);
   const [editAction, setEditAction] = useState("");
   const [editResolvedDate, setEditResolvedDate] = useState("");
+
+  const showLotField = area === "Allerta sanitaria" || area === "Alimenti";
 
   const onFileChange = (e) => {
     const f = e.target.files?.[0] || null;
@@ -49,8 +52,8 @@ export default function NonConformita() {
     try {
       let attachment_path = null;
       if (file) attachment_path = await uploadAttachment(company.id, file);
-      await add({ area, description, detected_date: detectedDate, responsible, attachment_path });
-      setDescription(""); setResponsible(""); setFile(null);
+      await add({ area, description, detected_date: detectedDate, responsible, attachment_path, traceability_log_id: lotId || null });
+      setDescription(""); setResponsible(""); setFile(null); setLotId("");
       const input = document.getElementById("nc-file-input");
       if (input) input.value = "";
     } catch (err) {
@@ -73,6 +76,7 @@ export default function NonConformita() {
   };
 
   const openCount = items.filter((i) => !i.resolved_date).length;
+  const lotLabel = (lot) => `${lot.product_name} — lotto ${lot.lot} (${lot.supplier})`;
 
   return (
     <div className="panel">
@@ -94,6 +98,18 @@ export default function NonConformita() {
           </label>
           <input type="text" placeholder="Responsabile" value={responsible} onChange={(e) => setResponsible(e.target.value)} className="note-input" />
         </div>
+
+        {showLotField && (
+          lots.length > 0 ? (
+            <select value={lotId} onChange={(e) => setLotId(e.target.value)} className="full-input">
+              <option value="">Prodotto/lotto coinvolto (opzionale)</option>
+              {lots.map((l) => <option key={l.id} value={l.id}>{lotLabel(l)}</option>)}
+            </select>
+          ) : (
+            <p className="range-hint">Nessun lotto ancora presente in Tracciabilità — puoi comunque descrivere il prodotto qui sotto.</p>
+          )
+        )}
+
         <input type="text" placeholder="Descrizione della non conformità" required value={description} onChange={(e) => setDescription(e.target.value)} className="full-input" />
         <label className="file-drop" htmlFor="nc-file-input">
           <Paperclip size={15} /><span>{file ? file.name : "Allega foto/documento (opzionale)"}</span>
@@ -114,6 +130,7 @@ export default function NonConformita() {
           {items.map((item) => {
             const resolved = !!item.resolved_date;
             const isEditing = editingId === item.id;
+            const linkedLot = item.traceability_log_id ? lots.find((l) => l.id === item.traceability_log_id) : null;
             return (
               <li key={item.id} className={"dish-row" + (!resolved ? " row-warn" : "")}>
                 <div className="dish-top">
@@ -129,6 +146,12 @@ export default function NonConformita() {
                   <span className="doc-type-tag">Rilevata {new Date(item.detected_date).toLocaleDateString("it-IT")}</span>
                   {item.responsible && <span className="doc-type-tag">{item.responsible}</span>}
                 </div>
+                {linkedLot && (
+                  <div className="nc-lot-tag">
+                    <Package size={13} />
+                    <span>{lotLabel(linkedLot)}</span>
+                  </div>
+                )}
                 <p className="pest-note">{item.description}</p>
                 <AttachmentLink path={item.attachment_path} />
 
