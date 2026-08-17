@@ -160,3 +160,6 @@ nav { display: flex; flex-direction: column; gap: 2px; }
 /* ---- Card allerta (es. vasca di accumulo scaduta) ---- */
 .stat-card-alert { background: #FBEEEC !important; border-color: #EFC9C1 !important; }
 .stat-value-date { font-size: 18px !important; }
+
+/* ---- Non conformità: lotto collegato ---- */
+.nc-lot-tag { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #2F6F4E; background: #E6EFE8; padding: 4px 10px; border-radius: 6px; margin-bottom: 8px; width: fit-content; }
