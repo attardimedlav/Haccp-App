@@ -1,15 +1,17 @@
 import React, { useState } from "react";
-import { Thermometer, SprayCan, Bug, ChevronRight, LogOut, ShieldCheck } from "lucide-react";
+import { Thermometer, SprayCan, Bug, ChevronRight, LogOut, ShieldCheck, Wrench } from "lucide-react";
 import { AuthProvider, useAuth } from "./AuthContext";
 import Login from "./Login";
 import Dashboard from "./modules/Dashboard";
 import Temperature from "./modules/Temperature";
 import Sanificazione from "./modules/Sanificazione";
 import Infestanti from "./modules/Infestanti";
+import Attrezzature from "./modules/Attrezzature";
 
 const TABS = [
   { id: "dashboard", label: "Panoramica", icon: ChevronRight },
   { id: "temperature", label: "Temperature", icon: Thermometer },
+  { id: "attrezzature", label: "Attrezzature", icon: Wrench },
   { id: "sanificazione", label: "Sanificazione", icon: SprayCan },
   { id: "infestanti", label: "Monitoraggio infestanti", icon: Bug },
 ];
@@ -41,6 +43,7 @@ function Shell() {
       <main className="content">
         {tab === "dashboard" && <Dashboard goTo={setTab} />}
         {tab === "temperature" && <Temperature />}
+        {tab === "attrezzature" && <Attrezzature />}
         {tab === "sanificazione" && <Sanificazione />}
         {tab === "infestanti" && <Infestanti />}
       </main>
