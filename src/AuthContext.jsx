@@ -67,8 +67,21 @@ export function AuthProvider({ children }) {
     await supabase.auth.signOut();
   };
 
+  const updateCompany = async (fields) => {
+    if (!company) return false;
+    const { data, error: updateError } = await supabase
+      .from("companies")
+      .update(fields)
+      .eq("id", company.id)
+      .select()
+      .single();
+    if (updateError) { setError(updateError.message); return false; }
+    setCompany(data);
+    return true;
+  };
+
   return (
-    <AuthContext.Provider value={{ session, company, loadingCompany, error, signIn, signOut }}>
+    <AuthContext.Provider value={{ session, company, loadingCompany, error, signIn, signOut, updateCompany }}>
       {children}
     </AuthContext.Provider>
   );

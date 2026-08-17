@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Thermometer, SprayCan, Bug, ChevronRight, LogOut, ShieldCheck, Wrench, Droplets, ShieldAlert, GraduationCap, Package, Building2 } from "lucide-react";
+import { Thermometer, SprayCan, Bug, ChevronRight, LogOut, ShieldCheck, Wrench, Droplets, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer } from "lucide-react";
 import { AuthProvider, useAuth } from "./AuthContext";
 import Login from "./Login";
 import Dashboard from "./modules/Dashboard";
@@ -12,6 +12,8 @@ import Allergeni from "./modules/Allergeni";
 import Formazione from "./modules/Formazione";
 import Tracciabilita from "./modules/Tracciabilita";
 import RegistrazioneSanitaria from "./modules/RegistrazioneSanitaria";
+import Configurazione from "./modules/Configurazione";
+import PrintHeader from "./PrintHeader";
 
 const TABS = [
   { id: "dashboard", label: "Panoramica", icon: ChevronRight },
@@ -25,6 +27,8 @@ const TABS = [
   { id: "tracciabilita", label: "Tracciabilità", icon: Package },
   { id: "registrazione", label: "Registrazione sanitaria", icon: Building2 },
 ];
+
+const SETTINGS_TAB = { id: "config", label: "Configurazione", icon: Settings };
 
 function Shell() {
   const { company, signOut } = useAuth();
@@ -46,11 +50,20 @@ function Shell() {
           ))}
         </nav>
         <div className="sidebar-spacer" />
-        <button className="nav-item nav-item-settings" onClick={signOut}>
+        <button className={"nav-item nav-item-settings" + (tab === SETTINGS_TAB.id ? " active" : "")} onClick={() => setTab(SETTINGS_TAB.id)}>
+          <SETTINGS_TAB.icon size={16} /> {SETTINGS_TAB.label}
+        </button>
+        <button className="nav-item" onClick={signOut}>
           <LogOut size={16} /> Esci
         </button>
       </aside>
       <main className="content">
+        <div className="content-toolbar">
+          <button type="button" className="print-btn" onClick={() => window.print()}>
+            <Printer size={14} /> Esporta PDF
+          </button>
+        </div>
+        <PrintHeader sectionLabel={(TABS.find((t) => t.id === tab) || SETTINGS_TAB).label} />
         {tab === "dashboard" && <Dashboard goTo={setTab} />}
         {tab === "temperature" && <Temperature />}
         {tab === "attrezzature" && <Attrezzature />}
@@ -61,6 +74,7 @@ function Shell() {
         {tab === "formazione" && <Formazione />}
         {tab === "tracciabilita" && <Tracciabilita />}
         {tab === "registrazione" && <RegistrazioneSanitaria />}
+        {tab === "config" && <Configurazione />}
       </main>
     </div>
   );

@@ -103,3 +103,36 @@ nav { display: flex; flex-direction: column; gap: 2px; }
 .chip-static { background: #EEE2DD; border-color: #EEE2DD; color: #8A4632; cursor: default; }
 .validity-row { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-end; margin: 4px 0; }
 .computed-field { background: #F1F4F0 !important; color: #2F6F4E !important; font-weight: 500; border-color: #D8E3DA !important; cursor: default; }
+
+/* ---- Toolbar / stampa PDF ---- */
+.content-toolbar { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+.print-btn { display: flex; align-items: center; gap: 6px; background: #fff; color: #2F6F4E; border: 1px solid #C9D6CD; padding: 7px 12px; border-radius: 8px; font: inherit; font-size: 12.5px; cursor: pointer; }
+.print-btn:hover { border-color: #2F6F4E; }
+.print-only { display: none; }
+
+/* ---- Configurazione ---- */
+.config-form { display: flex; flex-direction: column; gap: 18px; margin: 16px 0 20px; max-width: 560px; }
+.config-group { border: 1px solid #E1E5DF; border-radius: 10px; padding: 14px 14px 16px; }
+.config-group legend { font-size: 12px; color: #6E7C73; padding: 0 6px; font-weight: 500; }
+.saved-note { display: inline-flex; align-items: center; gap: 5px; color: #2F6F4E; font-size: 12.5px; margin-left: 10px; }
+.reminder-block { margin-top: 22px; padding-top: 20px; border-top: 1px solid #EDF0EB; max-width: 520px; }
+.reminder-head { display: flex; gap: 10px; align-items: flex-start; }
+.reminder-head h3 { margin: 0 0 4px; font-size: 14.5px; }
+.reminder-head .sub { margin: 0; }
+.reminder-list { margin: 12px 0 14px 27px; padding: 0; font-size: 12.5px; color: #4C5A52; display: flex; flex-direction: column; gap: 4px; }
+.nav-item-settings { border-top: 1px solid #2C3D33; padding-top: 12px; margin-top: 4px; margin-bottom: 2px; }
+
+/* ---- Stampa / Esporta PDF ---- */
+@media print {
+  .sidebar, .content-toolbar, form, .icon-btn { display: none !important; }
+  body { background: #fff; }
+  .app { background: #fff; display: block; }
+  .content { max-width: 100%; padding: 0; }
+  .print-only { display: block; }
+  .print-header { margin-bottom: 18px; padding-bottom: 10px; border-bottom: 2px solid #1B2A22; }
+  .print-header-top { display: flex; justify-content: space-between; align-items: baseline; font-size: 15px; color: #1B2A22; }
+  .print-header-sub { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; font-size: 11.5px; color: #4C5A52; }
+  .dish-row, .log-row, .stat-card { break-inside: avoid; border-color: #ccc !important; background: #fff !important; }
+  .card-grid { display: block; }
+  .stat-card { display: inline-block; width: auto; margin: 0 10px 10px 0; }
+}
