@@ -34,16 +34,14 @@ export default function Dashboard({ goTo }) {
     return { ...c, ...checkCompliance(c.days, items) };
   });
 
+  let tankCompliance = null;
   if (company?.has_water_tank) {
     const tankItems = water.items.filter((i) => i.control_type === WATER_TANK_CONTROL_TYPE);
-    compliance.push({
-      id: "water_tank",
-      tab: "acquepotabili",
-      label: "Ispezione vasca di accumulo",
-      days: 180,
-      icon: Droplet,
+    tankCompliance = {
+      id: "water_tank", tab: "acquepotabili", label: "Ispezione vasca di accumulo", days: 180, icon: Droplet,
       ...checkCompliance(180, tankItems),
-    });
+    };
+    compliance.push(tankCompliance);
   }
 
   const lateChecks = compliance.filter((c) => c.status !== "ok");
@@ -56,6 +54,9 @@ export default function Dashboard({ goTo }) {
     { id: "sanificazione", label: "Interventi di sanificazione", value: san.items.length, icon: SprayCan, flag: null },
     { id: "infestanti", label: "Controlli infestanti", value: pest.items.length, icon: Bug, flag: pestAlerts > 0 ? `${pestAlerts} con tracce` : null },
   ];
+
+  const tankOverdue = tankCompliance && tankCompliance.status !== "ok";
+  const tankLastDate = tankCompliance?.lastTs ? new Date(tankCompliance.lastTs).toLocaleDateString("it-IT") : null;
 
   return (
     <div className="panel">
@@ -98,6 +99,25 @@ export default function Dashboard({ goTo }) {
             {c.flag && <span className="stat-flag"><AlertTriangle size={12} /> {c.flag}</span>}
           </button>
         ))}
+
+        {tankCompliance && (
+          <button
+            className={"stat-card" + (tankOverdue ? " stat-card-alert" : "")}
+            onClick={() => goTo("acquepotabili")}
+          >
+            <Droplet size={18} color={tankOverdue ? "#B3432E" : "#2F6F4E"} />
+            <span className="stat-value stat-value-date" style={tankOverdue ? { color: "#B3432E" } : undefined}>
+              {tankLastDate || "Mai"}
+            </span>
+            <span className="stat-label">Ultimo controllo vasca di accumulo</span>
+            {tankOverdue && (
+              <span className="stat-flag">
+                <AlertTriangle size={12} />
+                {tankCompliance.status === "missing" ? " Nessun controllo registrato" : ` Scaduto da ${tankCompliance.daysLate} giorni`}
+              </span>
+            )}
+          </button>
+        )}
       </div>
     </div>
   );
