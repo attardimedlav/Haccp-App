@@ -152,3 +152,7 @@ nav { display: flex; flex-direction: column; gap: 2px; }
 .nc-edit-block { margin-top: 8px; padding-top: 10px; border-top: 1px dashed #D8DED6; }
 .nc-resolved { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: #4C5A52; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #D8DED6; }
 .nc-resolve-btn { margin-top: 8px; font-size: 12.5px !important; padding: 7px 12px !important; }
+
+/* ---- Checkbox in configurazione ---- */
+.checkbox-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #4C5A52; cursor: pointer; }
+.checkbox-row input[type="checkbox"] { width: 16px; height: 16px; accent-color: #2F6F4E; cursor: pointer; }
