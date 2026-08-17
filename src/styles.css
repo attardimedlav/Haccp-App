@@ -95,3 +95,11 @@ nav { display: flex; flex-direction: column; gap: 2px; }
   nav { flex-direction: row; }
   .content { padding: 20px; }
 }
+
+/* ---- Chips, campi calcolati, validità ---- */
+.chip-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: 12.5px; padding: 6px 12px; border-radius: 999px; border: 1px solid #D8DED6; background: #fff; color: #4C5A52; cursor: pointer; }
+.chip-on { background: #2F6F4E; border-color: #2F6F4E; color: #fff; }
+.chip-static { background: #EEE2DD; border-color: #EEE2DD; color: #8A4632; cursor: default; }
+.validity-row { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-end; margin: 4px 0; }
+.computed-field { background: #F1F4F0 !important; color: #2F6F4E !important; font-weight: 500; border-color: #D8E3DA !important; cursor: default; }

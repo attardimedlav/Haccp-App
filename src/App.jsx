@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Thermometer, SprayCan, Bug, ChevronRight, LogOut, ShieldCheck, Wrench, Droplets } from "lucide-react";
+import { Thermometer, SprayCan, Bug, ChevronRight, LogOut, ShieldCheck, Wrench, Droplets, ShieldAlert, GraduationCap, Package, Building2 } from "lucide-react";
 import { AuthProvider, useAuth } from "./AuthContext";
 import Login from "./Login";
 import Dashboard from "./modules/Dashboard";
@@ -8,6 +8,10 @@ import Sanificazione from "./modules/Sanificazione";
 import Infestanti from "./modules/Infestanti";
 import Attrezzature from "./modules/Attrezzature";
 import Sanificanti from "./modules/Sanificanti";
+import Allergeni from "./modules/Allergeni";
+import Formazione from "./modules/Formazione";
+import Tracciabilita from "./modules/Tracciabilita";
+import RegistrazioneSanitaria from "./modules/RegistrazioneSanitaria";
 
 const TABS = [
   { id: "dashboard", label: "Panoramica", icon: ChevronRight },
@@ -16,6 +20,10 @@ const TABS = [
   { id: "sanificanti", label: "Sanificanti", icon: Droplets },
   { id: "sanificazione", label: "Sanificazione", icon: SprayCan },
   { id: "infestanti", label: "Monitoraggio infestanti", icon: Bug },
+  { id: "allergeni", label: "Allergeni", icon: ShieldAlert },
+  { id: "formazione", label: "Formazione", icon: GraduationCap },
+  { id: "tracciabilita", label: "Tracciabilità", icon: Package },
+  { id: "registrazione", label: "Registrazione sanitaria", icon: Building2 },
 ];
 
 function Shell() {
@@ -49,6 +57,10 @@ function Shell() {
         {tab === "sanificanti" && <Sanificanti />}
         {tab === "sanificazione" && <Sanificazione />}
         {tab === "infestanti" && <Infestanti />}
+        {tab === "allergeni" && <Allergeni />}
+        {tab === "formazione" && <Formazione />}
+        {tab === "tracciabilita" && <Tracciabilita />}
+        {tab === "registrazione" && <RegistrazioneSanitaria />}
       </main>
     </div>
   );
