@@ -66,7 +66,7 @@ export default function Temperature() {
           </div>
         </div>
         <div className="empty">
-          <p>Vai su "Attrezzature" nel menu e aggiungi i tuoi frigo/freezer prima di registrare una temperatura.</p>
+          <p>Vai su Configurazione → Attrezzature e aggiungi i tuoi frigo/freezer prima di registrare una temperatura.</p>
         </div>
       </div>
     );

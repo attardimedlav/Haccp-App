@@ -97,6 +97,15 @@ export default function Infestanti() {
             {PEST_OUTCOMES.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
           </select>
           <input type="text" placeholder="Operatore / ditta esterna" required value={operator} onChange={(e) => setOperator(e.target.value)} className="note-input" />
+          {company?.haccp_manager && (
+            <button
+              type="button"
+              className="link-btn"
+              onClick={() => setOperator(company.haccp_manager)}
+            >
+              Usa responsabile HACCP
+            </button>
+          )}
         </div>
         <input type="text" placeholder="Nota (opzionale)" value={note} onChange={(e) => setNote(e.target.value)} className="full-input" />
         <label className="file-drop" htmlFor="infestanti-file-input">

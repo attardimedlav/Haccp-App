@@ -2,15 +2,12 @@ import React, { useState } from "react";
 import { Plus, Trash2, CheckCircle2 } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
-
 export const SAN_AREAS = ["Cucina", "Sala", "Bagni", "Magazzino", "Attrezzature", "Frigoriferi"];
-
 function fmtDate(ts) {
   const d = new Date(ts);
   return d.toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" }) +
     " · " + d.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
 }
-
 export default function Sanificazione() {
   const { company } = useAuth();
   const { items, add, remove, loading } = useTable("sanitization_logs", company?.id);
@@ -19,11 +16,9 @@ export default function Sanificazione() {
   const [sanitizer, setSanitizer] = useState("");
   const [operator, setOperator] = useState("");
   const [busy, setBusy] = useState(false);
-
   React.useEffect(() => {
     if (sanitizers.length > 0 && !sanitizer) setSanitizer(sanitizers[0].name);
   }, [sanitizers, sanitizer]);
-
   const submit = async (e) => {
     e.preventDefault();
     if (!operator.trim()) return;
@@ -32,7 +27,6 @@ export default function Sanificazione() {
     setOperator("");
     setBusy(false);
   };
-
   return (
     <div className="panel">
       <div className="panel-head">
@@ -41,7 +35,6 @@ export default function Sanificazione() {
           <p className="sub">Registra ogni intervento di pulizia e sanificazione per area.</p>
         </div>
       </div>
-
       <form onSubmit={submit} className="row-form">
         <select value={area} onChange={(e) => setArea(e.target.value)}>
           {SAN_AREAS.map((a) => <option key={a} value={a}>{a}</option>)}
@@ -52,13 +45,20 @@ export default function Sanificazione() {
           </select>
         )}
         <input type="text" placeholder="Operatore" required value={operator} onChange={(e) => setOperator(e.target.value)} className="note-input" />
+        {company?.haccp_manager && (
+          <button
+            type="button"
+            className="link-btn"
+            onClick={() => setOperator(company.haccp_manager)}
+          >
+            Usa responsabile HACCP
+          </button>
+        )}
         <button type="submit" className="btn-primary" disabled={busy}><Plus size={16} /> Registra</button>
       </form>
-
       {!sanitizersLoading && sanitizers.length === 0 && (
-        <p className="range-hint">Nessun sanificante configurato: vai su "Sanificanti" nel menu per aggiungerne uno (opzionale, puoi comunque registrare senza specificarlo).</p>
+        <p className="range-hint">Nessun sanificante configurato: vai su Configurazione → Sanificanti per aggiungerne uno (opzionale, puoi comunque registrare senza specificarlo).</p>
       )}
-
       {loading ? (
         <p className="sub">Caricamento…</p>
       ) : items.length === 0 ? (

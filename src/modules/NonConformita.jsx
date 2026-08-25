@@ -97,6 +97,15 @@ export default function NonConformita() {
             <input type="date" value={detectedDate} onChange={(e) => setDetectedDate(e.target.value)} />
           </label>
           <input type="text" placeholder="Responsabile" value={responsible} onChange={(e) => setResponsible(e.target.value)} className="note-input" />
+          {company?.haccp_manager && (
+            <button
+              type="button"
+              className="link-btn"
+              onClick={() => setResponsible(company.haccp_manager)}
+            >
+              Usa responsabile HACCP
+            </button>
+          )}
         </div>
 
         {showLotField && (
