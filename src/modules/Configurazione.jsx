@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { CheckCircle2, CalendarClock, Download, Wrench, Droplets, Settings2 } from "lucide-react";
+import { CheckCircle2, CalendarClock, Download, Wrench, Droplets, Settings2, RefreshCw, Lock } from "lucide-react";
 import { useAuth } from "../AuthContext";
 import { downloadReminderICS } from "../hooks/useReminders";
+import { getSubscriptionStatus, pillClassFor } from "../subscriptionStatus";
 import Attrezzature from "./Attrezzature";
 import Sanificanti from "./Sanificanti";
 
@@ -11,8 +12,15 @@ const SUB_TABS = [
   { id: "sanificanti", label: "Sanificanti", icon: Droplets },
 ];
 
+function addOneYear(dateStr) {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  d.setFullYear(d.getFullYear() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
 export default function Configurazione() {
-  const { company, updateCompany, error } = useAuth();
+  const { company, updateCompany, error, homeCompanyId } = useAuth();
   const [name, setName] = useState("");
   const [consultantName, setConsultantName] = useState("");
   const [consultantEmail, setConsultantEmail] = useState("");
@@ -27,6 +35,9 @@ export default function Configurazione() {
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
   const [subTab, setSubTab] = useState("generale");
+
+  // Solo chi entra come consulente in un'azienda cliente (non la propria) può gestire l'abbonamento.
+  const canManageSubscription = !!(company && homeCompanyId && company.id !== homeCompanyId);
 
   useEffect(() => {
     if (company) {
@@ -48,25 +59,55 @@ export default function Configurazione() {
     }
   }, [company]);
 
+  const buildPayload = (overrides = {}) => ({
+    name,
+    consultant_name: consultantName,
+    consultant_email: consultantEmail,
+    owner_email: ownerEmail,
+    has_water_tank: hasWaterTank,
+    haccp_manager: haccpManager,
+    subscription_start: subscriptionStart || null,
+    subscription_end: subscriptionEnd || null,
+    subscription_amount: subscriptionAmount === "" ? null : Number(subscriptionAmount),
+    subscription_status: subscriptionStatus,
+    subscription_note: subscriptionNote,
+    ...overrides,
+  });
+
   const submit = async (e) => {
     e.preventDefault();
     setBusy(true);
-    const ok = await updateCompany({
-      name,
-      consultant_name: consultantName,
-      consultant_email: consultantEmail,
-      owner_email: ownerEmail,
-      has_water_tank: hasWaterTank,
-      haccp_manager: haccpManager,
-      subscription_start: subscriptionStart || null,
-      subscription_end: subscriptionEnd || null,
-      subscription_amount: subscriptionAmount === "" ? null : Number(subscriptionAmount),
-      subscription_status: subscriptionStatus,
-      subscription_note: subscriptionNote,
-    });
+    const ok = await updateCompany(buildPayload());
     setBusy(false);
     if (ok) { setSaved(true); setTimeout(() => setSaved(false), 2500); }
   };
+
+  // Quando cambia la data di inizio, la scadenza si ricalcola sempre da sola: +1 anno.
+  const handleStartChange = (value) => {
+    setSubscriptionStart(value);
+    setSubscriptionEnd(addOneYear(value));
+  };
+
+  const renewFromToday = async () => {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const newEnd = addOneYear(todayStr);
+    setBusy(true);
+    const ok = await updateCompany(buildPayload({
+      subscription_start: todayStr,
+      subscription_end: newEnd,
+      subscription_status: "attivo",
+    }));
+    setBusy(false);
+    if (ok) {
+      setSubscriptionStart(todayStr);
+      setSubscriptionEnd(newEnd);
+      setSubscriptionStatus("attivo");
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    }
+  };
+
+  const subStatus = getSubscriptionStatus(company);
 
   return (
     <div className="panel">
@@ -128,24 +169,60 @@ export default function Configurazione() {
 
             <fieldset className="config-group">
               <legend>Abbonamento</legend>
+
+              {subStatus && (
+                <div style={{ marginBottom: 12 }}>
+                  <span className={"pill " + pillClassFor(subStatus.state)}>{subStatus.label}</span>
+                </div>
+              )}
+
+              {!canManageSubscription && (
+                <p className="sub" style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }}>
+                  <Lock size={13} /> Questa sezione può essere modificata solo dal tuo consulente HACCP.
+                </p>
+              )}
+
               <div className="config-grid-2">
                 <label className="field-label">
                   Inizio abbonamento
-                  <input type="date" value={subscriptionStart} onChange={(e) => setSubscriptionStart(e.target.value)} className="full-input" />
+                  <input
+                    type="date"
+                    value={subscriptionStart}
+                    onChange={(e) => handleStartChange(e.target.value)}
+                    className="full-input"
+                    disabled={!canManageSubscription}
+                  />
                 </label>
                 <label className="field-label">
-                  Scadenza abbonamento
-                  <input type="date" value={subscriptionEnd} onChange={(e) => setSubscriptionEnd(e.target.value)} className="full-input" />
+                  Scadenza abbonamento (calcolata: +1 anno)
+                  <input
+                    type="date"
+                    value={subscriptionEnd}
+                    className="full-input computed-field"
+                    disabled
+                    readOnly
+                  />
                 </label>
               </div>
               <div className="config-grid-2" style={{ marginTop: 10 }}>
                 <label className="field-label">
                   Importo (€)
-                  <input type="number" step="0.01" min="0" value={subscriptionAmount} onChange={(e) => setSubscriptionAmount(e.target.value)} className="full-input" />
+                  <input
+                    type="number" step="0.01" min="0"
+                    value={subscriptionAmount}
+                    onChange={(e) => setSubscriptionAmount(e.target.value)}
+                    className="full-input"
+                    disabled={!canManageSubscription}
+                  />
                 </label>
                 <label className="field-label">
                   Stato
-                  <select value={subscriptionStatus} onChange={(e) => setSubscriptionStatus(e.target.value)} className="full-input">
+                  <select
+                    value={subscriptionStatus}
+                    onChange={(e) => setSubscriptionStatus(e.target.value)}
+                    className="full-input"
+                    disabled={!canManageSubscription}
+                  >
                     <option value="attivo">Attivo</option>
                     <option value="scaduto">Scaduto</option>
                     <option value="sospeso">Sospeso</option>
@@ -158,7 +235,25 @@ export default function Configurazione() {
                 onChange={(e) => setSubscriptionNote(e.target.value)}
                 className="full-input"
                 style={{ marginTop: 10, minHeight: 70 }}
+                disabled={!canManageSubscription}
               />
+
+              {canManageSubscription && (
+                <>
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={renewFromToday}
+                    disabled={busy}
+                    style={{ marginTop: 12 }}
+                  >
+                    <RefreshCw size={15} /> Rinnova da oggi (+1 anno)
+                  </button>
+                  <p className="sub" style={{ marginTop: 6 }}>
+                    Imposta l'inizio a oggi, calcola la scadenza tra 12 mesi e riporta lo stato su Attivo — salva subito.
+                  </p>
+                </>
+              )}
             </fieldset>
 
             <button type="submit" className="btn-primary" disabled={busy} style={{ alignSelf: "flex-start" }}>
