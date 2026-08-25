@@ -17,7 +17,7 @@ import NonConformita from "./modules/NonConformita";
 import AcquePotabili from "./modules/AcquePotabili";
 import MieiClienti from "./modules/MieiClienti";
 import Documenti from "./modules/Documenti";
-import { getSubscriptionStatus, isSubscriptionBlocked } from "./subscriptionStatus";
+import { getSubscriptionStatus, isSubscriptionBlocked, getBannerTier } from "./subscriptionStatus";
 
 const TABS = [
   { id: "dashboard", label: "Panoramica", icon: ChevronRight },
@@ -42,6 +42,17 @@ function Shell() {
   const [tab, setTab] = useState("dashboard");
 
   const subStatus = getSubscriptionStatus(company);
+  const showSubBanner = subStatus?.state === "in_scadenza" && company.id === homeCompanyId;
+  const bannerTier = showSubBanner ? getBannerTier(subStatus.diffDays) : null;
+  const bannerClass = {
+    notice: "subscription-banner",
+    warning: "subscription-banner-warning",
+    urgent: "subscription-banner-urgent",
+    critical: "subscription-banner-critical",
+  }[bannerTier] || "subscription-banner";
+  const bannerWhen = showSubBanner
+    ? (subStatus.diffDays === 0 ? "scade OGGI" : subStatus.diffDays === 1 ? "scade DOMANI" : `scade tra ${subStatus.diffDays} giorni`)
+    : "";
 
   return (
     <div className="app">
@@ -80,22 +91,12 @@ function Shell() {
             </button>
           </div>
         )}
-        {subStatus?.state === "in_scadenza" && company.id === homeCompanyId && (
-          <div className={"subscription-banner" + (subStatus.diffDays <= 7 ? " subscription-banner-urgent" : "")}>
+        {showSubBanner && (
+          <div className={bannerClass}>
             <ShieldAlert size={14} />
             <span>
-              {subStatus.diffDays <= 7 ? (
-                <>
-                  Attenzione: il tuo abbonamento scade tra <strong>{subStatus.diffDays}</strong>{" "}
-                  {subStatus.diffDays === 1 ? "giorno" : "giorni"} ({subStatus.dateLabel}).
-                  Se non rinnovi, l'accesso verrà bloccato automaticamente.
-                </>
-              ) : (
-                <>
-                  Il tuo abbonamento scade il <strong>{subStatus.dateLabel}</strong> (tra {subStatus.diffDays} giorni).
-                  Ricordati di rinnovare.
-                </>
-              )}
+              Attenzione: l'abbonamento {bannerWhen} ({subStatus.dateLabel}).
+              Se non viene rinnovato, l'accesso verrà bloccato automaticamente.
               {(company.consultant_name || company.consultant_email) && (
                 <>
                   {" "}Contatta {company.consultant_name || "il tuo consulente"}

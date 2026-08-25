@@ -190,3 +190,28 @@ nav { display: flex; flex-direction: column; gap: 2px; }
 /* ---- Badge stato abbonamento (I miei clienti) ---- */
 .pill-warn { background: #FFF6E5; color: #7A5A1E; border: 1px solid #F0DDAE; }
 .pill-ok { background: #E6EFE8; color: #2F6F4E; }
+
+/* ---- Avviso abbonamento in scadenza (banner in alto) ---- */
+.subscription-banner {
+  display: flex; align-items: center; gap: 8px;
+  background: #FFF6E5; border: 1px solid #F0DDAE; color: #7A5A1E;
+  padding: 9px 14px; border-radius: 8px; font-size: 12.5px; margin-bottom: 14px;
+}
+.subscription-banner-urgent {
+  background: #FBEEEC; border-color: #EFC9C1; color: #B3432E; font-weight: 500;
+}
+.subscription-banner-warning {
+  background: #FDF0E1; border-color: #F0C896; color: #8A5A1E; font-weight: 500;
+}
+.subscription-banner-critical {
+  background: #B3432E; border-color: #B3432E; color: #fff; font-weight: 600;
+}
+
+/* ---- Schermata di blocco (abbonamento scaduto/sospeso) ---- */
+.subscription-block-card {
+  max-width: 380px; background: #fff; border: 1px solid #E1E5DF; border-radius: 14px;
+  padding: 28px 26px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px;
+}
+.subscription-block-card h2 { margin: 6px 0 0; font-size: 18px; }
+.subscription-block-card p { margin: 0; font-size: 13.5px; color: #4C5A52; }
+.subscription-block-card .sub { font-size: 12.5px; color: #6E7C73; }

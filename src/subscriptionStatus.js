@@ -29,3 +29,17 @@ export function isSubscriptionBlocked(company) {
   const info = getSubscriptionStatus(company);
   return info?.state === "sospeso" || info?.state === "scaduto";
 }
+
+export function pillClassFor(state) {
+  if (state === "scaduto" || state === "sospeso") return "pill-alert";
+  if (state === "in_scadenza") return "pill-warn";
+  return "pill-ok";
+}
+
+// Livello di urgenza del banner in base ai giorni rimanenti: 30 / 15 / 7 / 1.
+export function getBannerTier(diffDays) {
+  if (diffDays <= 1) return "critical";
+  if (diffDays <= 7) return "urgent";
+  if (diffDays <= 15) return "warning";
+  return "notice";
+}
