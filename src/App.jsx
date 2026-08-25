@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Thermometer, SprayCan, Bug, ChevronRight, LogOut, ShieldCheck, Droplets, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen } from "lucide-react";
+import { Thermometer, SprayCan, Bug, ChevronRight, LogOut, ShieldCheck, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen } from "lucide-react";
 import { AuthProvider, useAuth } from "./AuthContext";
 import Login from "./Login";
 import ResetPassword from "./ResetPassword";
@@ -17,6 +17,7 @@ import NonConformita from "./modules/NonConformita";
 import AcquePotabili from "./modules/AcquePotabili";
 import MieiClienti from "./modules/MieiClienti";
 import Documenti from "./modules/Documenti";
+import { getSubscriptionStatus, isSubscriptionBlocked } from "./subscriptionStatus";
 
 const TABS = [
   { id: "dashboard", label: "Panoramica", icon: ChevronRight },
@@ -39,6 +40,8 @@ function Shell() {
   const isViewingClient = homeCompanyId && company && company.id !== homeCompanyId;
   const hasMultipleClients = consultantCompanies.length > 0;
   const [tab, setTab] = useState("dashboard");
+
+  const subStatus = getSubscriptionStatus(company);
 
   return (
     <div className="app">
@@ -77,6 +80,31 @@ function Shell() {
             </button>
           </div>
         )}
+        {subStatus?.state === "in_scadenza" && company.id === homeCompanyId && (
+          <div className={"subscription-banner" + (subStatus.diffDays <= 7 ? " subscription-banner-urgent" : "")}>
+            <ShieldAlert size={14} />
+            <span>
+              {subStatus.diffDays <= 7 ? (
+                <>
+                  Attenzione: il tuo abbonamento scade tra <strong>{subStatus.diffDays}</strong>{" "}
+                  {subStatus.diffDays === 1 ? "giorno" : "giorni"} ({subStatus.dateLabel}).
+                  Se non rinnovi, l'accesso verrà bloccato automaticamente.
+                </>
+              ) : (
+                <>
+                  Il tuo abbonamento scade il <strong>{subStatus.dateLabel}</strong> (tra {subStatus.diffDays} giorni).
+                  Ricordati di rinnovare.
+                </>
+              )}
+              {(company.consultant_name || company.consultant_email) && (
+                <>
+                  {" "}Contatta {company.consultant_name || "il tuo consulente"}
+                  {company.consultant_email ? ` (${company.consultant_email})` : ""} per il rinnovo.
+                </>
+              )}
+            </span>
+          </div>
+        )}
         <div className="content-toolbar">
           <button type="button" className="print-btn" onClick={() => window.print()}>
             <Printer size={14} /> Esporta PDF
@@ -101,8 +129,34 @@ function Shell() {
   );
 }
 
+function SubscriptionBlockScreen({ company, signOut }) {
+  const sub = getSubscriptionStatus(company);
+  const suspended = sub?.state === "sospeso";
+  return (
+    <div className="loading-screen">
+      <div className="subscription-block-card">
+        <ShieldAlert size={28} color="#B3432E" />
+        <h2>Accesso non disponibile</h2>
+        <p>
+          {suspended
+            ? "Il tuo account è stato sospeso."
+            : `Il tuo abbonamento è scaduto${sub?.dateLabel ? " il " + sub.dateLabel : ""}.`}
+        </p>
+        <p className="sub">
+          Per riattivare l'accesso contatta il tuo consulente HACCP
+          {company.consultant_name ? `, ${company.consultant_name}` : ""}
+          {company.consultant_email ? ` (${company.consultant_email})` : ""}.
+        </p>
+        <button className="btn-primary" onClick={signOut} style={{ marginTop: 8 }}>
+          <LogOut size={16} /> Esci
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function Gate() {
-  const { session, company, loadingCompany, error, recoveryMode } = useAuth();
+  const { session, company, homeCompanyId, loadingCompany, error, recoveryMode, signOut } = useAuth();
 
   if (recoveryMode) return <ResetPassword />;
   if (session === undefined) return <div className="loading-screen">Caricamento…</div>;
@@ -115,6 +169,13 @@ function Gate() {
       </div>
     );
   }
+
+  // Il blocco riguarda solo l'azienda "propria" dell'utente (il cliente stesso),
+  // mai un'azienda che il consulente sta visitando tramite "I miei clienti".
+  if (company.id === homeCompanyId && isSubscriptionBlocked(company)) {
+    return <SubscriptionBlockScreen company={company} signOut={signOut} />;
+  }
+
   return <Shell />;
 }
 
