@@ -39,6 +39,9 @@ nav { display: flex; flex-direction: column; gap: 2px; }
 /* ---- Forms ---- */
 .row-form, .traccia-form .row-form { display: flex; gap: 8px; flex-wrap: wrap; margin: 16px 0 8px; }
 .row-form select, .row-form input, .full-input { font: inherit; padding: 9px 11px; border: 1px solid #D8DED6; border-radius: 8px; background: #fff; color: #1B2A22; }
+.full-input:disabled, .row-form select:disabled, .row-form input:disabled, textarea:disabled {
+  background: #F0F1EE; color: #97A199; cursor: not-allowed; border-color: #E1E5DF;
+}
 .row-form .num { width: 90px; }
 .row-form .note-input { flex: 1; min-width: 140px; }
 .traccia-form { display: flex; flex-direction: column; gap: 10px; margin: 16px 0 20px; }
