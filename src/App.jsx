@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Thermometer, SprayCan, Bug, ChevronRight, LogOut, ShieldCheck, Wrench, Droplets, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen } from "lucide-react";
+import { Thermometer, SprayCan, Bug, ChevronRight, LogOut, ShieldCheck, Droplets, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen } from "lucide-react";
 import { AuthProvider, useAuth } from "./AuthContext";
 import Login from "./Login";
 import ResetPassword from "./ResetPassword";
@@ -7,8 +7,6 @@ import Dashboard from "./modules/Dashboard";
 import Temperature from "./modules/Temperature";
 import Sanificazione from "./modules/Sanificazione";
 import Infestanti from "./modules/Infestanti";
-import Attrezzature from "./modules/Attrezzature";
-import Sanificanti from "./modules/Sanificanti";
 import Allergeni from "./modules/Allergeni";
 import Formazione from "./modules/Formazione";
 import Tracciabilita from "./modules/Tracciabilita";
@@ -23,8 +21,6 @@ import Documenti from "./modules/Documenti";
 const TABS = [
   { id: "dashboard", label: "Panoramica", icon: ChevronRight },
   { id: "temperature", label: "Temperature", icon: Thermometer },
-  { id: "attrezzature", label: "Attrezzature", icon: Wrench },
-  { id: "sanificanti", label: "Sanificanti", icon: Droplets },
   { id: "sanificazione", label: "Sanificazione", icon: SprayCan },
   { id: "infestanti", label: "Monitoraggio infestanti", icon: Bug },
   { id: "allergeni", label: "Allergeni", icon: ShieldAlert },
@@ -89,8 +85,6 @@ function Shell() {
         <PrintHeader sectionLabel={(TABS.find((t) => t.id === tab) || SETTINGS_TAB).label} />
         {tab === "dashboard" && <Dashboard goTo={setTab} />}
         {tab === "temperature" && <Temperature />}
-        {tab === "attrezzature" && <Attrezzature />}
-        {tab === "sanificanti" && <Sanificanti />}
         {tab === "sanificazione" && <Sanificazione />}
         {tab === "infestanti" && <Infestanti />}
         {tab === "allergeni" && <Allergeni />}

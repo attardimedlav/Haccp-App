@@ -28,7 +28,7 @@ export function AuthProvider({ children }) {
 
     const { data: ccRows } = await supabase
       .from("consultant_companies")
-      .select("company_id, companies(id, name)")
+      .select("company_id, companies(id, name, subscription_end, subscription_status)")
       .eq("consultant_id", userId);
 
     const clientList = (ccRows || [])
