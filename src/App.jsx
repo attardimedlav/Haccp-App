@@ -43,6 +43,14 @@ function Shell() {
   const hasMultipleClients = consultantCompanies.length > 0;
   const [tab, setTab] = useState("dashboard");
 
+  const visibleTabs = TABS.filter((t) => t.id !== "abbattimento" || company?.serves_raw_fish);
+
+  React.useEffect(() => {
+    if (tab === "abbattimento" && !company?.serves_raw_fish) {
+      setTab("dashboard");
+    }
+  }, [company?.serves_raw_fish, tab]);
+
   const subStatus = getSubscriptionStatus(company);
   const showSubBanner = subStatus?.state === "in_scadenza" && company.id === homeCompanyId;
   const bannerTier = showSubBanner ? getBannerTier(subStatus.diffDays) : null;
@@ -69,7 +77,7 @@ function Shell() {
           </button>
         )}
         <nav>
-          {TABS.map((t) => (
+          {visibleTabs.map((t) => (
             <button key={t.id} className={"nav-item" + (tab === t.id ? " active" : "")} onClick={() => setTab(t.id)}>
               <t.icon size={16} />
               {t.label}
