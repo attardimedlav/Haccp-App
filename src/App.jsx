@@ -94,6 +94,9 @@ function Shell() {
           </button>
         )}
         <nav>
+          <button className={"nav-item" + (tab === "dashboard" ? " active" : "")} onClick={() => setTab("dashboard")}>
+            <ChevronRight size={16} /> Panoramica
+          </button>
           {visibleMainTabs.map((t) => (
             <button key={t.id} className={"nav-item" + (tab === t.id ? " active" : "")} onClick={() => setTab(t.id)}>
               <t.icon size={16} />
