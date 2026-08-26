@@ -25,7 +25,7 @@ export default function Allergeni() {
 
   return (
     <div className="panel">
-      <div className="panel-head">
+      <div className="panel-head allergeni-panel-head">
         <div>
           <h2>Registro allergeni</h2>
           <p className="sub">Associa gli allergeni presenti a ogni piatto del menu.</p>
