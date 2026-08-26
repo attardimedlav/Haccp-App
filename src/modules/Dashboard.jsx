@@ -23,9 +23,19 @@ function checkCompliance(days, items) {
   return { status: "ok", lastTs };
 }
 
+// Stessa logica usata in Temperature.jsx: usa il flag nel/fuori range quando presente,
+// altrimenti (letture storiche precedenti all'introduzione del flag) confronta col range reale dell'unità.
+function isTempInRange(item, units) {
+  if (item.in_range !== null && item.in_range !== undefined) return item.in_range;
+  const u = units.find((x) => x.label === item.unit);
+  if (!u || item.value === null || item.value === undefined) return true;
+  return !(item.value < u.min_temp || item.value > u.max_temp);
+}
+
 export default function Dashboard({ goTo }) {
   const { company } = useAuth();
   const temp = useTable("temperature_logs", company?.id);
+  const units = useTable("temperature_units", company?.id);
   const san = useTable("sanitization_logs", company?.id);
   const pest = useTable("pest_logs", company?.id);
   const water = useTable("water_controls", company?.id);
@@ -59,8 +69,7 @@ export default function Dashboard({ goTo }) {
   compliance.push(planCompliance);
 
   const lateChecks = compliance.filter((c) => c.status !== "ok");
-
-  const deviations = temp.items.filter((i) => i.value < 0 || i.value > 4).length; // semplificato, vedi nota sotto
+  const deviations = temp.items.filter((i) => !isTempInRange(i, units.items)).length;
   const pestAlerts = pest.items.filter((i) => i.outcome === "tracce").length;
 
   const cards = [
@@ -113,7 +122,6 @@ export default function Dashboard({ goTo }) {
             {c.flag && <span className="stat-flag"><AlertTriangle size={12} /> {c.flag}</span>}
           </button>
         ))}
-
         {tankCompliance && (
           <button
             className={"stat-card" + (tankOverdue ? " stat-card-alert" : "")}
