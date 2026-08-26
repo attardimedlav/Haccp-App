@@ -1,0 +1,76 @@
+import React, { useState } from "react";
+import { Plus, Trash2, User } from "lucide-react";
+import { useTable } from "../hooks/useTable";
+import { useAuth } from "../AuthContext";
+
+export default function Dipendenti() {
+  const { company } = useAuth();
+  const { items, add, remove, loading } = useTable("employees", company?.id);
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [jobRole, setJobRole] = useState("");
+  const [department, setDepartment] = useState("");
+  const [hireDate, setHireDate] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!firstName.trim() || !lastName.trim()) return;
+    setBusy(true);
+    await add({
+      first_name: firstName,
+      last_name: lastName,
+      job_role: jobRole || null,
+      department: department || null,
+      hire_date: hireDate || null,
+    });
+    setFirstName(""); setLastName(""); setJobRole(""); setDepartment(""); setHireDate("");
+    setBusy(false);
+  };
+
+  return (
+    <div className="panel">
+      <div className="panel-head">
+        <div>
+          <h2>Dipendenti</h2>
+          <p className="sub">Anagrafica del personale, riusata nei menu a tendina delle schede che richiedono un nominativo (es. Sicurezza sul lavoro).</p>
+        </div>
+      </div>
+
+      <form onSubmit={submit} className="traccia-form">
+        <div className="row-form">
+          <input type="text" placeholder="Nome" required value={firstName} onChange={(e) => setFirstName(e.target.value)} className="note-input" />
+          <input type="text" placeholder="Cognome" required value={lastName} onChange={(e) => setLastName(e.target.value)} className="note-input" />
+        </div>
+        <div className="row-form">
+          <input type="text" placeholder="Mansione (opzionale)" value={jobRole} onChange={(e) => setJobRole(e.target.value)} className="note-input" />
+          <input type="text" placeholder="Reparto (opzionale)" value={department} onChange={(e) => setDepartment(e.target.value)} className="note-input" />
+          <label className="field-label">Data assunzione (opzionale)
+            <input type="date" value={hireDate} onChange={(e) => setHireDate(e.target.value)} />
+          </label>
+        </div>
+        <button type="submit" className="btn-primary" disabled={busy} style={{ alignSelf: "flex-start" }}>
+          <Plus size={16} /> Aggiungi dipendente
+        </button>
+      </form>
+
+      {loading ? (
+        <p className="sub">Caricamento…</p>
+      ) : items.length === 0 ? (
+        <div className="empty"><p>Nessun dipendente registrato. Aggiungine uno per iniziare a usarlo nelle altre sezioni.</p></div>
+      ) : (
+        <ul className="log-list">
+          {items.map((item) => (
+            <li key={item.id} className="log-row">
+              <User size={15} color="#2F6F4E" />
+              <span className="log-main"><strong>{item.first_name} {item.last_name}</strong></span>
+              {item.job_role && <span className="log-unit">{item.job_role}</span>}
+              {item.department && <span className="log-note">{item.department}</span>}
+              <button className="icon-btn" onClick={() => remove(item.id)} aria-label="Elimina"><Trash2 size={14} /></button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
