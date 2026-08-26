@@ -13,6 +13,7 @@ export const ROLE_OPTIONS = [
   "Designazione Addetto Antincendio",
   "Designazione Preposto",
   "Designazione / Elezione RLS",
+  "Consegna DPI",
   "Corso Datore di Lavoro",
   "Corso RSPP Datore di Lavoro",
   "Formazione Generale e Specifica Lavoratori",
@@ -20,6 +21,13 @@ export const ROLE_OPTIONS = [
   "Corso Addetto Primo Soccorso",
   "Corso RLS",
   "Corso Preposti",
+  "Altro",
+];
+
+export const ALLEGATO_TYPE_OPTIONS = [
+  "Planimetria",
+  "Verbale riunione periodica",
+  "Verbale di sopralluogo del medico competente",
   "Altro",
 ];
 
@@ -358,10 +366,18 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
       {(subTab === "dvr" || subTab === "allegati") && (
         <>
           <form onSubmit={submitDoc(subTab === "dvr" ? "dvr" : "allegato")} className="traccia-form">
+            {subTab === "allegati" && (
+              <select
+                value={ALLEGATO_TYPE_OPTIONS.includes(docTitle) ? docTitle : "Altro"}
+                onChange={(e) => setDocTitle(e.target.value === "Altro" ? "" : e.target.value)}
+              >
+                {ALLEGATO_TYPE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+              </select>
+            )}
             <div className="row-form">
               <input
                 type="text"
-                placeholder={subTab === "dvr" ? "Titolo (es. DVR 2026, Aggiornamento DVR...)" : "Titolo allegato (es. Planimetria, Verbale riunione...)"}
+                placeholder={subTab === "dvr" ? "Titolo (es. DVR 2026, Aggiornamento DVR...)" : "Titolo / dettaglio (es. aggiungi la data o il reparto)"}
                 required
                 value={docTitle}
                 onChange={(e) => setDocTitle(e.target.value)}
