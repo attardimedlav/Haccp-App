@@ -1,25 +1,16 @@
 import React from "react";
-import { Building2, ArrowRight, User } from "lucide-react";
+import { Building2, ArrowRight, User, FileWarning } from "lucide-react";
 import { useAuth } from "../AuthContext";
+import { getSubscriptionStatus, pillClassFor } from "../subscriptionStatus";
 
-function subscriptionInfo(c) {
+function legalMissingLabel(c) {
   if (!c) return null;
-  if (c.subscription_status === "sospeso") {
-    return { label: "Sospeso", cls: "pill-alert" };
-  }
-  if (!c.subscription_end) return null;
-  const end = new Date(c.subscription_end);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const diffDays = Math.ceil((end - today) / (1000 * 60 * 60 * 24));
-  const dateLabel = end.toLocaleDateString("it-IT");
-  if (diffDays < 0 || c.subscription_status === "scaduto") {
-    return { label: `Scaduto il ${dateLabel}`, cls: "pill-alert" };
-  }
-  if (diffDays <= 30) {
-    return { label: `Scade il ${dateLabel}`, cls: "pill-warn" };
-  }
-  return { label: `Attivo fino al ${dateLabel}`, cls: "pill-ok" };
+  const missingTos = !c.tos_accepted_at;
+  const missingDpa = !c.dpa_signed_at;
+  if (!missingTos && !missingDpa) return null;
+  if (missingTos && missingDpa) return "Termini e Accordo mancanti";
+  if (missingTos) return "Termini mancanti";
+  return "Accordo mancante";
 }
 
 export default function MieiClienti({ goTo }) {
@@ -29,7 +20,8 @@ export default function MieiClienti({ goTo }) {
     if (ok) goTo("dashboard");
   };
 
-  const homeSub = company?.id === homeCompanyId ? subscriptionInfo(company) : null;
+  const homeSub = company?.id === homeCompanyId ? getSubscriptionStatus(company) : null;
+  const homeLegalMissing = company?.id === homeCompanyId ? legalMissingLabel(company) : null;
 
   return (
     <div className="panel">
@@ -48,7 +40,10 @@ export default function MieiClienti({ goTo }) {
                 <strong>La tua azienda</strong>
                 <span className="log-note" style={{ display: "block" }}>{homeCompanyName}</span>
               </div>
-              {homeSub && <span className={"pill " + homeSub.cls}>{homeSub.label}</span>}
+              {homeSub && <span className={"pill " + pillClassFor(homeSub.state)}>{homeSub.label}</span>}
+              {homeLegalMissing && (
+                <span className="pill pill-warn"><FileWarning size={12} /> {homeLegalMissing}</span>
+              )}
             </div>
             {company?.id !== homeCompanyId && (
               <button className="btn-primary" onClick={() => enter(homeCompanyId)}>
@@ -58,13 +53,17 @@ export default function MieiClienti({ goTo }) {
           </li>
         )}
         {consultantCompanies.map((c) => {
-          const sub = subscriptionInfo(c);
+          const sub = getSubscriptionStatus(c);
+          const legalMissing = legalMissingLabel(c);
           return (
             <li key={c.id} className={"dish-row client-row" + (company?.id === c.id ? " client-row-active" : "")}>
               <div className="client-row-info">
                 <Building2 size={16} color="#2F6F4E" />
                 <strong>{c.name}</strong>
-                {sub && <span className={"pill " + sub.cls}>{sub.label}</span>}
+                {sub && <span className={"pill " + pillClassFor(sub.state)}>{sub.label}</span>}
+                {legalMissing && (
+                  <span className="pill pill-warn"><FileWarning size={12} /> {legalMissing}</span>
+                )}
               </div>
               {company?.id !== c.id && (
                 <button className="btn-primary" onClick={() => enter(c.id)}>

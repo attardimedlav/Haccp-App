@@ -27,12 +27,17 @@ export default function Configurazione() {
   const [ownerEmail, setOwnerEmail] = useState("");
   const [hasWaterTank, setHasWaterTank] = useState(false);
   const [servesRawFish, setServesRawFish] = useState(false);
+  const [activeWorkSafety, setActiveWorkSafety] = useState(false);
+  const [activeEquipmentChecks, setActiveEquipmentChecks] = useState(false);
+  const [activeMedicalSurveillance, setActiveMedicalSurveillance] = useState(false);
   const [haccpManager, setHaccpManager] = useState("");
   const [subscriptionStart, setSubscriptionStart] = useState("");
   const [subscriptionEnd, setSubscriptionEnd] = useState("");
   const [subscriptionAmount, setSubscriptionAmount] = useState("");
   const [subscriptionStatus, setSubscriptionStatus] = useState("attivo");
   const [subscriptionNote, setSubscriptionNote] = useState("");
+  const [tosAcceptedAt, setTosAcceptedAt] = useState("");
+  const [dpaSignedAt, setDpaSignedAt] = useState("");
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
   const [subTab, setSubTab] = useState("generale");
@@ -48,6 +53,9 @@ export default function Configurazione() {
       setOwnerEmail(company.owner_email || "");
       setHasWaterTank(!!company.has_water_tank);
       setServesRawFish(!!company.serves_raw_fish);
+      setActiveWorkSafety(!!company.active_work_safety);
+      setActiveEquipmentChecks(!!company.active_equipment_checks);
+      setActiveMedicalSurveillance(!!company.active_medical_surveillance);
       setHaccpManager(company.haccp_manager || "");
       setSubscriptionStart(company.subscription_start || "");
       setSubscriptionEnd(company.subscription_end || "");
@@ -58,6 +66,8 @@ export default function Configurazione() {
       );
       setSubscriptionStatus(company.subscription_status || "attivo");
       setSubscriptionNote(company.subscription_note || "");
+      setTosAcceptedAt(company.tos_accepted_at || "");
+      setDpaSignedAt(company.dpa_signed_at || "");
     }
   }, [company]);
 
@@ -68,12 +78,17 @@ export default function Configurazione() {
     owner_email: ownerEmail,
     has_water_tank: hasWaterTank,
     serves_raw_fish: servesRawFish,
+    active_work_safety: activeWorkSafety,
+    active_equipment_checks: activeEquipmentChecks,
+    active_medical_surveillance: activeMedicalSurveillance,
     haccp_manager: haccpManager,
     subscription_start: subscriptionStart || null,
     subscription_end: subscriptionEnd || null,
     subscription_amount: subscriptionAmount === "" ? null : Number(subscriptionAmount),
     subscription_status: subscriptionStatus,
     subscription_note: subscriptionNote,
+    tos_accepted_at: tosAcceptedAt || null,
+    dpa_signed_at: dpaSignedAt || null,
     ...overrides,
   });
 
@@ -108,6 +123,22 @@ export default function Configurazione() {
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
     }
+  };
+
+  const markTosAccepted = async () => {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    setBusy(true);
+    const ok = await updateCompany(buildPayload({ tos_accepted_at: todayStr }));
+    setBusy(false);
+    if (ok) { setTosAcceptedAt(todayStr); setSaved(true); setTimeout(() => setSaved(false), 2500); }
+  };
+
+  const markDpaSigned = async () => {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    setBusy(true);
+    const ok = await updateCompany(buildPayload({ dpa_signed_at: todayStr }));
+    setBusy(false);
+    if (ok) { setDpaSignedAt(todayStr); setSaved(true); setTimeout(() => setSaved(false), 2500); }
   };
 
   const subStatus = getSubscriptionStatus(company);
@@ -152,6 +183,22 @@ export default function Configurazione() {
                 <input type="checkbox" checked={servesRawFish} onChange={(e) => setServesRawFish(e.target.checked)} />
                 L'attività somministra pesce crudo (richiede abbattimento a norma)
               </label>
+              <label className="checkbox-row" style={{ marginTop: 8 }}>
+                <input type="checkbox" checked={activeWorkSafety} onChange={(e) => setActiveWorkSafety(e.target.checked)} />
+                Attiva il modulo Sicurezza sul lavoro (DVR, nomine e attestati — D.Lgs. 81/08)
+              </label>
+              {activeWorkSafety && (
+                <label className="checkbox-row" style={{ marginTop: 8, marginLeft: 26 }}>
+                  <input type="checkbox" checked={activeEquipmentChecks} onChange={(e) => setActiveEquipmentChecks(e.target.checked)} />
+                  Attiva anche il tracciamento attrezzature e verifiche (patentini, messa a terra, manutenzioni)
+                </label>
+              )}
+              {activeWorkSafety && (
+                <label className="checkbox-row" style={{ marginTop: 8, marginLeft: 26 }}>
+                  <input type="checkbox" checked={activeMedicalSurveillance} onChange={(e) => setActiveMedicalSurveillance(e.target.checked)} />
+                  Attiva anche la sorveglianza sanitaria (visite mediche periodiche dei dipendenti)
+                </label>
+              )}
             </fieldset>
 
             <fieldset className="config-group">
@@ -260,6 +307,64 @@ export default function Configurazione() {
                     Imposta l'inizio a oggi, calcola la scadenza tra 12 mesi e riporta lo stato su Attivo — salva subito.
                   </p>
                 </>
+              )}
+            </fieldset>
+
+            <fieldset className="config-group">
+              <legend>Documenti legali</legend>
+
+              {!canManageSubscription && (
+                <p className="sub" style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 12 }}>
+                  <Lock size={13} /> Questa sezione può essere modificata solo dal tuo consulente HACCP.
+                </p>
+              )}
+
+              <div className="config-grid-2">
+                <label className="field-label">
+                  Termini di servizio accettati il
+                  <input
+                    type="date"
+                    value={tosAcceptedAt}
+                    onChange={(e) => setTosAcceptedAt(e.target.value)}
+                    className="full-input"
+                    disabled={!canManageSubscription}
+                  />
+                </label>
+                <label className="field-label">
+                  Accordo di nomina a Responsabile firmato il
+                  <input
+                    type="date"
+                    value={dpaSignedAt}
+                    onChange={(e) => setDpaSignedAt(e.target.value)}
+                    className="full-input"
+                    disabled={!canManageSubscription}
+                  />
+                </label>
+              </div>
+
+              {canManageSubscription && (
+                <div className="row-form" style={{ margin: "12px 0 0" }}>
+                  {!tosAcceptedAt && (
+                    <button type="button" className="btn-primary" onClick={markTosAccepted} disabled={busy}>
+                      <CheckCircle2 size={15} /> Segna Termini come accettati oggi
+                    </button>
+                  )}
+                  {!dpaSignedAt && (
+                    <button type="button" className="btn-primary" onClick={markDpaSigned} disabled={busy}>
+                      <CheckCircle2 size={15} /> Segna Accordo come firmato oggi
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {(!tosAcceptedAt || !dpaSignedAt) && (
+                <p className="sub" style={{ marginTop: 10 }}>
+                  {!tosAcceptedAt && !dpaSignedAt
+                    ? "Termini di servizio e Accordo di nomina non ancora registrati per questa azienda."
+                    : !tosAcceptedAt
+                    ? "Termini di servizio non ancora registrati per questa azienda."
+                    : "Accordo di nomina non ancora registrato per questa azienda."}
+                </p>
               )}
             </fieldset>
 
