@@ -5,6 +5,23 @@ import { useAuth } from "../AuthContext";
 
 const ALLERGENS = ["Glutine", "Latte", "Uova", "Soia", "Frutta a guscio", "Pesce", "Crostacei", "Sedano", "Senape", "Solfiti", "Arachidi", "Sesamo", "Lupini", "Molluschi"];
 
+const ALLERGEN_SHORT = {
+  "Glutine": "Glu",
+  "Latte": "Lat",
+  "Uova": "Uov",
+  "Soia": "Soi",
+  "Frutta a guscio": "F.gu",
+  "Pesce": "Pes",
+  "Crostacei": "Cro",
+  "Sedano": "Sed",
+  "Senape": "Sen",
+  "Solfiti": "Sol",
+  "Arachidi": "Ara",
+  "Sesamo": "Ses",
+  "Lupini": "Lup",
+  "Molluschi": "Mol",
+};
+
 export default function Allergeni() {
   const { company } = useAuth();
   const { items, add, remove, loading } = useTable("allergen_dishes", company?.id);
@@ -49,7 +66,7 @@ export default function Allergeni() {
       ) : items.length === 0 ? (
         <div className="empty"><p>Nessun piatto registrato.</p></div>
       ) : (
-        <ul className="dish-list">
+        <ul className="dish-list allergeni-screen-list">
           {items.map((item) => (
             <li key={item.id} className="dish-row">
               <div className="dish-top">
@@ -64,6 +81,41 @@ export default function Allergeni() {
             </li>
           ))}
         </ul>
+      )}
+
+      {items.length > 0 && (
+        <div className="print-only">
+          <div className="print-allergen-header">
+            <h1>I nostri piatti e i loro allergeni</h1>
+            {company?.name && <p className="print-allergen-company">{company.name}</p>}
+            <p className="print-allergen-legal">
+              Ai sensi del Regolamento UE n. 1169/2011, indichiamo la presenza dei seguenti allergeni nei piatti che prepariamo.
+            </p>
+          </div>
+          <table className="print-allergen-table">
+            <thead>
+              <tr>
+                <th>Piatto</th>
+                {ALLERGENS.map((a) => <th key={a}>{ALLERGEN_SHORT[a]}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item.id}>
+                  <td>{item.dish}</td>
+                  {ALLERGENS.map((a) => (
+                    <td key={a} className={item.allergens?.includes(a) ? "allergen-yes" : ""}>
+                      {item.allergens?.includes(a) ? "X" : ""}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="print-allergen-legend">
+            {ALLERGENS.map((a) => `${ALLERGEN_SHORT[a]} = ${a}`).join(" · ")}
+          </p>
+        </div>
       )}
     </div>
   );
