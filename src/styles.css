@@ -128,8 +128,10 @@ nav { display: flex; flex-direction: column; gap: 2px; }
 
 /* ---- Stampa / Esporta PDF ---- */
 @media print {
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
   .sidebar, .content-toolbar, form, .icon-btn { display: none !important; }
   .subscription-banner, .subscription-banner-warning, .subscription-banner-urgent, .subscription-banner-critical, .viewing-client-banner { display: none !important; }
+  .allergeni-panel-head { display: none !important; }
   body { background: #fff; }
   .app { background: #fff; display: block; }
   .content { max-width: 100%; padding: 0; }
