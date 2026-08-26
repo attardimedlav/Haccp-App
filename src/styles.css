@@ -25,6 +25,12 @@ nav { display: flex; flex-direction: column; gap: 2px; }
 .nav-item:hover { background: #24352B; color: #fff; }
 .nav-item.active { background: #2F6F4E; color: #fff; }
 .nav-static-group { border-top: 1px solid #2C3D33; padding-top: 10px; margin-top: 6px; }
+.nav-worksafety-group { border-top: 1px solid #2C3D33; margin-top: 14px; padding: 10px 2px 4px; }
+.nav-item-accordion { justify-content: space-between; }
+.nav-subitems { display: flex; flex-direction: column; gap: 2px; margin-top: 2px; padding-left: 16px; }
+.nav-subitem { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 6px; border: none; background: none; color: #9FB0A5; font: inherit; font-size: 12.5px; cursor: pointer; text-align: left; }
+.nav-subitem:hover { background: #24352B; color: #fff; }
+.nav-subitem.active { background: #2F6F4E; color: #fff; }
 .content { flex: 1; padding: 32px 36px; max-width: 860px; }
 
 /* ---- Panel ---- */

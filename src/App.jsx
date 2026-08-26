@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Thermometer, SprayCan, Bug, ChevronRight, LogOut, ShieldCheck, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen, Snowflake, HardHat } from "lucide-react";
+import { Thermometer, SprayCan, Bug, ChevronRight, ChevronDown, LogOut, ShieldCheck, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen, Snowflake, HardHat, FileText, Paperclip, Award, Wrench, Stethoscope } from "lucide-react";
 import { AuthProvider, useAuth } from "./AuthContext";
 import Login from "./Login";
 import ResetPassword from "./ResetPassword";
@@ -29,7 +29,6 @@ const MAIN_TABS = [
   { id: "tracciabilita", label: "Tracciabilità", icon: Package },
   { id: "nonconformita", label: "Non conformità", icon: ClipboardX },
   { id: "abbattimento", label: "Abbattimento pesce crudo", icon: Snowflake },
-  { id: "sicurezzalavoro", label: "Sicurezza sul lavoro", icon: HardHat },
 ];
 
 const STATIC_TABS = [
@@ -39,10 +38,19 @@ const STATIC_TABS = [
   { id: "documenti", label: "Documenti", icon: FolderOpen },
 ];
 
+const WORK_SAFETY_SUB_ITEMS = [
+  { id: "dvr", label: "DVR", icon: FileText },
+  { id: "allegati", label: "Allegati al DVR", icon: Paperclip },
+  { id: "nomine", label: "Nomine e Attestati", icon: Award },
+  { id: "attrezzature", label: "Attrezzature", icon: Wrench, requires: "active_equipment_checks" },
+  { id: "visitemediche", label: "Visite Mediche", icon: Stethoscope, requires: "active_medical_surveillance" },
+];
+
 const TABS = [
   { id: "dashboard", label: "Panoramica", icon: ChevronRight },
   ...MAIN_TABS,
   ...STATIC_TABS,
+  { id: "sicurezzalavoro", label: "Sicurezza sul lavoro", icon: HardHat },
 ];
 
 const SETTINGS_TAB = { id: "config", label: "Configurazione", icon: Settings };
@@ -52,12 +60,11 @@ function Shell() {
   const isViewingClient = homeCompanyId && company && company.id !== homeCompanyId;
   const hasMultipleClients = consultantCompanies.length > 0;
   const [tab, setTab] = useState("dashboard");
+  const [workSafetySubTab, setWorkSafetySubTab] = useState("dvr");
+  const [workSafetyExpanded, setWorkSafetyExpanded] = useState(false);
 
-  const visibleMainTabs = MAIN_TABS.filter((t) => {
-    if (t.id === "abbattimento") return !!company?.serves_raw_fish;
-    if (t.id === "sicurezzalavoro") return !!company?.active_work_safety;
-    return true;
-  });
+  const visibleMainTabs = MAIN_TABS.filter((t) => t.id !== "abbattimento" || company?.serves_raw_fish);
+  const visibleWorkSafetyItems = WORK_SAFETY_SUB_ITEMS.filter((t) => !t.requires || company?.[t.requires]);
 
   React.useEffect(() => {
     if (tab === "abbattimento" && !company?.serves_raw_fish) {
@@ -66,7 +73,19 @@ function Shell() {
     if (tab === "sicurezzalavoro" && !company?.active_work_safety) {
       setTab("dashboard");
     }
-  }, [company?.serves_raw_fish, company?.active_work_safety, tab]);
+    if (workSafetySubTab === "attrezzature" && !company?.active_equipment_checks) {
+      setWorkSafetySubTab("dvr");
+    }
+    if (workSafetySubTab === "visitemediche" && !company?.active_medical_surveillance) {
+      setWorkSafetySubTab("dvr");
+    }
+  }, [company?.serves_raw_fish, company?.active_work_safety, company?.active_equipment_checks, company?.active_medical_surveillance, tab, workSafetySubTab]);
+
+  const openWorkSafety = (subTabId) => {
+    setTab("sicurezzalavoro");
+    setWorkSafetySubTab(subTabId);
+    setWorkSafetyExpanded(true);
+  };
 
   const subStatus = getSubscriptionStatus(company);
   const showSubBanner = subStatus?.state === "in_scadenza" && company.id === homeCompanyId;
@@ -112,6 +131,35 @@ function Shell() {
             </button>
           ))}
         </nav>
+        {company?.active_work_safety && (
+          <nav className="nav-worksafety-group">
+            <button
+              className={"nav-item nav-item-accordion" + (tab === "sicurezzalavoro" ? " active" : "")}
+              onClick={() => {
+                setTab("sicurezzalavoro");
+                setWorkSafetyExpanded((v) => !v);
+              }}
+            >
+              <HardHat size={16} />
+              <span style={{ flex: 1 }}>Sicurezza sul lavoro</span>
+              {workSafetyExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            </button>
+            {workSafetyExpanded && (
+              <div className="nav-subitems">
+                {visibleWorkSafetyItems.map((t) => (
+                  <button
+                    key={t.id}
+                    className={"nav-subitem" + (tab === "sicurezzalavoro" && workSafetySubTab === t.id ? " active" : "")}
+                    onClick={() => openWorkSafety(t.id)}
+                  >
+                    <t.icon size={14} />
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </nav>
+        )}
         <div className="sidebar-spacer" />
         <button className={"nav-item nav-item-settings" + (tab === SETTINGS_TAB.id ? " active" : "")} onClick={() => setTab(SETTINGS_TAB.id)}>
           <SETTINGS_TAB.icon size={16} /> {SETTINGS_TAB.label}
@@ -155,7 +203,7 @@ function Shell() {
         {tab === "dashboard" && <Dashboard goTo={setTab} />}
         {tab === "temperature" && <Temperature />}
         {tab === "abbattimento" && <AbbattimentoPesce />}
-        {tab === "sicurezzalavoro" && <SicurezzaLavoro />}
+        {tab === "sicurezzalavoro" && <SicurezzaLavoro subTab={workSafetySubTab} setSubTab={setWorkSafetySubTab} />}
         {tab === "sanificazione" && <Sanificazione />}
         {tab === "infestanti" && <Infestanti />}
         {tab === "allergeni" && <Allergeni />}
