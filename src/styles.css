@@ -139,6 +139,13 @@ nav { display: flex; flex-direction: column; gap: 2px; }
   .dish-row, .log-row, .stat-card { break-inside: avoid; border-color: #ccc !important; background: #fff !important; }
   .card-grid { display: block; }
   .stat-card { display: inline-block; width: auto; margin: 0 10px 10px 0; }
+  .temp-screen-list { display: none !important; }
+  .print-fridge-page { page-break-after: always; break-after: page; }
+  .print-fridge-page:last-child { page-break-after: auto; break-after: auto; }
+  .print-fridge-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid #999; }
+  .print-fridge-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .print-fridge-table th, .print-fridge-table td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
+  .print-fridge-table th { background: #F0F1EE; }
 }
 
 /* ---- Login: link e messaggi ---- */
