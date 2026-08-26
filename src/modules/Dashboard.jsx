@@ -1,9 +1,10 @@
 import React from "react";
-import { Thermometer, SprayCan, Bug, AlertTriangle, CheckCircle2, Droplet, FolderOpen } from "lucide-react";
+import { Thermometer, SprayCan, Bug, AlertTriangle, CheckCircle2, Droplet, FolderOpen, HardHat } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { WATER_TANK_CONTROL_TYPE } from "./AcquePotabili";
 import { PLAN_TYPE } from "./Documenti";
+import { expiryInfo } from "./SicurezzaLavoro";
 
 const CHECK_PERIODICITY = [
   { id: "temperature_logs", tab: "temperature", label: "Temperature", days: 1, icon: Thermometer },
@@ -40,6 +41,9 @@ export default function Dashboard({ goTo }) {
   const pest = useTable("pest_logs", company?.id);
   const water = useTable("water_controls", company?.id);
   const docs = useTable("haccp_documents", company?.id);
+  const workSafety = useTable("work_safety_appointments", company?.id);
+  const equipmentChecks = useTable("equipment_checks", company?.id);
+  const medicalVisits = useTable("medical_visits", company?.id);
 
   const compliance = CHECK_PERIODICITY.map((c) => {
     const items = c.id === "temperature_logs" ? temp.items : c.id === "sanitization_logs" ? san.items : pest.items;
@@ -72,6 +76,18 @@ export default function Dashboard({ goTo }) {
   const deviations = temp.items.filter((i) => !isTempInRange(i, units.items)).length;
   const pestAlerts = pest.items.filter((i) => i.outcome === "tracce").length;
 
+  const countExpiring = (items) => items.filter((a) => {
+    const info = expiryInfo(a.expiry_date);
+    return info && (info.cls === "pill-warn" || info.cls === "pill-alert");
+  }).length;
+
+  let safetyAlertCount = 0;
+  if (company?.active_work_safety) {
+    safetyAlertCount += countExpiring(workSafety.items);
+    if (company?.active_equipment_checks) safetyAlertCount += countExpiring(equipmentChecks.items);
+    if (company?.active_medical_surveillance) safetyAlertCount += countExpiring(medicalVisits.items);
+  }
+
   const cards = [
     { id: "temperature", label: "Letture temperatura", value: temp.items.length, icon: Thermometer, flag: deviations > 0 ? `${deviations} da verificare` : null },
     { id: "sanificazione", label: "Interventi di sanificazione", value: san.items.length, icon: SprayCan, flag: null },
@@ -90,7 +106,7 @@ export default function Dashboard({ goTo }) {
         </div>
       </div>
 
-      {lateChecks.length > 0 && (
+      {(lateChecks.length > 0 || safetyAlertCount > 0) && (
         <div className="compliance-banner">
           {lateChecks.map((c) => (
             <button key={c.id} className="compliance-row" onClick={() => goTo(c.tab)}>
@@ -104,6 +120,16 @@ export default function Dashboard({ goTo }) {
               </span>
             </button>
           ))}
+          {safetyAlertCount > 0 && (
+            <button className="compliance-row" onClick={() => goTo("sicurezzalavoro")}>
+              <AlertTriangle size={15} color="#B3432E" />
+              <HardHat size={15} />
+              <span className="compliance-text">
+                <strong>Sicurezza sul lavoro</strong>
+                {" — "}{safetyAlertCount} {safetyAlertCount === 1 ? "documento scaduto o in scadenza" : "documenti scaduti o in scadenza"}
+              </span>
+            </button>
+          )}
         </div>
       )}
 

@@ -53,7 +53,7 @@ function addYears(dateStr, years) {
   return d.toISOString().slice(0, 10);
 }
 
-function expiryInfo(expiryDate) {
+export function expiryInfo(expiryDate) {
   if (!expiryDate) return null;
   const end = new Date(expiryDate);
   const today = new Date();
