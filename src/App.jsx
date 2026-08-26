@@ -137,7 +137,9 @@ function Shell() {
             <Printer size={14} /> Esporta PDF
           </button>
         </div>
-        <PrintHeader sectionLabel={(TABS.find((t) => t.id === tab) || SETTINGS_TAB).label} />
+        {tab !== "allergeni" && (
+          <PrintHeader sectionLabel={(TABS.find((t) => t.id === tab) || SETTINGS_TAB).label} />
+        )}
         {tab === "dashboard" && <Dashboard goTo={setTab} />}
         {tab === "temperature" && <Temperature />}
         {tab === "abbattimento" && <AbbattimentoPesce />}
