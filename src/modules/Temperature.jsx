@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Trash2, AlertTriangle, CheckCircle2, Pencil, Check, X } from "lucide-react";
+import { Plus, Trash2, AlertTriangle, CheckCircle2, Pencil, Check, X, Refrigerator } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { EQUIPMENT_TYPES } from "./Attrezzature";
@@ -58,6 +58,11 @@ export default function Temperature() {
     return !(item.value < u.min_temp || item.value > u.max_temp);
   };
   const deviations = items.filter((i) => !isInRange(i)).length;
+
+  const groupedByUnit = units.map((u) => ({
+    unit: u,
+    readings: items.filter((i) => i.unit === u.label),
+  }));
 
   const startEdit = (item) => {
     setEditingId(item.id);
@@ -152,7 +157,7 @@ export default function Temperature() {
       ) : items.length === 0 ? (
         <div className="empty"><p>Nessuna lettura registrata.</p></div>
       ) : (
-        <ul className="log-list">
+        <ul className="log-list temp-screen-list">
           {items.map((item) => {
             const bad = !isInRange(item);
             const isEditing = editingId === item.id;
@@ -194,6 +199,48 @@ export default function Temperature() {
           })}
         </ul>
       )}
+
+      <div className="print-only">
+        {groupedByUnit.map(({ unit, readings }) => (
+          <div key={unit.id} className="print-fridge-page">
+            <div className="print-fridge-header">
+              <Refrigerator size={30} />
+              <div>
+                <h3 style={{ margin: 0 }}>{unit.label}</h3>
+                <p style={{ margin: "2px 0 0", fontSize: 12 }}>
+                  Range consentito: {unit.min_temp}°C — {unit.max_temp}°C
+                </p>
+              </div>
+            </div>
+            {readings.length === 0 ? (
+              <p style={{ fontSize: 12.5 }}>Nessuna lettura registrata per questo impianto.</p>
+            ) : (
+              <table className="print-fridge-table">
+                <thead>
+                  <tr>
+                    <th>Data e ora</th>
+                    <th>Esito</th>
+                    <th>°C</th>
+                    <th>Operatore</th>
+                    <th>Nota</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {readings.map((r) => (
+                    <tr key={r.id}>
+                      <td>{fmtDate(r.created_at)}</td>
+                      <td>{isInRange(r) ? "Nel range" : "Fuori range"}</td>
+                      <td>{r.value !== null && r.value !== undefined ? Number(r.value).toFixed(1) : "—"}</td>
+                      <td>{r.operator || "—"}</td>
+                      <td>{r.note || ""}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
