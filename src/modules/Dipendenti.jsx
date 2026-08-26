@@ -28,7 +28,7 @@ export default function Dipendenti() {
 
     // Avviso email al consulente: non blocca il salvataggio se fallisce, è solo un promemoria.
     try {
-      await supabase.functions.invoke("notify-new-employee", {
+      await supabase.functions.invoke("rapid-endpoint", {
         body: { company_id: company.id, first_name: firstName, last_name: lastName, job_role: jobRole || null },
       });
     } catch (err) {
