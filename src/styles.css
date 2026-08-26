@@ -129,6 +129,7 @@ nav { display: flex; flex-direction: column; gap: 2px; }
 /* ---- Stampa / Esporta PDF ---- */
 @media print {
   .sidebar, .content-toolbar, form, .icon-btn { display: none !important; }
+  .subscription-banner, .subscription-banner-warning, .subscription-banner-urgent, .subscription-banner-critical, .viewing-client-banner { display: none !important; }
   body { background: #fff; }
   .app { background: #fff; display: block; }
   .content { max-width: 100%; padding: 0; }
@@ -146,6 +147,17 @@ nav { display: flex; flex-direction: column; gap: 2px; }
   .print-fridge-table { width: 100%; border-collapse: collapse; font-size: 12px; }
   .print-fridge-table th, .print-fridge-table td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
   .print-fridge-table th { background: #F0F1EE; }
+  .allergeni-screen-list { display: none !important; }
+  .print-allergen-header { text-align: center; margin-bottom: 22px; }
+  .print-allergen-header h1 { font-size: 22px; margin: 0 0 6px; color: #1B2A22; }
+  .print-allergen-company { font-size: 14px; font-weight: 600; margin: 0 0 8px; color: #1B2A22; }
+  .print-allergen-legal { font-size: 11px; color: #4C5A52; margin: 0; max-width: 480px; margin-left: auto; margin-right: auto; }
+  .print-allergen-table { width: 100%; border-collapse: collapse; font-size: 11.5px; table-layout: fixed; }
+  .print-allergen-table th, .print-allergen-table td { border: 1px solid #ccc; padding: 6px 4px; text-align: center; }
+  .print-allergen-table th:first-child, .print-allergen-table td:first-child { text-align: left; width: 140px; font-weight: 500; }
+  .print-allergen-table th { background: #F0F1EE; font-size: 10.5px; }
+  .print-allergen-table td.allergen-yes { font-weight: 700; background: #FBEEEC; }
+  .print-allergen-legend { margin-top: 14px; font-size: 10.5px; color: #4C5A52; line-height: 1.6; text-align: center; }
 }
 
 /* ---- Login: link e messaggi ---- */
