@@ -76,9 +76,8 @@ function AttachmentLink({ path }) {
   );
 }
 
-export default function SicurezzaLavoro() {
+export default function SicurezzaLavoro({ subTab, setSubTab }) {
   const { company } = useAuth();
-  const [subTab, setSubTab] = useState("dvr");
   const { items: dvrDocs, add: addDvrDoc, remove: removeDvrDoc, loading: dvrLoading } = useTable("dvr_documents", company?.id);
   const { items: appointments, add: addAppointment, remove: removeAppointment, loading: appointmentsLoading } = useTable("work_safety_appointments", company?.id);
   const { items: equipmentChecks, add: addEquipmentCheck, remove: removeEquipmentCheck, loading: equipmentLoading } = useTable("equipment_checks", company?.id);
@@ -145,7 +144,8 @@ export default function SicurezzaLavoro() {
   const [issueDate, setIssueDate] = useState("");
   const [validityYears, setValidityYears] = useState("");
   const [expiryDate, setExpiryDate] = useState("");
-  const [apptFile, setApptFile] = useState(null);
+  const [apptNominaFile, setApptNominaFile] = useState(null);
+  const [apptAttestatoFile, setApptAttestatoFile] = useState(null);
   const [apptNote, setApptNote] = useState("");
   const [apptError, setApptError] = useState("");
   const [apptBusy, setApptBusy] = useState(false);
@@ -159,11 +159,18 @@ export default function SicurezzaLavoro() {
     if (issueDate) setExpiryDate(addYears(issueDate, value));
   };
 
-  const onApptFileChange = (e) => {
+  const onApptNominaFileChange = (e) => {
     const f = e.target.files?.[0] || null;
     setApptError("");
-    if (f && f.size > MAX_FILE_BYTES) { setApptError("File troppo grande (limite 8 MB)."); setApptFile(null); e.target.value = ""; return; }
-    setApptFile(f);
+    if (f && f.size > MAX_FILE_BYTES) { setApptError("File troppo grande (limite 8 MB)."); setApptNominaFile(null); e.target.value = ""; return; }
+    setApptNominaFile(f);
+  };
+
+  const onApptAttestatoFileChange = (e) => {
+    const f = e.target.files?.[0] || null;
+    setApptError("");
+    if (f && f.size > MAX_FILE_BYTES) { setApptError("File troppo grande (limite 8 MB)."); setApptAttestatoFile(null); e.target.value = ""; return; }
+    setApptAttestatoFile(f);
   };
 
   const submitAppointment = async (e) => {
@@ -172,20 +179,25 @@ export default function SicurezzaLavoro() {
     setApptBusy(true);
     setApptError("");
     try {
-      let attachment_path = null;
-      if (apptFile) attachment_path = await uploadAttachment(company.id, apptFile);
+      let nomina_attachment_path = null;
+      let attestato_attachment_path = null;
+      if (apptNominaFile) nomina_attachment_path = await uploadAttachment(company.id, apptNominaFile);
+      if (apptAttestatoFile) attestato_attachment_path = await uploadAttachment(company.id, apptAttestatoFile);
       await addAppointment({
         role,
         person_name: personName,
         issue_date: issueDate,
         validity_years: validityYears === "" ? null : Number(validityYears),
         expiry_date: expiryDate || null,
-        attachment_path,
+        nomina_attachment_path,
+        attestato_attachment_path,
         note: apptNote,
       });
-      setPersonName(""); setIssueDate(""); setValidityYears(""); setExpiryDate(""); setApptFile(null); setApptNote("");
-      const input = document.getElementById("nomine-file-input");
-      if (input) input.value = "";
+      setPersonName(""); setIssueDate(""); setValidityYears(""); setExpiryDate(""); setApptNominaFile(null); setApptAttestatoFile(null); setApptNote("");
+      const nominaInput = document.getElementById("nomine-nomina-file-input");
+      if (nominaInput) nominaInput.value = "";
+      const attestatoInput = document.getElementById("nomine-attestato-file-input");
+      if (attestatoInput) attestatoInput.value = "";
     } catch (err) {
       setApptError("Errore durante il caricamento: " + err.message);
     } finally {
@@ -415,10 +427,16 @@ export default function SicurezzaLavoro() {
               </label>
             </div>
             <input type="text" placeholder="Nota (opzionale)" value={apptNote} onChange={(e) => setApptNote(e.target.value)} className="full-input" />
-            <label className="file-drop" htmlFor="nomine-file-input">
-              <Paperclip size={15} /><span>{apptFile ? apptFile.name : "Allega nomina / attestato (PDF o immagine)"}</span>
-              <input id="nomine-file-input" type="file" accept=".pdf,image/*" onChange={onApptFileChange} hidden />
-            </label>
+            <div className="row-form">
+              <label className="file-drop" htmlFor="nomine-nomina-file-input">
+                <Paperclip size={15} /><span>{apptNominaFile ? apptNominaFile.name : "Allega nomina (PDF o immagine)"}</span>
+                <input id="nomine-nomina-file-input" type="file" accept=".pdf,image/*" onChange={onApptNominaFileChange} hidden />
+              </label>
+              <label className="file-drop" htmlFor="nomine-attestato-file-input">
+                <Paperclip size={15} /><span>{apptAttestatoFile ? apptAttestatoFile.name : "Allega attestato/i di formazione (PDF o immagine)"}</span>
+                <input id="nomine-attestato-file-input" type="file" accept=".pdf,image/*" onChange={onApptAttestatoFileChange} hidden />
+              </label>
+            </div>
             {apptError && <span className="file-error"><AlertTriangle size={13} /> {apptError}</span>}
             <button type="submit" className="btn-primary" disabled={apptBusy} style={{ alignSelf: "flex-start" }}>
               <Plus size={16} /> {apptBusy ? "Salvataggio…" : "Registra nomina / attestato"}
@@ -447,7 +465,16 @@ export default function SicurezzaLavoro() {
                       {info && <span className={"pill " + info.cls}>{info.label}</span>}
                     </div>
                     {item.note && <p className="pest-note">{item.note}</p>}
-                    <AttachmentLink path={item.attachment_path} />
+                    <div className="row-form" style={{ margin: "6px 0 0" }}>
+                      <div>
+                        <span className="none-label" style={{ display: "block", marginBottom: 4 }}>Nomina</span>
+                        <AttachmentLink path={item.nomina_attachment_path} />
+                      </div>
+                      <div>
+                        <span className="none-label" style={{ display: "block", marginBottom: 4 }}>Attestato/i formazione</span>
+                        <AttachmentLink path={item.attestato_attachment_path} />
+                      </div>
+                    </div>
                   </li>
                 );
               })}
