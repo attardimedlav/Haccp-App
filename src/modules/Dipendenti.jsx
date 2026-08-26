@@ -28,9 +28,11 @@ export default function Dipendenti() {
 
     // Avviso email al consulente: non blocca il salvataggio se fallisce, è solo un promemoria.
     try {
-      await supabase.functions.invoke("rapid-endpoint", {
+      const { data, error: fnError } = await supabase.functions.invoke("rapid-endpoint", {
         body: { company_id: company.id, first_name: firstName, last_name: lastName, job_role: jobRole || null },
       });
+      if (fnError) console.error("Notifica nuovo dipendente - errore dalla function:", fnError);
+      else console.log("Notifica nuovo dipendente - risposta:", data);
     } catch (err) {
       console.error("Notifica nuovo dipendente non inviata:", err);
     }
