@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle } from "lucide-react";
+import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Info } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
@@ -68,6 +68,11 @@ export default function Tracciabilita() {
           <p className="sub">Allega DDT, fatture o etichette: il lotto resta collegato al documento di origine.</p>
         </div>
       </div>
+
+      <p className="login-info" style={{ marginBottom: 16 }}>
+        <Info size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+        Questa scheda va compilata quando la bolla o la fattura del fornitore non riportano già il lotto e i dati necessari a garantire una reale tracciabilità del prodotto.
+      </p>
 
       <form onSubmit={submit} className="traccia-form">
         <div className="row-form">
