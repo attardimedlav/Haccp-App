@@ -1,10 +1,11 @@
 import React, { useState } from "react";
-import { Thermometer, SprayCan, Bug, ChevronRight, LogOut, ShieldCheck, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen } from "lucide-react";
+import { Thermometer, SprayCan, Bug, ChevronRight, LogOut, ShieldCheck, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen, Snowflake } from "lucide-react";
 import { AuthProvider, useAuth } from "./AuthContext";
 import Login from "./Login";
 import ResetPassword from "./ResetPassword";
 import Dashboard from "./modules/Dashboard";
 import Temperature from "./modules/Temperature";
+import AbbattimentoPesce from "./modules/AbbattimentoPesce";
 import Sanificazione from "./modules/Sanificazione";
 import Infestanti from "./modules/Infestanti";
 import Allergeni from "./modules/Allergeni";
@@ -22,6 +23,7 @@ import { getSubscriptionStatus, isSubscriptionBlocked, getBannerTier } from "./s
 const TABS = [
   { id: "dashboard", label: "Panoramica", icon: ChevronRight },
   { id: "temperature", label: "Temperature", icon: Thermometer },
+  { id: "abbattimento", label: "Abbattimento pesce crudo", icon: Snowflake },
   { id: "sanificazione", label: "Sanificazione", icon: SprayCan },
   { id: "infestanti", label: "Monitoraggio infestanti", icon: Bug },
   { id: "allergeni", label: "Allergeni", icon: ShieldAlert },
@@ -114,6 +116,7 @@ function Shell() {
         <PrintHeader sectionLabel={(TABS.find((t) => t.id === tab) || SETTINGS_TAB).label} />
         {tab === "dashboard" && <Dashboard goTo={setTab} />}
         {tab === "temperature" && <Temperature />}
+        {tab === "abbattimento" && <AbbattimentoPesce />}
         {tab === "sanificazione" && <Sanificazione />}
         {tab === "infestanti" && <Infestanti />}
         {tab === "allergeni" && <Allergeni />}
