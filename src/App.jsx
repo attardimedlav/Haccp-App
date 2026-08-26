@@ -1,11 +1,12 @@
 import React, { useState } from "react";
-import { Thermometer, SprayCan, Bug, ChevronRight, LogOut, ShieldCheck, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen, Snowflake } from "lucide-react";
+import { Thermometer, SprayCan, Bug, ChevronRight, LogOut, ShieldCheck, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen, Snowflake, HardHat } from "lucide-react";
 import { AuthProvider, useAuth } from "./AuthContext";
 import Login from "./Login";
 import ResetPassword from "./ResetPassword";
 import Dashboard from "./modules/Dashboard";
 import Temperature from "./modules/Temperature";
 import AbbattimentoPesce from "./modules/AbbattimentoPesce";
+import SicurezzaLavoro from "./modules/SicurezzaLavoro";
 import Sanificazione from "./modules/Sanificazione";
 import Infestanti from "./modules/Infestanti";
 import Allergeni from "./modules/Allergeni";
@@ -28,6 +29,7 @@ const MAIN_TABS = [
   { id: "tracciabilita", label: "Tracciabilità", icon: Package },
   { id: "nonconformita", label: "Non conformità", icon: ClipboardX },
   { id: "abbattimento", label: "Abbattimento pesce crudo", icon: Snowflake },
+  { id: "sicurezzalavoro", label: "Sicurezza sul lavoro", icon: HardHat },
 ];
 
 const STATIC_TABS = [
@@ -51,13 +53,20 @@ function Shell() {
   const hasMultipleClients = consultantCompanies.length > 0;
   const [tab, setTab] = useState("dashboard");
 
-  const visibleMainTabs = MAIN_TABS.filter((t) => t.id !== "abbattimento" || company?.serves_raw_fish);
+  const visibleMainTabs = MAIN_TABS.filter((t) => {
+    if (t.id === "abbattimento") return !!company?.serves_raw_fish;
+    if (t.id === "sicurezzalavoro") return !!company?.active_work_safety;
+    return true;
+  });
 
   React.useEffect(() => {
     if (tab === "abbattimento" && !company?.serves_raw_fish) {
       setTab("dashboard");
     }
-  }, [company?.serves_raw_fish, tab]);
+    if (tab === "sicurezzalavoro" && !company?.active_work_safety) {
+      setTab("dashboard");
+    }
+  }, [company?.serves_raw_fish, company?.active_work_safety, tab]);
 
   const subStatus = getSubscriptionStatus(company);
   const showSubBanner = subStatus?.state === "in_scadenza" && company.id === homeCompanyId;
@@ -143,6 +152,7 @@ function Shell() {
         {tab === "dashboard" && <Dashboard goTo={setTab} />}
         {tab === "temperature" && <Temperature />}
         {tab === "abbattimento" && <AbbattimentoPesce />}
+        {tab === "sicurezzalavoro" && <SicurezzaLavoro />}
         {tab === "sanificazione" && <Sanificazione />}
         {tab === "infestanti" && <Infestanti />}
         {tab === "allergeni" && <Allergeni />}
