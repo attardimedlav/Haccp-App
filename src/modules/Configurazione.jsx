@@ -26,6 +26,7 @@ export default function Configurazione() {
   const [consultantEmail, setConsultantEmail] = useState("");
   const [ownerEmail, setOwnerEmail] = useState("");
   const [hasWaterTank, setHasWaterTank] = useState(false);
+  const [servesRawFish, setServesRawFish] = useState(false);
   const [haccpManager, setHaccpManager] = useState("");
   const [subscriptionStart, setSubscriptionStart] = useState("");
   const [subscriptionEnd, setSubscriptionEnd] = useState("");
@@ -46,6 +47,7 @@ export default function Configurazione() {
       setConsultantEmail(company.consultant_email || "");
       setOwnerEmail(company.owner_email || "");
       setHasWaterTank(!!company.has_water_tank);
+      setServesRawFish(!!company.serves_raw_fish);
       setHaccpManager(company.haccp_manager || "");
       setSubscriptionStart(company.subscription_start || "");
       setSubscriptionEnd(company.subscription_end || "");
@@ -65,6 +67,7 @@ export default function Configurazione() {
     consultant_email: consultantEmail,
     owner_email: ownerEmail,
     has_water_tank: hasWaterTank,
+    serves_raw_fish: servesRawFish,
     haccp_manager: haccpManager,
     subscription_start: subscriptionStart || null,
     subscription_end: subscriptionEnd || null,
@@ -144,6 +147,10 @@ export default function Configurazione() {
               <label className="checkbox-row" style={{ marginTop: 12 }}>
                 <input type="checkbox" checked={hasWaterTank} onChange={(e) => setHasWaterTank(e.target.checked)} />
                 L'attività ha una vasca di accumulo dell'acqua
+              </label>
+              <label className="checkbox-row" style={{ marginTop: 8 }}>
+                <input type="checkbox" checked={servesRawFish} onChange={(e) => setServesRawFish(e.target.checked)} />
+                L'attività somministra pesce crudo (richiede abbattimento a norma)
               </label>
             </fieldset>
 
