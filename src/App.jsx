@@ -20,19 +20,27 @@ import MieiClienti from "./modules/MieiClienti";
 import Documenti from "./modules/Documenti";
 import { getSubscriptionStatus, isSubscriptionBlocked, getBannerTier } from "./subscriptionStatus";
 
-const TABS = [
-  { id: "dashboard", label: "Panoramica", icon: ChevronRight },
+const MAIN_TABS = [
   { id: "temperature", label: "Temperature", icon: Thermometer },
-  { id: "abbattimento", label: "Abbattimento pesce crudo", icon: Snowflake },
   { id: "sanificazione", label: "Sanificazione", icon: SprayCan },
   { id: "infestanti", label: "Monitoraggio infestanti", icon: Bug },
+  { id: "acquepotabili", label: "Acque potabili", icon: Droplet },
+  { id: "tracciabilita", label: "Tracciabilità", icon: Package },
+  { id: "nonconformita", label: "Non conformità", icon: ClipboardX },
+  { id: "abbattimento", label: "Abbattimento pesce crudo", icon: Snowflake },
+];
+
+const STATIC_TABS = [
   { id: "allergeni", label: "Allergeni", icon: ShieldAlert },
   { id: "formazione", label: "Formazione", icon: GraduationCap },
-  { id: "tracciabilita", label: "Tracciabilità", icon: Package },
   { id: "registrazione", label: "Registrazione sanitaria", icon: Building2 },
-  { id: "nonconformita", label: "Non conformità", icon: ClipboardX },
-  { id: "acquepotabili", label: "Acque potabili", icon: Droplet },
   { id: "documenti", label: "Documenti", icon: FolderOpen },
+];
+
+const TABS = [
+  { id: "dashboard", label: "Panoramica", icon: ChevronRight },
+  ...MAIN_TABS,
+  ...STATIC_TABS,
 ];
 
 const SETTINGS_TAB = { id: "config", label: "Configurazione", icon: Settings };
@@ -43,7 +51,7 @@ function Shell() {
   const hasMultipleClients = consultantCompanies.length > 0;
   const [tab, setTab] = useState("dashboard");
 
-  const visibleTabs = TABS.filter((t) => t.id !== "abbattimento" || company?.serves_raw_fish);
+  const visibleMainTabs = MAIN_TABS.filter((t) => t.id !== "abbattimento" || company?.serves_raw_fish);
 
   React.useEffect(() => {
     if (tab === "abbattimento" && !company?.serves_raw_fish) {
@@ -77,7 +85,15 @@ function Shell() {
           </button>
         )}
         <nav>
-          {visibleTabs.map((t) => (
+          {visibleMainTabs.map((t) => (
+            <button key={t.id} className={"nav-item" + (tab === t.id ? " active" : "")} onClick={() => setTab(t.id)}>
+              <t.icon size={16} />
+              {t.label}
+            </button>
+          ))}
+        </nav>
+        <nav className="nav-static-group">
+          {STATIC_TABS.map((t) => (
             <button key={t.id} className={"nav-item" + (tab === t.id ? " active" : "")} onClick={() => setTab(t.id)}>
               <t.icon size={16} />
               {t.label}

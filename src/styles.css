@@ -24,6 +24,7 @@ nav { display: flex; flex-direction: column; gap: 2px; }
 .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 7px; border: none; background: none; color: #B9C6BC; font: inherit; font-size: 13.5px; cursor: pointer; text-align: left; }
 .nav-item:hover { background: #24352B; color: #fff; }
 .nav-item.active { background: #2F6F4E; color: #fff; }
+.nav-static-group { border-top: 1px solid #2C3D33; padding-top: 10px; margin-top: 6px; }
 .content { flex: 1; padding: 32px 36px; max-width: 860px; }
 
 /* ---- Panel ---- */
