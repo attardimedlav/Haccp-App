@@ -90,6 +90,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
   const { items: appointments, add: addAppointment, remove: removeAppointment, loading: appointmentsLoading } = useTable("work_safety_appointments", company?.id);
   const { items: equipmentChecks, add: addEquipmentCheck, remove: removeEquipmentCheck, loading: equipmentLoading } = useTable("equipment_checks", company?.id);
   const { items: medicalVisits, add: addMedicalVisit, remove: removeMedicalVisit, loading: medicalLoading } = useTable("medical_visits", company?.id);
+  const { items: employees } = useTable("employees", company?.id);
 
   const showEquipmentTab = !!company?.active_equipment_checks;
   const showMedicalTab = !!company?.active_medical_surveillance;
@@ -429,6 +430,18 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
               <select value={role} onChange={(e) => setRole(e.target.value)}>
                 {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
               </select>
+              {employees.length > 0 && (
+                <select
+                  value=""
+                  onChange={(e) => {
+                    const emp = employees.find((x) => x.id === e.target.value);
+                    if (emp) setPersonName(`${emp.first_name} ${emp.last_name}`);
+                  }}
+                >
+                  <option value="">Scegli dall'elenco dipendenti…</option>
+                  {employees.map((emp) => <option key={emp.id} value={emp.id}>{emp.first_name} {emp.last_name}</option>)}
+                </select>
+              )}
               <input type="text" placeholder="Nominativo" required value={personName} onChange={(e) => setPersonName(e.target.value)} className="note-input" />
             </div>
             <div className="row-form">
@@ -566,6 +579,21 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
       {subTab === "visitemediche" && (
         <>
           <form onSubmit={submitMedicalVisit} className="traccia-form">
+            {employees.length > 0 && (
+              <select
+                value=""
+                onChange={(e) => {
+                  const emp = employees.find((x) => x.id === e.target.value);
+                  if (emp) {
+                    setMedEmployeeName(`${emp.first_name} ${emp.last_name}`);
+                    if (emp.job_role) setMedJobRole(emp.job_role);
+                  }
+                }}
+              >
+                <option value="">Scegli dall'elenco dipendenti…</option>
+                {employees.map((emp) => <option key={emp.id} value={emp.id}>{emp.first_name} {emp.last_name}</option>)}
+              </select>
+            )}
             <div className="row-form">
               <input type="text" placeholder="Nome e Cognome dipendente" required value={medEmployeeName} onChange={(e) => setMedEmployeeName(e.target.value)} className="note-input" />
               <input type="text" placeholder="Mansione" value={medJobRole} onChange={(e) => setMedJobRole(e.target.value)} className="note-input" />

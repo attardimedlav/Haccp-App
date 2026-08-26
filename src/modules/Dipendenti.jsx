@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Plus, Trash2, User } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
+import { supabase } from "../supabaseClient";
 
 export default function Dipendenti() {
   const { company } = useAuth();
@@ -24,6 +25,16 @@ export default function Dipendenti() {
       department: department || null,
       hire_date: hireDate || null,
     });
+
+    // Avviso email al consulente: non blocca il salvataggio se fallisce, è solo un promemoria.
+    try {
+      await supabase.functions.invoke("notify-new-employee", {
+        body: { company_id: company.id, first_name: firstName, last_name: lastName, job_role: jobRole || null },
+      });
+    } catch (err) {
+      console.error("Notifica nuovo dipendente non inviata:", err);
+    }
+
     setFirstName(""); setLastName(""); setJobRole(""); setDepartment(""); setHireDate("");
     setBusy(false);
   };
@@ -33,7 +44,7 @@ export default function Dipendenti() {
       <div className="panel-head">
         <div>
           <h2>Dipendenti</h2>
-          <p className="sub">Anagrafica del personale, riusata nei menu a tendina delle schede che richiedono un nominativo (es. Sicurezza sul lavoro).</p>
+          <p className="sub">Anagrafica del personale, riusata nei menu a tendina delle schede che richiedono un nominativo (es. Sicurezza sul lavoro). Ogni nuovo inserimento avvisa via email il consulente.</p>
         </div>
       </div>
 

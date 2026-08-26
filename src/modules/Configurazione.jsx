@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from "react";
-import { CheckCircle2, CalendarClock, Download, Wrench, Droplets, Settings2, RefreshCw, Lock } from "lucide-react";
+import { CheckCircle2, CalendarClock, Download, Wrench, Droplets, Settings2, RefreshCw, Lock, Users } from "lucide-react";
 import { useAuth } from "../AuthContext";
 import { downloadReminderICS } from "../hooks/useReminders";
 import { getSubscriptionStatus, pillClassFor } from "../subscriptionStatus";
 import Attrezzature from "./Attrezzature";
 import Sanificanti from "./Sanificanti";
+import Dipendenti from "./Dipendenti";
 
 const SUB_TABS = [
   { id: "generale", label: "Generale", icon: Settings2 },
   { id: "attrezzature", label: "Attrezzature", icon: Wrench },
   { id: "sanificanti", label: "Sanificanti", icon: Droplets },
+  { id: "dipendenti", label: "Dipendenti", icon: Users },
 ];
 
 function addOneYear(dateStr) {
@@ -167,6 +169,7 @@ export default function Configurazione() {
 
       {subTab === "attrezzature" && <Attrezzature />}
       {subTab === "sanificanti" && <Sanificanti />}
+      {subTab === "dipendenti" && <Dipendenti />}
 
       {subTab === "generale" && (
         <>
