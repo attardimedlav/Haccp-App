@@ -521,6 +521,18 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
               </select>
               <input type="text" placeholder="Identificativo (es. Carrello reparto magazzino)" value={equipLabel} onChange={(e) => setEquipLabel(e.target.value)} className="note-input" />
             </div>
+            {employees.length > 0 && (
+              <select
+                value=""
+                onChange={(e) => {
+                  const emp = employees.find((x) => x.id === e.target.value);
+                  if (emp) setEquipTechnician(`${emp.first_name} ${emp.last_name}`);
+                }}
+              >
+                <option value="">Scegli dall'elenco dipendenti…</option>
+                {employees.map((emp) => <option key={emp.id} value={emp.id}>{emp.first_name} {emp.last_name}</option>)}
+              </select>
+            )}
             <input type="text" placeholder="Nominativo / Ditta esecutrice (opzionale)" value={equipTechnician} onChange={(e) => setEquipTechnician(e.target.value)} className="full-input" />
             <div className="row-form">
               <label className="field-label">Data verifica / rilascio
