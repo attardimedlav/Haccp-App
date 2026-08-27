@@ -88,7 +88,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
   const { items: appointments, add: addAppointment, remove: removeAppointment, update: updateAppointment, loading: appointmentsLoading } = useTable("work_safety_appointments", company?.id);
   const { items: equipmentChecks, add: addEquipmentCheck, remove: removeEquipmentCheck, loading: equipmentLoading } = useTable("equipment_checks", company?.id);
   const { items: medicalVisits, add: addMedicalVisit, remove: removeMedicalVisit, loading: medicalLoading } = useTable("medical_visits", company?.id);
-  const { items: employees } = useTable("employees", company?.id);
+  const { items: employees, add: addEmployee } = useTable("employees", company?.id);
 
   const showEquipmentTab = !!company?.active_equipment_checks;
   const showMedicalTab = !!company?.active_medical_surveillance;
@@ -373,6 +373,21 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
     setMedBusy(true);
     setMedError("");
     try {
+      const typedName = medEmployeeName.trim();
+      const alreadyInOrganigramma = employees.some(
+        (emp) => `${emp.first_name} ${emp.last_name}`.trim() === typedName
+      );
+      if (!alreadyInOrganigramma) {
+        const [firstName, ...rest] = typedName.split(" ");
+        await addEmployee({
+          first_name: firstName,
+          last_name: rest.join(" ") || "",
+          job_role: medJobRole || null,
+          department: null,
+          security_role: "Dipendente",
+        });
+      }
+
       let attachment_path = null;
       if (medFile) attachment_path = await uploadAttachment(company.id, medFile);
       await addMedicalVisit({
