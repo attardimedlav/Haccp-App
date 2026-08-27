@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Plus, Trash2, UserPlus, Award } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
-import { ROLE_OPTIONS, expiryInfo, addYears } from "./SicurezzaLavoro";
+import { ROLE_OPTIONS, expiryInfo } from "./SicurezzaLavoro";
 
 export const SECURITY_ROLE_OPTIONS = [
   "Dipendente",
@@ -44,7 +44,8 @@ export default function Organigramma() {
       await addAppointment({
         role: securityRole,
         person_name: `${firstName} ${lastName}`,
-        issue_date: todayStr,
+        nomina_issue_date: todayStr,
+        issue_date: null,
         validity_years: null,
         expiry_date: null,
         nomina_attachment_path: null,
@@ -61,25 +62,12 @@ export default function Organigramma() {
   const [assigningFor, setAssigningFor] = useState(null);
   const [assignRole, setAssignRole] = useState(ROLE_OPTIONS[0]);
   const [assignIssueDate, setAssignIssueDate] = useState("");
-  const [assignYears, setAssignYears] = useState("");
-  const [assignExpiry, setAssignExpiry] = useState("");
   const [assignBusy, setAssignBusy] = useState(false);
 
   const startAssign = (empId) => {
     setAssigningFor(empId);
     setAssignRole(ROLE_OPTIONS[0]);
     setAssignIssueDate(new Date().toISOString().slice(0, 10));
-    setAssignYears("");
-    setAssignExpiry("");
-  };
-
-  const handleAssignIssueChange = (value) => {
-    setAssignIssueDate(value);
-    if (assignYears) setAssignExpiry(addYears(value, assignYears));
-  };
-  const handleAssignYearsChange = (value) => {
-    setAssignYears(value);
-    if (assignIssueDate) setAssignExpiry(addYears(assignIssueDate, value));
   };
 
   const submitAssign = async (emp) => {
@@ -88,9 +76,10 @@ export default function Organigramma() {
     await addAppointment({
       role: assignRole,
       person_name: `${emp.first_name} ${emp.last_name}`,
-      issue_date: assignIssueDate,
-      validity_years: assignYears === "" ? null : Number(assignYears),
-      expiry_date: assignExpiry || null,
+      nomina_issue_date: assignIssueDate,
+      issue_date: null,
+      validity_years: null,
+      expiry_date: null,
       nomina_attachment_path: null,
       attestato_attachment_path: null,
       note: "",
@@ -181,13 +170,11 @@ export default function Organigramma() {
                       <select value={assignRole} onChange={(e) => setAssignRole(e.target.value)}>
                         {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
                       </select>
-                      <label className="field-label">Data rilascio
-                        <input type="date" value={assignIssueDate} onChange={(e) => handleAssignIssueChange(e.target.value)} />
-                      </label>
-                      <label className="field-label">Anni validità (opzionale)
-                        <input type="number" min="0" step="1" placeholder="es. 5" value={assignYears} onChange={(e) => handleAssignYearsChange(e.target.value)} className="num" />
+                      <label className="field-label">Data nomina
+                        <input type="date" value={assignIssueDate} onChange={(e) => setAssignIssueDate(e.target.value)} />
                       </label>
                     </div>
+                    <p className="sub" style={{ margin: "6px 0" }}>Il corso di formazione (con la sua scadenza) si aggiunge poi da "Nomine e Attestati".</p>
                     <div className="row-form" style={{ margin: "8px 0" }}>
                       <button type="button" className="btn-primary" onClick={() => submitAssign(emp)} disabled={assignBusy || !assignIssueDate}>
                         <Plus size={14} /> Assegna

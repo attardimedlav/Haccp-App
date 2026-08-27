@@ -35,7 +35,8 @@ export default function Dipendenti() {
       await addAppointment({
         role: securityRole,
         person_name: `${firstName} ${lastName}`,
-        issue_date: todayStr,
+        nomina_issue_date: todayStr,
+        issue_date: null,
         validity_years: null,
         expiry_date: null,
         nomina_attachment_path: null,
