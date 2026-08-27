@@ -31,6 +31,8 @@ export default function Configurazione() {
   const [sedeOperativa, setSedeOperativa] = useState("");
   const [piva, setPiva] = useState("");
   const [pec, setPec] = useState("");
+  const [formaGiuridica, setFormaGiuridica] = useState("");
+  const [numeroRea, setNumeroRea] = useState("");
   const [codiceAteco, setCodiceAteco] = useState("");
   const [tipologiaAttivita, setTipologiaAttivita] = useState("");
   const [hasWaterTank, setHasWaterTank] = useState(false);
@@ -63,6 +65,8 @@ export default function Configurazione() {
       setSedeOperativa(company.sede_operativa || "");
       setPiva(company.piva || "");
       setPec(company.pec || "");
+      setFormaGiuridica(company.forma_giuridica || "");
+      setNumeroRea(company.numero_rea || "");
       setCodiceAteco(company.codice_ateco || "");
       setTipologiaAttivita(company.tipologia_attivita || "");
       setHasWaterTank(!!company.has_water_tank);
@@ -94,6 +98,8 @@ export default function Configurazione() {
     sede_operativa: sedeOperativa,
     piva: piva,
     pec: pec,
+    forma_giuridica: formaGiuridica,
+    numero_rea: numeroRea,
     codice_ateco: codiceAteco,
     tipologia_attivita: tipologiaAttivita,
     has_water_tank: hasWaterTank,
@@ -204,6 +210,13 @@ export default function Configurazione() {
                 <input type="text" placeholder="P.IVA" value={piva} onChange={(e) => setPiva(e.target.value)} className="full-input" />
                 <input type="email" placeholder="PEC" value={pec} onChange={(e) => setPec(e.target.value)} className="full-input" />
               </div>
+              <div className="config-grid-2" style={{ marginTop: 10 }}>
+                <input type="text" placeholder="Forma giuridica (es. S.R.L., S.N.C., Ditta individuale...)" value={formaGiuridica} onChange={(e) => setFormaGiuridica(e.target.value)} className="full-input" />
+                <input type="text" placeholder="Numero REA (es. CT - 346696)" value={numeroRea} onChange={(e) => setNumeroRea(e.target.value)} className="full-input" />
+              </div>
+              <p className="sub" style={{ marginTop: 6 }}>
+                Questi dati, insieme a Sede legale e P.IVA, vengono usati per compilare da soli i documenti di nomina generati automaticamente in Sicurezza sul lavoro.
+              </p>
               <div className="config-grid-2" style={{ marginTop: 10 }}>
                 <input type="text" placeholder="Codice ATECO" value={codiceAteco} onChange={(e) => setCodiceAteco(e.target.value)} className="full-input" />
                 <input type="text" placeholder="Tipologia di attività (es. Ristorazione, Bar...)" value={tipologiaAttivita} onChange={(e) => setTipologiaAttivita(e.target.value)} className="full-input" />

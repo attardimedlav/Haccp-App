@@ -5,6 +5,7 @@ import { useAuth } from "../AuthContext";
 import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
 import { supabase } from "../supabaseClient";
 import Organigramma from "./Organigramma";
+import { generateNominaAttachment, findRlsName } from "../utils/nominaTemplates";
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
 
@@ -191,7 +192,20 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
     try {
       let nomina_attachment_path = null;
       let attestato_attachment_path = null;
-      if (apptNominaFile) nomina_attachment_path = await uploadAttachment(company.id, apptNominaFile);
+      if (apptNominaFile) {
+        nomina_attachment_path = await uploadAttachment(company.id, apptNominaFile);
+      } else {
+        // Nessun file allegato a mano: se esiste un modello per questo ruolo
+        // (es. "RSPP Datore di Lavoro"), la nomina viene generata da sola in
+        // Word con i dati dell'azienda. Non blocca il salvataggio se fallisce.
+        nomina_attachment_path = await generateNominaAttachment({
+          role,
+          company,
+          personName,
+          nominaDate: nominaIssueDate || issueDate,
+          rlsName: findRlsName(appointments),
+        });
+      }
       if (apptAttestatoFile) attestato_attachment_path = await uploadAttachment(company.id, apptAttestatoFile);
       await addAppointment({
         role,

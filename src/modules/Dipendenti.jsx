@@ -4,11 +4,12 @@ import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { supabase } from "../supabaseClient";
 import { SECURITY_ROLE_OPTIONS } from "./Organigramma";
+import { generateNominaAttachment, findRlsName } from "../utils/nominaTemplates";
 
 export default function Dipendenti() {
   const { company } = useAuth();
   const { items, add, remove, loading } = useTable("employees", company?.id);
-  const { add: addAppointment } = useTable("work_safety_appointments", company?.id);
+  const { items: appointments, add: addAppointment } = useTable("work_safety_appointments", company?.id);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [jobRole, setJobRole] = useState("");
@@ -32,14 +33,25 @@ export default function Dipendenti() {
     });
 
     if (securityRole !== "Dipendente") {
+      const nominaDateToUse = nominaDate || new Date().toISOString().slice(0, 10);
+      // Se esiste un modello per questo ruolo (es. "RSPP Datore di Lavoro"), la
+      // nomina viene generata da sola in Word e allegata subito: non blocca il
+      // salvataggio se la generazione fallisce, in quel caso resta da allegare a mano.
+      const nomina_attachment_path = await generateNominaAttachment({
+        role: securityRole,
+        company,
+        personName: `${firstName} ${lastName}`,
+        nominaDate: nominaDateToUse,
+        rlsName: findRlsName(appointments),
+      });
       await addAppointment({
         role: securityRole,
         person_name: `${firstName} ${lastName}`,
-        nomina_issue_date: nominaDate || new Date().toISOString().slice(0, 10),
+        nomina_issue_date: nominaDateToUse,
         issue_date: null,
         validity_years: null,
         expiry_date: null,
-        nomina_attachment_path: null,
+        nomina_attachment_path,
         attestato_attachment_path: null,
         note: "",
       });

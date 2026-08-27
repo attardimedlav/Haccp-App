@@ -4,6 +4,7 @@ import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { supabase } from "../supabaseClient";
 import { ROLE_OPTIONS, expiryInfo } from "./SicurezzaLavoro";
+import { generateNominaAttachment, findRlsName } from "../utils/nominaTemplates";
 
 export const SECURITY_ROLE_OPTIONS = [
   "Dipendente",
@@ -42,14 +43,25 @@ export default function Organigramma() {
       security_role: securityRole,
     });
     if (securityRole !== "Dipendente") {
+      const nominaDateToUse = personNominaDate || new Date().toISOString().slice(0, 10);
+      // Se esiste un modello per questo ruolo (es. "RSPP Datore di Lavoro"), la
+      // nomina viene generata da sola in Word e allegata subito: non blocca il
+      // salvataggio se la generazione fallisce, in quel caso resta da allegare a mano.
+      const nomina_attachment_path = await generateNominaAttachment({
+        role: securityRole,
+        company,
+        personName: `${firstName} ${lastName}`,
+        nominaDate: nominaDateToUse,
+        rlsName: findRlsName(appointments),
+      });
       await addAppointment({
         role: securityRole,
         person_name: `${firstName} ${lastName}`,
-        nomina_issue_date: personNominaDate || new Date().toISOString().slice(0, 10),
+        nomina_issue_date: nominaDateToUse,
         issue_date: null,
         validity_years: null,
         expiry_date: null,
-        nomina_attachment_path: null,
+        nomina_attachment_path,
         attestato_attachment_path: null,
         note: "",
       });
@@ -87,6 +99,13 @@ export default function Organigramma() {
   const submitAssign = async (emp) => {
     if (!assignIssueDate) return;
     setAssignBusy(true);
+    const nomina_attachment_path = await generateNominaAttachment({
+      role: assignRole,
+      company,
+      personName: `${emp.first_name} ${emp.last_name}`,
+      nominaDate: assignIssueDate,
+      rlsName: findRlsName(appointments),
+    });
     await addAppointment({
       role: assignRole,
       person_name: `${emp.first_name} ${emp.last_name}`,
@@ -94,7 +113,7 @@ export default function Organigramma() {
       issue_date: null,
       validity_years: null,
       expiry_date: null,
-      nomina_attachment_path: null,
+      nomina_attachment_path,
       attestato_attachment_path: null,
       note: "",
     });
