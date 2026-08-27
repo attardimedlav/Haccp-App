@@ -3,6 +3,7 @@ import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Award, Hard
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
+import { supabase } from "../supabaseClient";
 import Organigramma from "./Organigramma";
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
@@ -379,13 +380,25 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
       );
       if (!alreadyInOrganigramma) {
         const [firstName, ...rest] = typedName.split(" ");
+        const lastName = rest.join(" ") || "";
         await addEmployee({
           first_name: firstName,
-          last_name: rest.join(" ") || "",
+          last_name: lastName,
           job_role: medJobRole || null,
           department: null,
           security_role: "Dipendente",
         });
+
+        // Avviso email al consulente: non blocca il salvataggio se fallisce, è solo un promemoria.
+        try {
+          const { data, error: fnError } = await supabase.functions.invoke("rapid-endpoint", {
+            body: { company_id: company.id, first_name: firstName, last_name: lastName, job_role: medJobRole || null },
+          });
+          if (fnError) console.error("Notifica nuovo dipendente - errore dalla function:", fnError);
+          else console.log("Notifica nuovo dipendente - risposta:", data);
+        } catch (err) {
+          console.error("Notifica nuovo dipendente non inviata:", err);
+        }
       }
 
       let attachment_path = null;

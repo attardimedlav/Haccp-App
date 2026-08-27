@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Plus, Trash2, UserPlus, Award } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
+import { supabase } from "../supabaseClient";
 import { ROLE_OPTIONS, expiryInfo } from "./SicurezzaLavoro";
 
 export const SECURITY_ROLE_OPTIONS = [
@@ -53,6 +54,18 @@ export default function Organigramma() {
         note: "",
       });
     }
+
+    // Avviso email al consulente: non blocca il salvataggio se fallisce, è solo un promemoria.
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke("rapid-endpoint", {
+        body: { company_id: company.id, first_name: firstName, last_name: lastName, job_role: jobRole || null },
+      });
+      if (fnError) console.error("Notifica nuovo dipendente - errore dalla function:", fnError);
+      else console.log("Notifica nuovo dipendente - risposta:", data);
+    } catch (err) {
+      console.error("Notifica nuovo dipendente non inviata:", err);
+    }
+
     setFirstName(""); setLastName(""); setJobRole(""); setDepartment(""); setSecurityRole("Dipendente");
     setBusyPerson(false);
     setShowAddPerson(false);
