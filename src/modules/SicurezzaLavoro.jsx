@@ -127,7 +127,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
     setDocFile(f);
   };
 
-  const submitDoc = async (kind) => async (e) => {
+  const submitDoc = (kind) => async (e) => {
     e.preventDefault();
     if (!docTitle.trim()) return;
     setDocBusy(true);
