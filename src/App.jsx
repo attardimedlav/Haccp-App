@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Thermometer, SprayCan, Bug, ChevronRight, ChevronDown, LogOut, ShieldCheck, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen, Snowflake, HardHat, FileText, Paperclip, Award, Wrench, Stethoscope } from "lucide-react";
+import { Thermometer, SprayCan, Bug, ChevronRight, ChevronDown, LogOut, ShieldCheck, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen, Snowflake, HardHat, FileText, Paperclip, Award, Wrench, Stethoscope, Network } from "lucide-react";
 import { AuthProvider, useAuth } from "./AuthContext";
 import Login from "./Login";
 import ResetPassword from "./ResetPassword";
@@ -39,6 +39,7 @@ const STATIC_TABS = [
 ];
 
 const WORK_SAFETY_SUB_ITEMS = [
+  { id: "organigramma", label: "Organigramma", icon: Network },
   { id: "dvr", label: "DVR", icon: FileText },
   { id: "allegati", label: "Allegati al DVR", icon: Paperclip },
   { id: "nomine", label: "Nomine e Attestati", icon: Award },
@@ -60,7 +61,7 @@ function Shell() {
   const isViewingClient = homeCompanyId && company && company.id !== homeCompanyId;
   const hasMultipleClients = consultantCompanies.length > 0;
   const [tab, setTab] = useState("dashboard");
-  const [workSafetySubTab, setWorkSafetySubTab] = useState("dvr");
+  const [workSafetySubTab, setWorkSafetySubTab] = useState("organigramma");
   const [workSafetyExpanded, setWorkSafetyExpanded] = useState(false);
 
   const visibleMainTabs = MAIN_TABS.filter((t) => t.id !== "abbattimento" || company?.serves_raw_fish);
