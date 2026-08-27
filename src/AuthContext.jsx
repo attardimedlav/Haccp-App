@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "./supabaseClient";
 
 const AuthContext = createContext(null);
@@ -61,17 +61,30 @@ export function AuthProvider({ children }) {
     setLoadingCompany(false);
   }, []);
 
+  const loadedUserIdRef = useRef(null);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
-      if (data.session?.user) loadCompany(data.session.user.id);
+      if (data.session?.user) {
+        loadedUserIdRef.current = data.session.user.id;
+        loadCompany(data.session.user.id);
+      }
     });
     const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
       setSession(newSession);
       if (event === "PASSWORD_RECOVERY") setRecoveryMode(true);
+      // Il token viene rinnovato automaticamente ogni volta che il browser
+      // torna in primo piano (cambio scheda/finestra): non è un vero cambio
+      // di utente, quindi non serve ricaricare tutto (evita di perdere la
+      // pagina corrente e tornare sempre alla Panoramica).
+      if (event === "TOKEN_REFRESHED") return;
       if (newSession?.user) {
+        if (loadedUserIdRef.current === newSession.user.id) return;
+        loadedUserIdRef.current = newSession.user.id;
         loadCompany(newSession.user.id);
       } else {
+        loadedUserIdRef.current = null;
         setCompany(null);
         setConsultantCompanies([]);
         setHomeCompanyId(null);
