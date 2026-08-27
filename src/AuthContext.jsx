@@ -13,8 +13,12 @@ export function AuthProvider({ children }) {
   const [error, setError] = useState("");
   const [recoveryMode, setRecoveryMode] = useState(false);
 
-  const loadCompany = useCallback(async (userId) => {
-    setLoadingCompany(true);
+  // silent = true: aggiorna i dati dell'azienda in background (usato quando il
+  // browser torna in primo piano su una scheda già aperta) senza mostrare la
+  // schermata "Caricamento azienda…", che smonterebbe la pagina corrente e
+  // farebbe tornare l'utente alla Panoramica.
+  const loadCompany = useCallback(async (userId, { silent = false } = {}) => {
+    if (!silent) setLoadingCompany(true);
     setError("");
 
     const { data: profile } = await supabase
@@ -39,9 +43,11 @@ export function AuthProvider({ children }) {
     const initialId = ownCompanyId || (clientList[0] && clientList[0].id) || null;
 
     if (!initialId) {
-      setError("Il tuo utente non è ancora collegato a nessuna azienda. Contatta il consulente.");
-      setCompany(null);
-      setLoadingCompany(false);
+      if (!silent) {
+        setError("Il tuo utente non è ancora collegato a nessuna azienda. Contatta il consulente.");
+        setCompany(null);
+      }
+      if (!silent) setLoadingCompany(false);
       return;
     }
 
@@ -58,7 +64,7 @@ export function AuthProvider({ children }) {
       const { data: ownRow } = await supabase.from("companies").select("name").eq("id", ownCompanyId).single();
       setHomeCompanyName(ownRow?.name || "");
     }
-    setLoadingCompany(false);
+    if (!silent) setLoadingCompany(false);
   }, []);
 
   const loadedUserIdRef = useRef(null);
@@ -74,15 +80,16 @@ export function AuthProvider({ children }) {
     const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
       setSession(newSession);
       if (event === "PASSWORD_RECOVERY") setRecoveryMode(true);
-      // Il token viene rinnovato automaticamente ogni volta che il browser
-      // torna in primo piano (cambio scheda/finestra): non è un vero cambio
-      // di utente, quindi non serve ricaricare tutto (evita di perdere la
-      // pagina corrente e tornare sempre alla Panoramica).
-      if (event === "TOKEN_REFRESHED") return;
       if (newSession?.user) {
-        if (loadedUserIdRef.current === newSession.user.id) return;
+        // Il token viene rinnovato automaticamente ogni volta che il browser
+        // torna in primo piano su una scheda già aperta (cambio scheda/finestra):
+        // se è lo stesso utente già caricato, aggiorniamo comunque i dati
+        // dell'azienda (così restano aggiornati anche cambiando scheda), ma in
+        // modo silenzioso — senza mostrare "Caricamento azienda…", che
+        // smonterebbe la pagina corrente e farebbe tornare sempre alla Panoramica.
+        const isSameUserAlreadyLoaded = loadedUserIdRef.current === newSession.user.id;
         loadedUserIdRef.current = newSession.user.id;
-        loadCompany(newSession.user.id);
+        loadCompany(newSession.user.id, { silent: isSameUserAlreadyLoaded });
       } else {
         loadedUserIdRef.current = null;
         setCompany(null);
