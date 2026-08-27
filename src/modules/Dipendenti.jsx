@@ -15,6 +15,7 @@ export default function Dipendenti() {
   const [department, setDepartment] = useState("");
   const [hireDate, setHireDate] = useState("");
   const [securityRole, setSecurityRole] = useState("Dipendente");
+  const [nominaDate, setNominaDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [busy, setBusy] = useState(false);
 
   const submit = async (e) => {
@@ -31,11 +32,10 @@ export default function Dipendenti() {
     });
 
     if (securityRole !== "Dipendente") {
-      const todayStr = new Date().toISOString().slice(0, 10);
       await addAppointment({
         role: securityRole,
         person_name: `${firstName} ${lastName}`,
-        nomina_issue_date: todayStr,
+        nomina_issue_date: nominaDate || new Date().toISOString().slice(0, 10),
         issue_date: null,
         validity_years: null,
         expiry_date: null,
@@ -57,6 +57,7 @@ export default function Dipendenti() {
     }
 
     setFirstName(""); setLastName(""); setJobRole(""); setDepartment(""); setHireDate(""); setSecurityRole("Dipendente");
+    setNominaDate(new Date().toISOString().slice(0, 10));
     setBusy(false);
   };
 
@@ -87,11 +88,17 @@ export default function Dipendenti() {
           </select>
         </label>
         {securityRole !== "Dipendente" && (
-          <p className="sub" style={{ marginTop: -6 }}>
-            Verrà creata automaticamente anche la relativa nomina in "Sicurezza sul lavoro → Nomine e Attestati", con data di oggi.
-          </p>
+          <>
+            <label className="field-label">Data nomina
+              <input type="date" value={nominaDate} onChange={(e) => setNominaDate(e.target.value)} />
+            </label>
+            <p className="sub" style={{ marginTop: -6 }}>
+              Verrà creata automaticamente anche la relativa nomina in "Sicurezza sul lavoro → Nomine e Attestati", con questa data
+              (utile per registrare nomine già fatte in passato, non solo quelle di oggi).
+            </p>
+          </>
         )}
-        <button type="submit" className="btn-primary" disabled={busy} style={{ alignSelf: "flex-start" }}>
+        <button type="submit" className="btn-primary" disabled={busy || (securityRole !== "Dipendente" && !nominaDate)} style={{ alignSelf: "flex-start" }}>
           <Plus size={16} /> Aggiungi dipendente
         </button>
       </form>

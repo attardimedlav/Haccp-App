@@ -27,6 +27,7 @@ export default function Organigramma() {
   const [jobRole, setJobRole] = useState("");
   const [department, setDepartment] = useState("");
   const [securityRole, setSecurityRole] = useState("Dipendente");
+  const [personNominaDate, setPersonNominaDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [busyPerson, setBusyPerson] = useState(false);
 
   const submitPerson = async (e) => {
@@ -41,11 +42,10 @@ export default function Organigramma() {
       security_role: securityRole,
     });
     if (securityRole !== "Dipendente") {
-      const todayStr = new Date().toISOString().slice(0, 10);
       await addAppointment({
         role: securityRole,
         person_name: `${firstName} ${lastName}`,
-        nomina_issue_date: todayStr,
+        nomina_issue_date: personNominaDate || new Date().toISOString().slice(0, 10),
         issue_date: null,
         validity_years: null,
         expiry_date: null,
@@ -67,6 +67,7 @@ export default function Organigramma() {
     }
 
     setFirstName(""); setLastName(""); setJobRole(""); setDepartment(""); setSecurityRole("Dipendente");
+    setPersonNominaDate(new Date().toISOString().slice(0, 10));
     setBusyPerson(false);
     setShowAddPerson(false);
   };
@@ -136,11 +137,17 @@ export default function Organigramma() {
             </select>
           </label>
           {securityRole !== "Dipendente" && (
-            <p className="sub" style={{ marginTop: -6 }}>
-              Verrà creata automaticamente anche la relativa nomina in "Nomine e Attestati", con data di oggi.
-            </p>
+            <>
+              <label className="field-label">Data nomina
+                <input type="date" value={personNominaDate} onChange={(e) => setPersonNominaDate(e.target.value)} />
+              </label>
+              <p className="sub" style={{ marginTop: -6 }}>
+                Verrà creata automaticamente anche la relativa nomina in "Nomine e Attestati", con questa data
+                (utile per registrare nomine già fatte in passato, non solo quelle di oggi).
+              </p>
+            </>
           )}
-          <button type="submit" className="btn-primary" disabled={busyPerson} style={{ alignSelf: "flex-start" }}>
+          <button type="submit" className="btn-primary" disabled={busyPerson || (securityRole !== "Dipendente" && !personNominaDate)} style={{ alignSelf: "flex-start" }}>
             <Plus size={16} /> Salva persona
           </button>
         </form>
