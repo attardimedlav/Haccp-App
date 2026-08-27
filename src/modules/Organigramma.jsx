@@ -4,6 +4,16 @@ import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { ROLE_OPTIONS, expiryInfo, addYears } from "./SicurezzaLavoro";
 
+export const SECURITY_ROLE_OPTIONS = [
+  "Dipendente",
+  "RSPP Datore di Lavoro",
+  "RSPP Esterno",
+  "Addetto al Primo Soccorso",
+  "Addetto Antincendio",
+  "Preposto",
+  "RLS",
+];
+
 export default function Organigramma() {
   const { company } = useAuth();
   const { items: employees, add: addEmployee, remove: removeEmployee, loading: employeesLoading } = useTable("employees", company?.id);
@@ -15,14 +25,34 @@ export default function Organigramma() {
   const [lastName, setLastName] = useState("");
   const [jobRole, setJobRole] = useState("");
   const [department, setDepartment] = useState("");
+  const [securityRole, setSecurityRole] = useState("Dipendente");
   const [busyPerson, setBusyPerson] = useState(false);
 
   const submitPerson = async (e) => {
     e.preventDefault();
     if (!firstName.trim() || !lastName.trim()) return;
     setBusyPerson(true);
-    await addEmployee({ first_name: firstName, last_name: lastName, job_role: jobRole || null, department: department || null });
-    setFirstName(""); setLastName(""); setJobRole(""); setDepartment("");
+    await addEmployee({
+      first_name: firstName,
+      last_name: lastName,
+      job_role: jobRole || null,
+      department: department || null,
+      security_role: securityRole,
+    });
+    if (securityRole !== "Dipendente") {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      await addAppointment({
+        role: securityRole,
+        person_name: `${firstName} ${lastName}`,
+        issue_date: todayStr,
+        validity_years: null,
+        expiry_date: null,
+        nomina_attachment_path: null,
+        attestato_attachment_path: null,
+        note: "",
+      });
+    }
+    setFirstName(""); setLastName(""); setJobRole(""); setDepartment(""); setSecurityRole("Dipendente");
     setBusyPerson(false);
     setShowAddPerson(false);
   };
@@ -98,6 +128,16 @@ export default function Organigramma() {
             <input type="text" placeholder="Mansione (opzionale)" value={jobRole} onChange={(e) => setJobRole(e.target.value)} className="note-input" />
             <input type="text" placeholder="Reparto (opzionale)" value={department} onChange={(e) => setDepartment(e.target.value)} className="note-input" />
           </div>
+          <label className="field-label">Ruolo di sicurezza
+            <select value={securityRole} onChange={(e) => setSecurityRole(e.target.value)}>
+              {SECURITY_ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </label>
+          {securityRole !== "Dipendente" && (
+            <p className="sub" style={{ marginTop: -6 }}>
+              Verrà creata automaticamente anche la relativa nomina in "Nomine e Attestati", con data di oggi.
+            </p>
+          )}
           <button type="submit" className="btn-primary" disabled={busyPerson} style={{ alignSelf: "flex-start" }}>
             <Plus size={16} /> Salva persona
           </button>

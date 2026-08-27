@@ -3,15 +3,18 @@ import { Plus, Trash2, User } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { supabase } from "../supabaseClient";
+import { SECURITY_ROLE_OPTIONS } from "./Organigramma";
 
 export default function Dipendenti() {
   const { company } = useAuth();
   const { items, add, remove, loading } = useTable("employees", company?.id);
+  const { add: addAppointment } = useTable("work_safety_appointments", company?.id);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [jobRole, setJobRole] = useState("");
   const [department, setDepartment] = useState("");
   const [hireDate, setHireDate] = useState("");
+  const [securityRole, setSecurityRole] = useState("Dipendente");
   const [busy, setBusy] = useState(false);
 
   const submit = async (e) => {
@@ -24,7 +27,22 @@ export default function Dipendenti() {
       job_role: jobRole || null,
       department: department || null,
       hire_date: hireDate || null,
+      security_role: securityRole,
     });
+
+    if (securityRole !== "Dipendente") {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      await addAppointment({
+        role: securityRole,
+        person_name: `${firstName} ${lastName}`,
+        issue_date: todayStr,
+        validity_years: null,
+        expiry_date: null,
+        nomina_attachment_path: null,
+        attestato_attachment_path: null,
+        note: "",
+      });
+    }
 
     // Avviso email al consulente: non blocca il salvataggio se fallisce, è solo un promemoria.
     try {
@@ -37,7 +55,7 @@ export default function Dipendenti() {
       console.error("Notifica nuovo dipendente non inviata:", err);
     }
 
-    setFirstName(""); setLastName(""); setJobRole(""); setDepartment(""); setHireDate("");
+    setFirstName(""); setLastName(""); setJobRole(""); setDepartment(""); setHireDate(""); setSecurityRole("Dipendente");
     setBusy(false);
   };
 
@@ -62,6 +80,16 @@ export default function Dipendenti() {
             <input type="date" value={hireDate} onChange={(e) => setHireDate(e.target.value)} />
           </label>
         </div>
+        <label className="field-label">Ruolo di sicurezza
+          <select value={securityRole} onChange={(e) => setSecurityRole(e.target.value)}>
+            {SECURITY_ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+          </select>
+        </label>
+        {securityRole !== "Dipendente" && (
+          <p className="sub" style={{ marginTop: -6 }}>
+            Verrà creata automaticamente anche la relativa nomina in "Sicurezza sul lavoro → Nomine e Attestati", con data di oggi.
+          </p>
+        )}
         <button type="submit" className="btn-primary" disabled={busy} style={{ alignSelf: "flex-start" }}>
           <Plus size={16} /> Aggiungi dipendente
         </button>
