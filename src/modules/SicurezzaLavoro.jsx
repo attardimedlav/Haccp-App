@@ -399,6 +399,30 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
     return info && (info.cls === "pill-warn" || info.cls === "pill-alert");
   }).length;
 
+  // Tutti i lavoratori sono soggetti a sorveglianza sanitaria tranne il datore
+  // di lavoro (identificato dal ruolo di sicurezza "RSPP Datore di Lavoro").
+  const medicalComplianceList = employees
+    .filter((emp) => emp.security_role !== "RSPP Datore di Lavoro")
+    .map((emp) => {
+      const fullName = `${emp.first_name} ${emp.last_name}`;
+      const visits = medicalVisits.filter((v) => v.employee_name === fullName);
+      const latest = visits.reduce((best, v) => {
+        if (!v.visit_date) return best;
+        if (!best || new Date(v.visit_date) > new Date(best.visit_date)) return v;
+        return best;
+      }, null);
+      const info = latest ? expiryInfo(latest.expiry_date) : null;
+      let status;
+      if (!latest) {
+        status = { label: "Nessuna visita registrata", cls: "pill-alert" };
+      } else if (info) {
+        status = { label: info.label, cls: info.cls };
+      } else {
+        status = { label: "Registrata (senza scadenza)", cls: "pill-ok" };
+      }
+      return { emp, fullName, status };
+    });
+
   return (
     <div className="panel">
       <div className="panel-head">
@@ -724,6 +748,32 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
 
       {subTab === "visitemediche" && (
         <>
+          {medicalComplianceList.length > 0 && (
+            <div className="panel-head" style={{ marginBottom: 12 }}>
+              <div>
+                <h3 style={{ margin: "0 0 6px" }}>Situazione visite mediche per dipendente</h3>
+                <p className="sub" style={{ margin: 0 }}>
+                  Tutti i lavoratori, tranne il datore di lavoro, sono soggetti per legge a sorveglianza sanitaria.
+                </p>
+              </div>
+            </div>
+          )}
+          {medicalComplianceList.length > 0 && (
+            <ul className="dish-list" style={{ marginBottom: 20 }}>
+              {medicalComplianceList.map(({ emp, fullName, status }) => (
+                <li key={emp.id} className="dish-row">
+                  <div className="dish-top">
+                    <div>
+                      <strong>{fullName}</strong>
+                      {emp.job_role && <span className="lot-tag">{emp.job_role}</span>}
+                    </div>
+                    <span className={"pill " + status.cls}>{status.label}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+
           <form onSubmit={submitMedicalVisit} className="traccia-form">
             {employees.length > 0 && (
               <select
