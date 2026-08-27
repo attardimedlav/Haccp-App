@@ -27,6 +27,12 @@ export default function Configurazione() {
   const [consultantName, setConsultantName] = useState("");
   const [consultantEmail, setConsultantEmail] = useState("");
   const [ownerEmail, setOwnerEmail] = useState("");
+  const [sedeLegale, setSedeLegale] = useState("");
+  const [sedeOperativa, setSedeOperativa] = useState("");
+  const [piva, setPiva] = useState("");
+  const [pec, setPec] = useState("");
+  const [codiceAteco, setCodiceAteco] = useState("");
+  const [tipologiaAttivita, setTipologiaAttivita] = useState("");
   const [hasWaterTank, setHasWaterTank] = useState(false);
   const [servesRawFish, setServesRawFish] = useState(false);
   const [activeWorkSafety, setActiveWorkSafety] = useState(false);
@@ -53,6 +59,12 @@ export default function Configurazione() {
       setConsultantName(company.consultant_name || "");
       setConsultantEmail(company.consultant_email || "");
       setOwnerEmail(company.owner_email || "");
+      setSedeLegale(company.sede_legale || "");
+      setSedeOperativa(company.sede_operativa || "");
+      setPiva(company.piva || "");
+      setPec(company.pec || "");
+      setCodiceAteco(company.codice_ateco || "");
+      setTipologiaAttivita(company.tipologia_attivita || "");
       setHasWaterTank(!!company.has_water_tank);
       setServesRawFish(!!company.serves_raw_fish);
       setActiveWorkSafety(!!company.active_work_safety);
@@ -78,6 +90,12 @@ export default function Configurazione() {
     consultant_name: consultantName,
     consultant_email: consultantEmail,
     owner_email: ownerEmail,
+    sede_legale: sedeLegale,
+    sede_operativa: sedeOperativa,
+    piva: piva,
+    pec: pec,
+    codice_ateco: codiceAteco,
+    tipologia_attivita: tipologiaAttivita,
     has_water_tank: hasWaterTank,
     serves_raw_fish: servesRawFish,
     active_work_safety: activeWorkSafety,
@@ -178,6 +196,18 @@ export default function Configurazione() {
               <legend>Attività</legend>
               <input type="text" placeholder="Ragione sociale / nome attività" value={name} onChange={(e) => setName(e.target.value)} className="full-input" />
               <input type="email" placeholder="Email del titolare" value={ownerEmail} onChange={(e) => setOwnerEmail(e.target.value)} className="full-input" style={{ marginTop: 10 }} />
+              <div className="config-grid-2" style={{ marginTop: 10 }}>
+                <input type="text" placeholder="Sede legale (indirizzo completo)" value={sedeLegale} onChange={(e) => setSedeLegale(e.target.value)} className="full-input" />
+                <input type="text" placeholder="Sede operativa (se diversa)" value={sedeOperativa} onChange={(e) => setSedeOperativa(e.target.value)} className="full-input" />
+              </div>
+              <div className="config-grid-2" style={{ marginTop: 10 }}>
+                <input type="text" placeholder="P.IVA" value={piva} onChange={(e) => setPiva(e.target.value)} className="full-input" />
+                <input type="email" placeholder="PEC" value={pec} onChange={(e) => setPec(e.target.value)} className="full-input" />
+              </div>
+              <div className="config-grid-2" style={{ marginTop: 10 }}>
+                <input type="text" placeholder="Codice ATECO" value={codiceAteco} onChange={(e) => setCodiceAteco(e.target.value)} className="full-input" />
+                <input type="text" placeholder="Tipologia di attività (es. Ristorazione, Bar...)" value={tipologiaAttivita} onChange={(e) => setTipologiaAttivita(e.target.value)} className="full-input" />
+              </div>
               <label className="checkbox-row" style={{ marginTop: 12 }}>
                 <input type="checkbox" checked={hasWaterTank} onChange={(e) => setHasWaterTank(e.target.checked)} />
                 L'attività ha una vasca di accumulo dell'acqua

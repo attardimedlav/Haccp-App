@@ -1,8 +1,9 @@
 import React, { useState } from "react";
-import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Award, HardHat, Wrench, Stethoscope } from "lucide-react";
+import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Award, HardHat, Wrench, Stethoscope, Network } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
+import Organigramma from "./Organigramma";
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
 
@@ -39,6 +40,8 @@ export const EQUIPMENT_TYPE_OPTIONS = [
   "Manutenzione / Controllo Periodico Attrezzatura",
   "Altro",
 ];
+
+const ORGANIGRAMMA_SUB_TAB = { id: "organigramma", label: "Organigramma", icon: Network };
 
 const BASE_SUB_TABS = [
   { id: "dvr", label: "DVR", icon: FileText },
@@ -95,6 +98,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
   const showEquipmentTab = !!company?.active_equipment_checks;
   const showMedicalTab = !!company?.active_medical_surveillance;
   const visibleSubTabs = [
+    ORGANIGRAMMA_SUB_TAB,
     ...BASE_SUB_TABS,
     ...(showEquipmentTab ? [EQUIPMENT_SUB_TAB] : []),
     ...(showMedicalTab ? [MEDICAL_SUB_TAB] : []),
@@ -363,6 +367,8 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
           </button>
         ))}
       </div>
+
+      {subTab === "organigramma" && <Organigramma />}
 
       {(subTab === "dvr" || subTab === "allegati") && (
         <>
