@@ -57,7 +57,7 @@ function fmtDate(d) {
   return new Date(d).toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
-function addYears(dateStr, years) {
+export function addYears(dateStr, years) {
   if (!dateStr || !years) return "";
   const d = new Date(dateStr);
   d.setFullYear(d.getFullYear() + Number(years));
