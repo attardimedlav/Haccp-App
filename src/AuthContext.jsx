@@ -3,6 +3,31 @@ import { supabase } from "./supabaseClient";
 
 const AuthContext = createContext(null);
 
+// L'azienda aperta viene ricordata nel browser, non solo nella memoria della
+// pagina: se la scheda viene ricaricata — cosa che Chrome fa da solo quando
+// resta a lungo in secondo piano, oltre che a ogni F5 — il consulente deve
+// ritrovarsi ancora dentro il cliente su cui stava lavorando, non riportato
+// alla propria azienda. Le letture e scritture sono protette perché in
+// navigazione privata o con i cookie bloccati l'accesso può fallire.
+const SELECTED_COMPANY_KEY = "cardine.selectedCompanyId";
+
+function readSelectedCompanyId() {
+  try {
+    return window.localStorage.getItem(SELECTED_COMPANY_KEY) || null;
+  } catch (err) {
+    return null;
+  }
+}
+
+function writeSelectedCompanyId(companyId) {
+  try {
+    if (companyId) window.localStorage.setItem(SELECTED_COMPANY_KEY, companyId);
+    else window.localStorage.removeItem(SELECTED_COMPANY_KEY);
+  } catch (err) {
+    // memoria del browser non disponibile: pazienza, si riparte dalla propria azienda
+  }
+}
+
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(undefined); // undefined = ancora da caricare
   const [company, setCompany] = useState(null);
@@ -13,10 +38,9 @@ export function AuthProvider({ children }) {
   const [error, setError] = useState("");
   const [recoveryMode, setRecoveryMode] = useState(false);
 
-  // Azienda che l'utente sta guardando in questo momento. Serve perché il
-  // rinnovo automatico del token (che scatta al rientro sulla scheda del
-  // browser) non riporti il consulente alla propria azienda mentre sta
-  // lavorando dentro un cliente.
+  // Azienda aperta in questo momento. Il ref risponde subito durante la
+  // sessione; la memoria del browser copre il caso in cui la pagina venga
+  // ricaricata da capo e il ref sia quindi vuoto.
   const selectedCompanyIdRef = useRef(null);
 
   // silent = true: aggiorna i dati dell'azienda in background (usato quando il
@@ -49,15 +73,15 @@ export function AuthProvider({ children }) {
     // Tutte le aziende a cui questo utente ha diritto di accedere.
     const accessibleIds = [ownCompanyId, ...clientList.map((c) => c.id)].filter(Boolean);
 
-    // Su un aggiornamento silenzioso (rientro sulla scheda) si resta sull'azienda
-    // aperta; su un accesso vero si parte sempre dalla propria azienda.
-    const keepSelected =
-      silent &&
-      selectedCompanyIdRef.current &&
-      accessibleIds.includes(selectedCompanyIdRef.current);
+    // Si riapre l'azienda su cui si stava lavorando, purché sia ancora fra
+    // quelle a cui si ha accesso. Vale sia al rientro sulla scheda sia dopo un
+    // ricaricamento completo della pagina. Se non risulta nessuna azienda
+    // ricordata, si parte dalla propria.
+    const remembered = selectedCompanyIdRef.current || readSelectedCompanyId();
+    const keepSelected = remembered && accessibleIds.includes(remembered);
 
     const initialId = keepSelected
-      ? selectedCompanyIdRef.current
+      ? remembered
       : ownCompanyId || (clientList[0] && clientList[0].id) || null;
 
     if (!initialId) {
@@ -77,6 +101,7 @@ export function AuthProvider({ children }) {
 
     setCompany(companyRow || null);
     selectedCompanyIdRef.current = companyRow?.id || null;
+    writeSelectedCompanyId(companyRow?.id || null);
     if (ownCompanyId && companyRow && companyRow.id === ownCompanyId) {
       setHomeCompanyName(companyRow.name || "");
     } else if (ownCompanyId) {
@@ -112,6 +137,7 @@ export function AuthProvider({ children }) {
       } else {
         loadedUserIdRef.current = null;
         selectedCompanyIdRef.current = null;
+        writeSelectedCompanyId(null);
         setCompany(null);
         setConsultantCompanies([]);
         setHomeCompanyId(null);
@@ -130,6 +156,7 @@ export function AuthProvider({ children }) {
     if (fetchError || !data) { setError("Non hai accesso a questa azienda."); return false; }
     setCompany(data);
     selectedCompanyIdRef.current = data.id;
+    writeSelectedCompanyId(data.id);
     return true;
   };
 
