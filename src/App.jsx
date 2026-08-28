@@ -54,6 +54,10 @@ const TABS = [
   { id: "sicurezzalavoro", label: "Sicurezza sul lavoro", icon: HardHat },
 ];
 
+// Tutte le schede che fanno parte del modulo HACCP (autocontrollo alimentare):
+// quando il modulo è disattivato per un'azienda, nessuna di queste è raggiungibile.
+const HACCP_TAB_IDS = new Set([...MAIN_TABS, ...STATIC_TABS].map((t) => t.id));
+
 const SETTINGS_TAB = { id: "config", label: "Configurazione", icon: Settings };
 
 function Shell() {
@@ -64,6 +68,10 @@ function Shell() {
   const [workSafetySubTab, setWorkSafetySubTab] = useState("organigramma");
   const [workSafetyExpanded, setWorkSafetyExpanded] = useState(false);
 
+  // Di default il modulo HACCP è attivo: lo consideriamo spento solo se è stato
+  // esplicitamente disattivato in Configurazione (valore false), non se la
+  // colonna è semplicemente vuota/non ancora impostata.
+  const showHaccp = company?.active_haccp !== false;
   const visibleMainTabs = MAIN_TABS.filter((t) => t.id !== "abbattimento" || company?.serves_raw_fish);
   const visibleWorkSafetyItems = WORK_SAFETY_SUB_ITEMS.filter((t) => !t.requires || company?.[t.requires]);
 
@@ -74,13 +82,16 @@ function Shell() {
     if (tab === "sicurezzalavoro" && !company?.active_work_safety) {
       setTab("dashboard");
     }
+    if (HACCP_TAB_IDS.has(tab) && !showHaccp) {
+      setTab("dashboard");
+    }
     if (workSafetySubTab === "attrezzature" && !company?.active_equipment_checks) {
       setWorkSafetySubTab("dvr");
     }
     if (workSafetySubTab === "visitemediche" && !company?.active_medical_surveillance) {
       setWorkSafetySubTab("dvr");
     }
-  }, [company?.serves_raw_fish, company?.active_work_safety, company?.active_equipment_checks, company?.active_medical_surveillance, tab, workSafetySubTab]);
+  }, [company?.serves_raw_fish, company?.active_work_safety, company?.active_equipment_checks, company?.active_medical_surveillance, showHaccp, tab, workSafetySubTab]);
 
   const openWorkSafety = (subTabId) => {
     setTab("sicurezzalavoro");
@@ -108,30 +119,44 @@ function Shell() {
           <span className="brand-mark"><ShieldCheck size={16} /></span>
           <span className="brand-name">{company?.name || "Autocontrollo"}</span>
         </div>
+        <button className={"nav-item nav-item-settings-top" + (tab === SETTINGS_TAB.id ? " active" : "")} onClick={() => setTab(SETTINGS_TAB.id)}>
+          <SETTINGS_TAB.icon size={16} /> {SETTINGS_TAB.label}
+        </button>
         {hasMultipleClients && (
           <button className={"nav-item nav-item-clients" + (tab === "clienti" ? " active" : "")} onClick={() => setTab("clienti")}>
             <Users size={16} /> I miei clienti
           </button>
         )}
-        <nav>
-          <button className={"nav-item" + (tab === "dashboard" ? " active" : "")} onClick={() => setTab("dashboard")}>
-            <ChevronRight size={16} /> Panoramica
-          </button>
-          {visibleMainTabs.map((t) => (
-            <button key={t.id} className={"nav-item" + (tab === t.id ? " active" : "")} onClick={() => setTab(t.id)}>
-              <t.icon size={16} />
-              {t.label}
+        {showHaccp && (
+          <nav>
+            <button className={"nav-item" + (tab === "dashboard" ? " active" : "")} onClick={() => setTab("dashboard")}>
+              <ChevronRight size={16} /> Panoramica
             </button>
-          ))}
-        </nav>
-        <nav className="nav-static-group">
-          {STATIC_TABS.map((t) => (
-            <button key={t.id} className={"nav-item" + (tab === t.id ? " active" : "")} onClick={() => setTab(t.id)}>
-              <t.icon size={16} />
-              {t.label}
+            {visibleMainTabs.map((t) => (
+              <button key={t.id} className={"nav-item" + (tab === t.id ? " active" : "")} onClick={() => setTab(t.id)}>
+                <t.icon size={16} />
+                {t.label}
+              </button>
+            ))}
+          </nav>
+        )}
+        {!showHaccp && (
+          <nav>
+            <button className={"nav-item" + (tab === "dashboard" ? " active" : "")} onClick={() => setTab("dashboard")}>
+              <ChevronRight size={16} /> Panoramica
             </button>
-          ))}
-        </nav>
+          </nav>
+        )}
+        {showHaccp && (
+          <nav className="nav-static-group">
+            {STATIC_TABS.map((t) => (
+              <button key={t.id} className={"nav-item" + (tab === t.id ? " active" : "")} onClick={() => setTab(t.id)}>
+                <t.icon size={16} />
+                {t.label}
+              </button>
+            ))}
+          </nav>
+        )}
         {company?.active_work_safety && (
           <nav className="nav-worksafety-group">
             <button
@@ -162,9 +187,6 @@ function Shell() {
           </nav>
         )}
         <div className="sidebar-spacer" />
-        <button className={"nav-item nav-item-settings" + (tab === SETTINGS_TAB.id ? " active" : "")} onClick={() => setTab(SETTINGS_TAB.id)}>
-          <SETTINGS_TAB.icon size={16} /> {SETTINGS_TAB.label}
-        </button>
         <button className="nav-item" onClick={signOut}>
           <LogOut size={16} /> Esci
         </button>
