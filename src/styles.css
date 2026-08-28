@@ -21,6 +21,7 @@ body { margin: 0; font-family: 'IBM Plex Sans', system-ui, sans-serif; backgroun
 nav { display: flex; flex-direction: column; gap: 2px; }
 .sidebar-spacer { flex: 1; }
 .nav-item-settings { border-top: 1px solid #2C3D33; padding-top: 12px; margin-top: 4px; }
+.nav-item-settings-top { border-bottom: 1px solid #2C3D33; padding-bottom: 14px; margin-bottom: 2px; }
 .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 7px; border: none; background: none; color: #B9C6BC; font: inherit; font-size: 13.5px; cursor: pointer; text-align: left; }
 .nav-item:hover { background: #24352B; color: #fff; }
 .nav-item.active { background: #2F6F4E; color: #fff; }
@@ -104,6 +105,7 @@ nav { display: flex; flex-direction: column; gap: 2px; }
   .sidebar { width: 100%; flex-direction: row; align-items: center; overflow-x: auto; }
   nav { flex-direction: row; }
   .content { padding: 20px; }
+  .nav-item-settings-top { border-bottom: none; border-right: 1px solid #2C3D33; padding-bottom: 9px; padding-right: 12px; margin-bottom: 0; margin-right: 4px; }
 }
 
 /* ---- Chips, campi calcolati, validità ---- */
