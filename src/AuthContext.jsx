@@ -13,6 +13,12 @@ export function AuthProvider({ children }) {
   const [error, setError] = useState("");
   const [recoveryMode, setRecoveryMode] = useState(false);
 
+  // Azienda che l'utente sta guardando in questo momento. Serve perché il
+  // rinnovo automatico del token (che scatta al rientro sulla scheda del
+  // browser) non riporti il consulente alla propria azienda mentre sta
+  // lavorando dentro un cliente.
+  const selectedCompanyIdRef = useRef(null);
+
   // silent = true: aggiorna i dati dell'azienda in background (usato quando il
   // browser torna in primo piano su una scheda già aperta) senza mostrare la
   // schermata "Caricamento azienda…", che smonterebbe la pagina corrente e
@@ -40,7 +46,19 @@ export function AuthProvider({ children }) {
       .filter(Boolean);
     setConsultantCompanies(clientList);
 
-    const initialId = ownCompanyId || (clientList[0] && clientList[0].id) || null;
+    // Tutte le aziende a cui questo utente ha diritto di accedere.
+    const accessibleIds = [ownCompanyId, ...clientList.map((c) => c.id)].filter(Boolean);
+
+    // Su un aggiornamento silenzioso (rientro sulla scheda) si resta sull'azienda
+    // aperta; su un accesso vero si parte sempre dalla propria azienda.
+    const keepSelected =
+      silent &&
+      selectedCompanyIdRef.current &&
+      accessibleIds.includes(selectedCompanyIdRef.current);
+
+    const initialId = keepSelected
+      ? selectedCompanyIdRef.current
+      : ownCompanyId || (clientList[0] && clientList[0].id) || null;
 
     if (!initialId) {
       if (!silent) {
@@ -58,6 +76,7 @@ export function AuthProvider({ children }) {
       .single();
 
     setCompany(companyRow || null);
+    selectedCompanyIdRef.current = companyRow?.id || null;
     if (ownCompanyId && companyRow && companyRow.id === ownCompanyId) {
       setHomeCompanyName(companyRow.name || "");
     } else if (ownCompanyId) {
@@ -92,6 +111,7 @@ export function AuthProvider({ children }) {
         loadCompany(newSession.user.id, { silent: isSameUserAlreadyLoaded });
       } else {
         loadedUserIdRef.current = null;
+        selectedCompanyIdRef.current = null;
         setCompany(null);
         setConsultantCompanies([]);
         setHomeCompanyId(null);
@@ -109,6 +129,7 @@ export function AuthProvider({ children }) {
       .single();
     if (fetchError || !data) { setError("Non hai accesso a questa azienda."); return false; }
     setCompany(data);
+    selectedCompanyIdRef.current = data.id;
     return true;
   };
 
