@@ -90,6 +90,8 @@ nav { display: flex; flex-direction: column; gap: 2px; }
 .compliance-banner { display: flex; flex-direction: column; gap: 6px; margin: 16px 0 6px; }
 .compliance-row { display: flex; align-items: center; gap: 8px; text-align: left; padding: 10px 12px; border-radius: 8px; background: #FBEEEC; border: 1px solid #EFC9C1; font: inherit; font-size: 13px; color: #1B2A22; cursor: pointer; width: 100%; }
 .compliance-row:hover { border-color: #B3432E; }
+.compliance-row-warn { background: #FBF4E4; border-color: #EAD9A8; }
+.compliance-row-warn:hover { border-color: #9A6B12; }
 .compliance-text { color: #4C5A52; }
 .compliance-ok-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
 .ok-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: #2F6F4E; background: #E6EFE8; padding: 4px 10px; border-radius: 999px; }

@@ -117,7 +117,7 @@ function Shell() {
       <aside className="sidebar">
         <div className="brand">
           <span className="brand-mark"><ShieldCheck size={16} /></span>
-          <span className="brand-name">{company?.name || "Autocontrollo"}</span>
+          <span className="brand-name">{company?.name || "Cardine"}</span>
         </div>
         <button className={"nav-item nav-item-settings-top" + (tab === SETTINGS_TAB.id ? " active" : "")} onClick={() => setTab(SETTINGS_TAB.id)}>
           <SETTINGS_TAB.icon size={16} /> {SETTINGS_TAB.label}
@@ -223,7 +223,7 @@ function Shell() {
         {tab !== "allergeni" && (
           <PrintHeader sectionLabel={(TABS.find((t) => t.id === tab) || SETTINGS_TAB).label} />
         )}
-        {tab === "dashboard" && <Dashboard goTo={setTab} />}
+        {tab === "dashboard" && <Dashboard goTo={setTab} openWorkSafety={openWorkSafety} />}
         {tab === "temperature" && <Temperature />}
         {tab === "abbattimento" && <AbbattimentoPesce />}
         {tab === "sicurezzalavoro" && <SicurezzaLavoro subTab={workSafetySubTab} setSubTab={setWorkSafetySubTab} />}
