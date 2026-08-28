@@ -37,6 +37,7 @@ export default function Configurazione() {
   const [tipologiaAttivita, setTipologiaAttivita] = useState("");
   const [hasWaterTank, setHasWaterTank] = useState(false);
   const [servesRawFish, setServesRawFish] = useState(false);
+  const [activeHaccp, setActiveHaccp] = useState(true);
   const [activeWorkSafety, setActiveWorkSafety] = useState(false);
   const [activeEquipmentChecks, setActiveEquipmentChecks] = useState(false);
   const [activeMedicalSurveillance, setActiveMedicalSurveillance] = useState(false);
@@ -71,6 +72,10 @@ export default function Configurazione() {
       setTipologiaAttivita(company.tipologia_attivita || "");
       setHasWaterTank(!!company.has_water_tank);
       setServesRawFish(!!company.serves_raw_fish);
+      // Di default il modulo HACCP è attivo: lo consideriamo spento solo se
+      // qualcuno lo ha esplicitamente disattivato (valore false), non se la
+      // colonna è semplicemente vuota/non ancora impostata.
+      setActiveHaccp(company.active_haccp !== false);
       setActiveWorkSafety(!!company.active_work_safety);
       setActiveEquipmentChecks(!!company.active_equipment_checks);
       setActiveMedicalSurveillance(!!company.active_medical_surveillance);
@@ -104,6 +109,7 @@ export default function Configurazione() {
     tipologia_attivita: tipologiaAttivita,
     has_water_tank: hasWaterTank,
     serves_raw_fish: servesRawFish,
+    active_haccp: activeHaccp,
     active_work_safety: activeWorkSafety,
     active_equipment_checks: activeEquipmentChecks,
     active_medical_surveillance: activeMedicalSurveillance,
@@ -222,13 +228,24 @@ export default function Configurazione() {
                 <input type="text" placeholder="Tipologia di attività (es. Ristorazione, Bar...)" value={tipologiaAttivita} onChange={(e) => setTipologiaAttivita(e.target.value)} className="full-input" />
               </div>
               <label className="checkbox-row" style={{ marginTop: 12 }}>
-                <input type="checkbox" checked={hasWaterTank} onChange={(e) => setHasWaterTank(e.target.checked)} />
-                L'attività ha una vasca di accumulo dell'acqua
+                <input type="checkbox" checked={activeHaccp} onChange={(e) => setActiveHaccp(e.target.checked)} />
+                Attiva il modulo HACCP (autocontrollo alimentare)
               </label>
-              <label className="checkbox-row" style={{ marginTop: 8 }}>
-                <input type="checkbox" checked={servesRawFish} onChange={(e) => setServesRawFish(e.target.checked)} />
-                L'attività somministra pesce crudo (richiede abbattimento a norma)
-              </label>
+              <p className="sub" style={{ marginTop: 4, marginLeft: 26 }}>
+                Disattivalo per i clienti che non sono attività alimentari (es. aziende seguite solo per la sicurezza sul lavoro): nel menu resteranno visibili solo Sicurezza sul lavoro e Configurazione. I dati già inseriti restano salvati.
+              </p>
+              {activeHaccp && (
+                <>
+                  <label className="checkbox-row" style={{ marginTop: 8 }}>
+                    <input type="checkbox" checked={hasWaterTank} onChange={(e) => setHasWaterTank(e.target.checked)} />
+                    L'attività ha una vasca di accumulo dell'acqua
+                  </label>
+                  <label className="checkbox-row" style={{ marginTop: 8 }}>
+                    <input type="checkbox" checked={servesRawFish} onChange={(e) => setServesRawFish(e.target.checked)} />
+                    L'attività somministra pesce crudo (richiede abbattimento a norma)
+                  </label>
+                </>
+              )}
               <label className="checkbox-row" style={{ marginTop: 8 }}>
                 <input type="checkbox" checked={activeWorkSafety} onChange={(e) => setActiveWorkSafety(e.target.checked)} />
                 Attiva il modulo Sicurezza sul lavoro (DVR, nomine e attestati — D.Lgs. 81/08)

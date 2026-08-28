@@ -35,6 +35,9 @@ function isTempInRange(item, units) {
 
 export default function Dashboard({ goTo }) {
   const { company } = useAuth();
+  // Di default il modulo HACCP è attivo: lo consideriamo spento solo se è
+  // stato esplicitamente disattivato in Configurazione (valore false).
+  const showHaccp = company?.active_haccp !== false;
   const temp = useTable("temperature_logs", company?.id);
   const units = useTable("temperature_units", company?.id);
   const san = useTable("sanitization_logs", company?.id);
@@ -45,13 +48,18 @@ export default function Dashboard({ goTo }) {
   const equipmentChecks = useTable("equipment_checks", company?.id);
   const medicalVisits = useTable("medical_visits", company?.id);
 
-  const compliance = CHECK_PERIODICITY.map((c) => {
-    const items = c.id === "temperature_logs" ? temp.items : c.id === "sanitization_logs" ? san.items : pest.items;
-    return { ...c, ...checkCompliance(c.days, items) };
-  });
+  // Tutti gli indicatori di questo blocco riguardano solo il modulo HACCP: se
+  // è disattivato (azienda seguita solo per la sicurezza sul lavoro) restano
+  // vuoti, così la Panoramica non segnala mai scadenze che non si applicano.
+  const compliance = showHaccp
+    ? CHECK_PERIODICITY.map((c) => {
+        const items = c.id === "temperature_logs" ? temp.items : c.id === "sanitization_logs" ? san.items : pest.items;
+        return { ...c, ...checkCompliance(c.days, items) };
+      })
+    : [];
 
   let tankCompliance = null;
-  if (company?.has_water_tank) {
+  if (showHaccp && company?.has_water_tank) {
     const tankItems = water.items.filter((i) => i.control_type === WATER_TANK_CONTROL_TYPE);
     tankCompliance = {
       id: "water_tank", tab: "acquepotabili", label: "Ispezione vasca di accumulo", days: 180, icon: Droplet,
@@ -60,21 +68,23 @@ export default function Dashboard({ goTo }) {
     compliance.push(tankCompliance);
   }
 
-  // Revisione del piano di autocontrollo: usa review_date (non created_at) come riferimento
-  const planItems = docs.items.filter((i) => i.document_type === PLAN_TYPE);
-  let planCompliance = { id: "haccp_plan", tab: "documenti", label: "Revisione piano di autocontrollo", days: 365, icon: FolderOpen, status: "missing" };
-  if (planItems.length > 0) {
-    const lastReview = planItems.reduce((max, i) => Math.max(max, new Date(i.review_date).getTime()), 0);
-    const elapsed = daysSince(lastReview);
-    planCompliance = elapsed > 365
-      ? { ...planCompliance, status: "late", lastTs: lastReview, daysLate: Math.floor(elapsed - 365) }
-      : { ...planCompliance, status: "ok", lastTs: lastReview };
+  if (showHaccp) {
+    // Revisione del piano di autocontrollo: usa review_date (non created_at) come riferimento
+    const planItems = docs.items.filter((i) => i.document_type === PLAN_TYPE);
+    let planCompliance = { id: "haccp_plan", tab: "documenti", label: "Revisione piano di autocontrollo", days: 365, icon: FolderOpen, status: "missing" };
+    if (planItems.length > 0) {
+      const lastReview = planItems.reduce((max, i) => Math.max(max, new Date(i.review_date).getTime()), 0);
+      const elapsed = daysSince(lastReview);
+      planCompliance = elapsed > 365
+        ? { ...planCompliance, status: "late", lastTs: lastReview, daysLate: Math.floor(elapsed - 365) }
+        : { ...planCompliance, status: "ok", lastTs: lastReview };
+    }
+    compliance.push(planCompliance);
   }
-  compliance.push(planCompliance);
 
   const lateChecks = compliance.filter((c) => c.status !== "ok");
-  const deviations = temp.items.filter((i) => !isTempInRange(i, units.items)).length;
-  const pestAlerts = pest.items.filter((i) => i.outcome === "tracce").length;
+  const deviations = showHaccp ? temp.items.filter((i) => !isTempInRange(i, units.items)).length : 0;
+  const pestAlerts = showHaccp ? pest.items.filter((i) => i.outcome === "tracce").length : 0;
 
   const countExpiring = (items) => items.filter((a) => {
     const info = expiryInfo(a.expiry_date);
@@ -88,11 +98,13 @@ export default function Dashboard({ goTo }) {
     if (company?.active_medical_surveillance) safetyAlertCount += countExpiring(medicalVisits.items);
   }
 
-  const cards = [
-    { id: "temperature", label: "Letture temperatura", value: temp.items.length, icon: Thermometer, flag: deviations > 0 ? `${deviations} da verificare` : null },
-    { id: "sanificazione", label: "Interventi di sanificazione", value: san.items.length, icon: SprayCan, flag: null },
-    { id: "infestanti", label: "Controlli infestanti", value: pest.items.length, icon: Bug, flag: pestAlerts > 0 ? `${pestAlerts} con tracce` : null },
-  ];
+  const cards = showHaccp
+    ? [
+        { id: "temperature", label: "Letture temperatura", value: temp.items.length, icon: Thermometer, flag: deviations > 0 ? `${deviations} da verificare` : null },
+        { id: "sanificazione", label: "Interventi di sanificazione", value: san.items.length, icon: SprayCan, flag: null },
+        { id: "infestanti", label: "Controlli infestanti", value: pest.items.length, icon: Bug, flag: pestAlerts > 0 ? `${pestAlerts} con tracce` : null },
+      ]
+    : [];
 
   const tankOverdue = tankCompliance && tankCompliance.status !== "ok";
   const tankLastDate = tankCompliance?.lastTs ? new Date(tankCompliance.lastTs).toLocaleDateString("it-IT") : null;
