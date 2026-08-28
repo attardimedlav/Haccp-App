@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Trash2, UserPlus, Award } from "lucide-react";
+import { Plus, Trash2, UserPlus, Award, Users, Network, Stethoscope, HeartPulse, Flame, HardHat, ShieldCheck } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { supabase } from "../supabaseClient";
@@ -8,6 +8,7 @@ import { generateNominaAttachment, findRlsName } from "../utils/nominaTemplates"
 
 export const SECURITY_ROLE_OPTIONS = [
   "Dipendente",
+  "Datore di Lavoro",
   "RSPP Datore di Lavoro",
   "RSPP Esterno",
   "Addetto al Primo Soccorso",
@@ -123,6 +124,53 @@ export default function Organigramma() {
 
   const rolesFor = (emp) => appointments.filter((a) => a.person_name === `${emp.first_name} ${emp.last_name}`);
 
+  // --- Organigramma da esporre (vista per ruolo, D.Lgs. 81/08) ---
+  const [view, setView] = useState("gestione");
+
+  // I nominativi di un ruolo si prendono sia dalle nomine registrate sia dal
+  // ruolo di sicurezza in anagrafica: così una persona compare anche se la sua
+  // nomina non è ancora stata protocollata in "Nomine e Attestati".
+  const namesFor = (roles) => {
+    const wanted = new Set(Array.isArray(roles) ? roles : [roles]);
+    const fromAppointments = appointments
+      .filter((a) => wanted.has(a.role))
+      .map((a) => (a.person_name || "").trim());
+    const fromEmployees = employees
+      .filter((e) => wanted.has(e.security_role))
+      .map((e) => `${e.first_name} ${e.last_name}`.trim());
+    return [...new Set([...fromAppointments, ...fromEmployees])].filter(Boolean);
+  };
+
+  const datoreLavoro = namesFor(["Datore di Lavoro", "RSPP Datore di Lavoro"]);
+  const rspp = namesFor(["RSPP Datore di Lavoro", "RSPP Esterno"]);
+  const medicoCompetente = namesFor(["Nomina Medico Competente"]);
+  const primoSoccorso = namesFor(["Addetto al Primo Soccorso"]);
+  const rls = namesFor(["RLS"]);
+  const antincendio = namesFor(["Addetto Antincendio"]);
+  const preposti = namesFor(["Preposto"]);
+  // Tutte le persone in organigramma sono lavoratori, tranne il datore di lavoro.
+  const lavoratori = employees
+    .map((e) => `${e.first_name} ${e.last_name}`.trim())
+    .filter((n) => !datoreLavoro.includes(n));
+
+  // emptyLabel: i ruoli scoperti vanno segnalati in rosso ("Da nominare"),
+  // ma per i lavoratori una casella vuota non è un'inadempienza.
+  const OrgBox = ({ icon: Icon, title, note, names, tone, emptyLabel, emptyMuted }) => (
+    <div className={"org-box org-box-" + tone}>
+      <p className="org-box-title"><Icon size={15} /> {title}</p>
+      {note && <p className="org-box-note">{note}</p>}
+      {names.length > 0 ? (
+        <ul className="org-names">
+          {names.map((n) => <li key={n}>{n}</li>)}
+        </ul>
+      ) : (
+        <p className={"org-empty" + (emptyMuted ? " org-empty-muted" : "")}>
+          {emptyLabel || "Da nominare"}
+        </p>
+      )}
+    </div>
+  );
+
   return (
     <div className="panel">
       <div className="panel-head">
@@ -136,6 +184,85 @@ export default function Organigramma() {
         </div>
       </div>
 
+      <div className="config-subtabs">
+        <button
+          type="button"
+          className={"config-subtab" + (view === "gestione" ? " active" : "")}
+          onClick={() => setView("gestione")}
+        >
+          <Users size={15} /> Gestione persone
+        </button>
+        <button
+          type="button"
+          className={"config-subtab" + (view === "schema" ? " active" : "")}
+          onClick={() => setView("schema")}
+        >
+          <Network size={15} /> Organigramma da esporre
+        </button>
+      </div>
+
+      {view === "schema" && (
+        <div className="org-chart">
+          <div className="org-chart-head">
+            <h3>{company?.name || "Azienda"}</h3>
+            {(company?.sede_legale || company?.sede_operativa) && (
+              <p className="org-sede">
+                Sede legale ed operativa: {company.sede_legale || company.sede_operativa}
+              </p>
+            )}
+            <p className="org-intro">
+              Organigramma delle risorse che a vari livelli sono coinvolte funzionalmente
+              secondo le disposizioni contenute nel D.Lgs. 81/08.
+            </p>
+          </div>
+
+          <div className="org-top">
+            <p className="org-box-title"><ShieldCheck size={15} /> DATORE DI LAVORO / LEGALE RAPPRESENTANTE</p>
+            {datoreLavoro.length > 0 ? (
+              <ul className="org-names">
+                {datoreLavoro.map((n) => <li key={n}>{n}</li>)}
+              </ul>
+            ) : (
+              <p className="org-empty">Da nominare</p>
+            )}
+          </div>
+
+          <div className="org-row org-row-2">
+            <OrgBox icon={Award} tone="rspp" names={rspp}
+              title="RESPONSABILE DEL SERVIZIO DI PREVENZIONE E PROTEZIONE (RSPP)" />
+            <OrgBox icon={Stethoscope} tone="medico" names={medicoCompetente}
+              title="MEDICO COMPETENTE" />
+          </div>
+
+          <div className="org-row org-row-3">
+            <OrgBox icon={HeartPulse} tone="soccorso" names={primoSoccorso}
+              title="ADDETTI AL PRIMO SOCCORSO" />
+            <OrgBox icon={Users} tone="rls" names={rls}
+              title="RAPPRESENTANTE DEI LAVORATORI PER LA SICUREZZA (RLS)" />
+            <OrgBox icon={Flame} tone="antincendio" names={antincendio}
+              title="ADDETTI ALLA PREVENZIONE INCENDI" />
+          </div>
+
+          <div className="org-row org-row-2">
+            <OrgBox icon={HardHat} tone="neutro" names={preposti}
+              title="PREPOSTI" note="art. 37 D.Lgs. 81/08" />
+            <OrgBox icon={Users} tone="neutro" names={lavoratori}
+              title="LAVORATORI" note="art. 37 D.Lgs. 81/08"
+              emptyLabel="Nessun lavoratore inserito" emptyMuted />
+          </div>
+
+          <p className="org-foot">
+            Documento esposto ai sensi del D.Lgs. 81/08 — valido per lavoratori, visitatori e pubblico
+          </p>
+          <p className="sub org-hint">
+            Si compila da solo con le persone e i ruoli inseriti in "Gestione persone".
+            Per stamparlo o salvarlo in PDF usa "Esporta PDF" in alto a destra.
+          </p>
+        </div>
+      )}
+
+      {view === "gestione" && (
+      <>
       <button type="button" className="btn-primary" onClick={() => setShowAddPerson((v) => !v)} style={{ marginBottom: 16 }}>
         <UserPlus size={16} /> Aggiungi persona
       </button>
@@ -230,6 +357,8 @@ export default function Organigramma() {
             );
           })}
         </ul>
+      )}
+      </>
       )}
     </div>
   );
