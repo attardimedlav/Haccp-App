@@ -1,8 +1,18 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../supabaseClient";
 
-// Hook generico: legge tutte le righe di una tabella (RLS filtra già
-// automaticamente per azienda), permette di aggiungerne e cancellarne.
+// Hook generico: legge le righe di una tabella per l'azienda attualmente
+// selezionata, e permette di aggiungerne, modificarne e cancellarne.
+//
+// Il filtro esplicito su company_id non è una ridondanza delle policy RLS.
+// Un utente consulente ha legittimamente accesso a TUTTE le aziende che
+// segue, quindi per il database sono tutte visibili allo stesso modo. Quale
+// di quelle aziende sia "aperta" in questo momento lo sa solo l'app (è lo
+// stato React gestito da switchCompany in AuthContext), e il database non
+// ha modo di saperlo. Senza questo filtro un consulente con più di un
+// cliente vedrebbe i registri di tutte le sue aziende mescolati in un unico
+// elenco. Filtrare qui rende anche molto più leggere le pagine, perché
+// scarica solo le righe dell'azienda aperta invece di tutto lo storico.
 export function useTable(tableName, companyId) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -14,6 +24,7 @@ export function useTable(tableName, companyId) {
     const { data, error: fetchError } = await supabase
       .from(tableName)
       .select("*")
+      .eq("company_id", companyId)
       .order("created_at", { ascending: false });
     if (fetchError) setError(fetchError.message);
     else setItems(data || []);
@@ -31,19 +42,30 @@ export function useTable(tableName, companyId) {
     return true;
   }, [tableName, companyId, reload]);
 
+  // Su cancellazione e modifica il vincolo su company_id vale come rete di
+  // sicurezza: impedisce che un id rimasto in un elenco non aggiornato possa
+  // toccare la riga di un'altra azienda.
   const remove = useCallback(async (id) => {
-    const { error: deleteError } = await supabase.from(tableName).delete().eq("id", id);
+    const { error: deleteError } = await supabase
+      .from(tableName)
+      .delete()
+      .eq("id", id)
+      .eq("company_id", companyId);
     if (deleteError) { setError(deleteError.message); return false; }
     await reload();
     return true;
-  }, [tableName, reload]);
+  }, [tableName, companyId, reload]);
 
   const update = useCallback(async (id, fields) => {
-    const { error: updateError } = await supabase.from(tableName).update(fields).eq("id", id);
+    const { error: updateError } = await supabase
+      .from(tableName)
+      .update(fields)
+      .eq("id", id)
+      .eq("company_id", companyId);
     if (updateError) { setError(updateError.message); return false; }
     await reload();
     return true;
-  }, [tableName, reload]);
+  }, [tableName, companyId, reload]);
 
   return { items, add, remove, update, loading, error, reload };
 }
