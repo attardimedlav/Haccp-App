@@ -1,5 +1,5 @@
 import React from "react";
-import { Thermometer, SprayCan, Bug, AlertTriangle, CheckCircle2, Droplet, FolderOpen, HardHat } from "lucide-react";
+import { Thermometer, SprayCan, Bug, AlertTriangle, CheckCircle2, Droplet, FolderOpen, HardHat, Award, Stethoscope, Wrench } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { WATER_TANK_CONTROL_TYPE } from "./AcquePotabili";
@@ -33,7 +33,7 @@ function isTempInRange(item, units) {
   return !(item.value < u.min_temp || item.value > u.max_temp);
 }
 
-export default function Dashboard({ goTo }) {
+export default function Dashboard({ goTo, openWorkSafety }) {
   const { company } = useAuth();
   // Di default il modulo HACCP è attivo: lo consideriamo spento solo se è
   // stato esplicitamente disattivato in Configurazione (valore false).
@@ -47,6 +47,7 @@ export default function Dashboard({ goTo }) {
   const workSafety = useTable("work_safety_appointments", company?.id);
   const equipmentChecks = useTable("equipment_checks", company?.id);
   const medicalVisits = useTable("medical_visits", company?.id);
+  const employees = useTable("employees", company?.id);
 
   // Tutti gli indicatori di questo blocco riguardano solo il modulo HACCP: se
   // è disattivato (azienda seguita solo per la sicurezza sul lavoro) restano
@@ -91,12 +92,65 @@ export default function Dashboard({ goTo }) {
     return info && (info.cls === "pill-warn" || info.cls === "pill-alert");
   }).length;
 
-  let safetyAlertCount = 0;
+  // Ogni scadenza viene elencata per esteso — cosa, di chi, entro quando — e
+  // porta con un clic esattamente alla scheda che la contiene, invece di
+  // limitarsi a un conteggio che poi va cercato a mano.
+  const goToWorkSafety = (subTab) => {
+    if (openWorkSafety) openWorkSafety(subTab);
+    else goTo("sicurezzalavoro");
+  };
+
+  const safetyIssues = [];
   if (company?.active_work_safety) {
-    safetyAlertCount += countExpiring(workSafety.items);
-    if (company?.active_equipment_checks) safetyAlertCount += countExpiring(equipmentChecks.items);
-    if (company?.active_medical_surveillance) safetyAlertCount += countExpiring(medicalVisits.items);
+    const collect = (items, subTab, icon, titleOf, detailOf) => {
+      items.forEach((it) => {
+        const info = expiryInfo(it.expiry_date);
+        if (!info || (info.cls !== "pill-warn" && info.cls !== "pill-alert")) return;
+        safetyIssues.push({
+          key: subTab + "-" + it.id,
+          icon,
+          subTab,
+          title: titleOf(it),
+          detail: detailOf(it),
+          info,
+          expiry: it.expiry_date,
+        });
+      });
+    };
+
+    collect(workSafety.items, "nomine", Award,
+      (a) => a.role || "Nomina",
+      (a) => a.person_name);
+
+    if (company?.active_medical_surveillance) {
+      collect(medicalVisits.items, "visitemediche", Stethoscope,
+        () => "Visita medica",
+        (v) => [v.employee_name, v.job_role].filter(Boolean).join(", "));
+    }
+
+    if (company?.active_equipment_checks) {
+      collect(equipmentChecks.items, "attrezzature", Wrench,
+        (e) => e.equipment_type || "Attrezzatura",
+        (e) => e.label);
+    }
+
+    // Ordine per data di scadenza: le più vecchie (già scadute) in cima,
+    // poi le prossime in ordine di urgenza.
+    safetyIssues.sort((a, b) => new Date(a.expiry) - new Date(b.expiry));
   }
+
+  // Lavoratori senza alcuna visita registrata: obbligo di legge per tutti
+  // tranne il datore di lavoro.
+  const senzaVisita =
+    company?.active_work_safety && company?.active_medical_surveillance
+      ? employees.items
+          .filter((e) => e.security_role !== "RSPP Datore di Lavoro" && e.security_role !== "Datore di Lavoro")
+          .filter((e) => !medicalVisits.items.some(
+            (v) => (v.employee_name || "").trim() === `${e.first_name} ${e.last_name}`.trim()
+          ))
+      : [];
+
+  const safetyAlertCount = safetyIssues.length + (senzaVisita.length > 0 ? 1 : 0);
 
   const cards = showHaccp
     ? [
@@ -132,16 +186,38 @@ export default function Dashboard({ goTo }) {
               </span>
             </button>
           ))}
-          {safetyAlertCount > 0 && (
-            <button className="compliance-row" onClick={() => goTo("sicurezzalavoro")}>
+          {senzaVisita.length > 0 && (
+            <button className="compliance-row" onClick={() => goToWorkSafety("visitemediche")}>
               <AlertTriangle size={15} color="#B3432E" />
-              <HardHat size={15} />
+              <Stethoscope size={15} />
               <span className="compliance-text">
-                <strong>Sicurezza sul lavoro</strong>
-                {" — "}{safetyAlertCount} {safetyAlertCount === 1 ? "documento scaduto o in scadenza" : "documenti scaduti o in scadenza"}
+                <strong>Visite mediche mai registrate</strong>
+                {" — "}
+                {senzaVisita.length === 1
+                  ? `${senzaVisita[0].first_name} ${senzaVisita[0].last_name}`
+                  : `${senzaVisita.length} lavoratori: ` +
+                    senzaVisita.map((e) => `${e.first_name} ${e.last_name}`).join(", ")}
               </span>
             </button>
           )}
+          {safetyIssues.map((it) => {
+            const scaduto = it.info.cls === "pill-alert";
+            return (
+              <button
+                key={it.key}
+                className={"compliance-row" + (scaduto ? "" : " compliance-row-warn")}
+                onClick={() => goToWorkSafety(it.subTab)}
+              >
+                <AlertTriangle size={15} color={scaduto ? "#B3432E" : "#9A6B12"} />
+                <it.icon size={15} />
+                <span className="compliance-text">
+                  <strong>{it.title}</strong>
+                  {it.detail ? ` — ${it.detail}` : ""}
+                  {" · "}{it.info.label}
+                </span>
+              </button>
+            );
+          })}
         </div>
       )}
 
