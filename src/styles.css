@@ -134,12 +134,45 @@ nav { display: flex; flex-direction: column; gap: 2px; }
 .reminder-list { margin: 12px 0 14px 27px; padding: 0; font-size: 12.5px; color: #4C5A52; display: flex; flex-direction: column; gap: 4px; }
 .nav-item-settings { border-top: 1px solid #2C3D33; padding-top: 12px; margin-top: 4px; margin-bottom: 2px; }
 
+/* ---- Organigramma da esporre (D.Lgs. 81/08) ---- */
+.org-chart { margin-top: 18px; display: flex; flex-direction: column; gap: 14px; }
+.org-chart-head { text-align: center; display: flex; flex-direction: column; gap: 4px; }
+.org-chart-head h3 { margin: 0; font-size: 16px; }
+.org-sede { margin: 0; font-size: 12.5px; color: #4C5A52; }
+.org-intro { margin: 10px 0 0; font-size: 12.5px; color: #2F6F4E; font-weight: 500; }
+.org-top { border: 1px solid #1B2A22; border-radius: 8px; padding: 12px 14px; text-align: center; background: #F1F4F0; }
+.org-row { display: grid; gap: 12px; }
+.org-row-2 { grid-template-columns: repeat(2, 1fr); }
+.org-row-3 { grid-template-columns: repeat(3, 1fr); }
+.org-box { border: 1px solid #C9D6CD; border-radius: 8px; padding: 12px 14px; text-align: center; background: #fff; display: flex; flex-direction: column; gap: 4px; }
+.org-box-title { margin: 0; font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.02em; line-height: 1.35; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.org-box-note { margin: 0; font-size: 11px; color: #6E7C73; font-style: italic; }
+.org-names { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
+.org-names li { text-decoration: underline; text-underline-offset: 3px; }
+.org-empty { margin: 4px 0 0; font-size: 12px; color: #B3432E; font-style: italic; }
+.org-empty-muted { color: #97A199; }
+.org-foot { text-align: center; font-size: 12px; color: #4C5A52; margin: 4px 0 0; }
+.org-hint { text-align: center; }
+.org-box-rspp .org-box-title { color: #1F6B57; }
+.org-box-medico .org-box-title { color: #2F6F4E; }
+.org-box-soccorso .org-box-title { color: #A3342A; }
+.org-box-rls .org-box-title { color: #6A3E8E; }
+.org-box-antincendio .org-box-title { color: #C2610F; }
+.org-box-neutro .org-box-title { color: #1B2A22; }
+
+@media (max-width: 640px) {
+  .org-row-2, .org-row-3 { grid-template-columns: 1fr; }
+}
+
 /* ---- Stampa / Esporta PDF ---- */
 @media print {
   * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
   .sidebar, .content-toolbar, form, .icon-btn { display: none !important; }
   .subscription-banner, .subscription-banner-warning, .subscription-banner-urgent, .subscription-banner-critical, .viewing-client-banner { display: none !important; }
   .allergeni-panel-head { display: none !important; }
+  .config-subtabs, .org-hint { display: none !important; }
+  .org-box, .org-top { break-inside: avoid; }
+  .org-chart { gap: 12px; }
   body { background: #fff; }
   .app { background: #fff; display: block; }
   .content { max-width: 100%; padding: 0; }
