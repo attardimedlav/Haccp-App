@@ -33,13 +33,18 @@ export function useTable(tableName, companyId) {
 
   useEffect(() => { reload(); }, [reload]);
 
+  // Ritorna la riga appena creata (non solo true): serve a chi deve
+  // agganciare subito qualcos'altro al record, per esempio un corso di
+  // formazione alla nomina appena registrata. In caso di errore torna false.
   const add = useCallback(async (row) => {
-    const { error: insertError } = await supabase
+    const { data, error: insertError } = await supabase
       .from(tableName)
-      .insert([{ ...row, company_id: companyId }]);
+      .insert([{ ...row, company_id: companyId }])
+      .select()
+      .single();
     if (insertError) { setError(insertError.message); return false; }
     await reload();
-    return true;
+    return data;
   }, [tableName, companyId, reload]);
 
   // Su cancellazione e modifica il vincolo su company_id vale come rete di
