@@ -38,6 +38,8 @@ export const EQUIPMENT_TYPE_OPTIONS = [
   "Altro",
 ];
 
+export const COURSE_KIND_OPTIONS = ["Corso base", "Aggiornamento", "Altro"];
+
 const ORGANIGRAMMA_SUB_TAB = { id: "organigramma", label: "Organigramma", icon: Network };
 
 const BASE_SUB_TABS = [
@@ -91,6 +93,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
   const { items: equipmentChecks, add: addEquipmentCheck, remove: removeEquipmentCheck, loading: equipmentLoading } = useTable("equipment_checks", company?.id);
   const { items: medicalVisits, add: addMedicalVisit, remove: removeMedicalVisit, loading: medicalLoading } = useTable("medical_visits", company?.id);
   const { items: employees, add: addEmployee } = useTable("employees", company?.id);
+  const { items: trainings, add: addTraining, remove: removeTraining } = useTable("work_safety_trainings", company?.id);
 
   const showEquipmentTab = !!company?.active_equipment_checks;
   const showMedicalTab = !!company?.active_medical_surveillance;
@@ -148,6 +151,27 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
     }
   };
 
+  // I corsi di un incarico, dal più recente. La validità dell'incarico è
+  // quella dell'ultimo corso fatto: è l'aggiornamento più recente a dire se
+  // la persona è ancora in regola, non la nomina, che di suo non scade.
+  const trainingsFor = (appointmentId) =>
+    trainings
+      .filter((t) => t.appointment_id === appointmentId)
+      .sort((a, b) => new Date(b.issue_date || 0) - new Date(a.issue_date || 0));
+
+  const latestTraining = (appointmentId) => {
+    const list = trainingsFor(appointmentId).filter((t) => t.expiry_date);
+    if (list.length === 0) return null;
+    // fra i corsi con scadenza vale quello che scade più tardi
+    return list.reduce((best, t) =>
+      !best || new Date(t.expiry_date) > new Date(best.expiry_date) ? t : best, null);
+  };
+
+  const appointmentStatus = (appointmentId) => {
+    const t = latestTraining(appointmentId);
+    return t ? expiryInfo(t.expiry_date) : null;
+  };
+
   // --- Form Nomine e Attestati ---
   const [role, setRole] = useState(ROLE_OPTIONS[0]);
   const [personName, setPersonName] = useState("");
@@ -160,6 +184,18 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
   const [apptNote, setApptNote] = useState("");
   const [apptError, setApptError] = useState("");
   const [apptBusy, setApptBusy] = useState(false);
+  // Il modulo di inserimento si apre nel punto in cui serve:
+  // null = chiuso, "" = nuovo nominativo libero, altrimenti il nome della
+  // persona a cui si sta aggiungendo un incarico.
+  const [addingFor, setAddingFor] = useState(null);
+
+  const openAddFor = (name) => {
+    setAddingFor(name);
+    setPersonName(name || "");
+    setRole(ROLE_OPTIONS[0]);
+    setNominaIssueDate(""); setIssueDate(""); setValidityYears(""); setExpiryDate("");
+    setApptNominaFile(null); setApptAttestatoFile(null); setApptNote(""); setApptError("");
+  };
 
   const handleIssueChange = (value) => {
     setIssueDate(value);
@@ -207,22 +243,37 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
         });
       }
       if (apptAttestatoFile) attestato_attachment_path = await uploadAttachment(company.id, apptAttestatoFile);
-      await addAppointment({
+      // La nomina custodisce solo se stessa. Il corso, se è stato compilato,
+      // diventa subito il primo della lista degli attestati di questo incarico.
+      const created = await addAppointment({
         role,
         person_name: personName,
         nomina_issue_date: nominaIssueDate || null,
-        issue_date: issueDate || null,
-        validity_years: validityYears === "" ? null : Number(validityYears),
-        expiry_date: expiryDate || null,
+        issue_date: null,
+        validity_years: null,
+        expiry_date: null,
         nomina_attachment_path,
-        attestato_attachment_path,
+        attestato_attachment_path: null,
         note: apptNote,
       });
+
+      if (created?.id && (issueDate || expiryDate || attestato_attachment_path)) {
+        await addTraining({
+          appointment_id: created.id,
+          course_kind: "Corso base",
+          issue_date: issueDate || null,
+          validity_years: validityYears === "" ? null : Number(validityYears),
+          expiry_date: expiryDate || null,
+          attachment_path: attestato_attachment_path,
+          note: null,
+        });
+      }
       setPersonName(""); setNominaIssueDate(""); setIssueDate(""); setValidityYears(""); setExpiryDate(""); setApptNominaFile(null); setApptAttestatoFile(null); setApptNote("");
       const nominaInput = document.getElementById("nomine-nomina-file-input");
       if (nominaInput) nominaInput.value = "";
       const attestatoInput = document.getElementById("nomine-attestato-file-input");
       if (attestatoInput) attestatoInput.value = "";
+      setAddingFor(null);
     } catch (err) {
       setApptError("Errore durante il caricamento: " + err.message);
     } finally {
@@ -230,56 +281,94 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
     }
   };
 
+  // --- Corsi di formazione di un incarico ---
+  const [trainingFor, setTrainingFor] = useState(null); // id dell'incarico aperto
+  const [trKind, setTrKind] = useState(COURSE_KIND_OPTIONS[0]);
+  const [trIssueDate, setTrIssueDate] = useState("");
+  const [trValidityYears, setTrValidityYears] = useState("");
+  const [trExpiryDate, setTrExpiryDate] = useState("");
+  const [trFile, setTrFile] = useState(null);
+  const [trNote, setTrNote] = useState("");
+  const [trError, setTrError] = useState("");
+  const [trBusy, setTrBusy] = useState(false);
+
+  const openTrainingFor = (appointmentId) => {
+    setTrainingFor(appointmentId);
+    setTrKind(COURSE_KIND_OPTIONS[0]);
+    setTrIssueDate(""); setTrValidityYears(""); setTrExpiryDate("");
+    setTrFile(null); setTrNote(""); setTrError("");
+  };
+
+  const handleTrIssueChange = (value) => {
+    setTrIssueDate(value);
+    if (trValidityYears) setTrExpiryDate(addYears(value, trValidityYears));
+  };
+  const handleTrYearsChange = (value) => {
+    setTrValidityYears(value);
+    if (trIssueDate) setTrExpiryDate(addYears(trIssueDate, value));
+  };
+
+  const onTrFileChange = (e) => {
+    const f = e.target.files?.[0] || null;
+    setTrError("");
+    if (f && f.size > MAX_FILE_BYTES) { setTrError("File troppo grande (limite 8 MB)."); setTrFile(null); e.target.value = ""; return; }
+    setTrFile(f);
+  };
+
+  const submitTraining = async (appointmentId) => {
+    if (!trIssueDate && !trExpiryDate && !trFile) {
+      setTrError("Inserisci almeno la data del corso o la scadenza.");
+      return;
+    }
+    setTrBusy(true);
+    setTrError("");
+    try {
+      let attachment_path = null;
+      if (trFile) attachment_path = await uploadAttachment(company.id, trFile);
+      await addTraining({
+        appointment_id: appointmentId,
+        course_kind: trKind,
+        issue_date: trIssueDate || null,
+        validity_years: trValidityYears === "" ? null : Number(trValidityYears),
+        expiry_date: trExpiryDate || null,
+        attachment_path,
+        note: trNote || null,
+      });
+      setTrainingFor(null);
+    } catch (err) {
+      setTrError("Errore durante il caricamento: " + err.message);
+    } finally {
+      setTrBusy(false);
+    }
+  };
+
   // --- Modifica di una nomina/attestato già registrato ---
   const [editingApptId, setEditingApptId] = useState(null);
   const [editNominaIssueDate, setEditNominaIssueDate] = useState("");
-  const [editIssueDate, setEditIssueDate] = useState("");
-  const [editValidityYears, setEditValidityYears] = useState("");
-  const [editExpiryDate, setEditExpiryDate] = useState("");
   const [editNote, setEditNote] = useState("");
   const [editNominaFile, setEditNominaFile] = useState(null);
-  const [editAttestatoFile, setEditAttestatoFile] = useState(null);
   const [editBusy, setEditBusy] = useState(false);
   const [editError, setEditError] = useState("");
 
   const startEditAppointment = (item) => {
     setEditingApptId(item.id);
     setEditNominaIssueDate(item.nomina_issue_date || "");
-    setEditIssueDate(item.issue_date || "");
-    setEditValidityYears(item.validity_years ? String(item.validity_years) : "");
-    setEditExpiryDate(item.expiry_date || "");
     setEditNote(item.note || "");
     setEditNominaFile(null);
-    setEditAttestatoFile(null);
     setEditError("");
   };
   const cancelEditAppointment = () => setEditingApptId(null);
-
-  const handleEditIssueChange = (value) => {
-    setEditIssueDate(value);
-    if (editValidityYears) setEditExpiryDate(addYears(value, editValidityYears));
-  };
-  const handleEditYearsChange = (value) => {
-    setEditValidityYears(value);
-    if (editIssueDate) setEditExpiryDate(addYears(editIssueDate, value));
-  };
 
   const saveEditAppointment = async (item) => {
     setEditBusy(true);
     setEditError("");
     try {
       let nomina_attachment_path = item.nomina_attachment_path;
-      let attestato_attachment_path = item.attestato_attachment_path;
       if (editNominaFile) nomina_attachment_path = await uploadAttachment(company.id, editNominaFile);
-      if (editAttestatoFile) attestato_attachment_path = await uploadAttachment(company.id, editAttestatoFile);
       await updateAppointment(item.id, {
         nomina_issue_date: editNominaIssueDate || null,
-        issue_date: editIssueDate || null,
-        validity_years: editValidityYears === "" ? null : Number(editValidityYears),
-        expiry_date: editExpiryDate || null,
         note: editNote,
         nomina_attachment_path,
-        attestato_attachment_path,
       });
       setEditingApptId(null);
     } catch (err) {
@@ -290,9 +379,101 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
   };
 
   const expiringSoon = appointments.filter((a) => {
-    const info = expiryInfo(a.expiry_date);
+    const info = appointmentStatus(a.id);
     return info && (info.cls === "pill-warn" || info.cls === "pill-alert");
   }).length;
+
+  // Le nomine si leggono per persona, non in ordine cronologico: chi ricopre
+  // più ruoli deve comparire una volta sola, con sotto tutti i suoi documenti.
+  const appointmentGroups = (() => {
+    const map = new Map();
+    appointments.forEach((a) => {
+      const name = (a.person_name || "").trim() || "Senza nominativo";
+      if (!map.has(name)) map.set(name, []);
+      map.get(name).push(a);
+    });
+    return [...map.entries()]
+      .map(([name, items]) => ({ name, items }))
+      .sort((a, b) => a.name.localeCompare(b.name, "it"));
+  })();
+
+  // Un solo modulo di inserimento, riusato in due punti: in cima quando si
+  // registra un incarico per un nominativo nuovo, e dentro la scheda della
+  // persona quando se ne aggiunge uno a chi è già in elenco. In quel secondo
+  // caso il nominativo è già deciso e non va più scelto.
+  const appointmentForm = (lockedName) => (
+    <form onSubmit={submitAppointment} className="traccia-form">
+      {lockedName ? (
+        <p className="sub" style={{ margin: 0 }}>
+          Nuovo incarico per <strong>{lockedName}</strong>
+        </p>
+      ) : (
+        <div className="row-form" style={{ marginTop: 0 }}>
+          {employees.length > 0 && (
+            <select
+              value=""
+              onChange={(e) => {
+                const emp = employees.find((x) => x.id === e.target.value);
+                if (emp) setPersonName(`${emp.first_name} ${emp.last_name}`);
+              }}
+            >
+              <option value="">Scegli dall'elenco dipendenti…</option>
+              {employees.map((emp) => <option key={emp.id} value={emp.id}>{emp.first_name} {emp.last_name}</option>)}
+            </select>
+          )}
+          <input type="text" placeholder="Nominativo" required value={personName} onChange={(e) => setPersonName(e.target.value)} className="note-input" />
+        </div>
+      )}
+
+      <label className="field-label">Incarico
+        <select value={role} onChange={(e) => setRole(e.target.value)}>
+          {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+        </select>
+      </label>
+
+      <fieldset className="config-group">
+        <legend>Nomina</legend>
+        <div className="row-form" style={{ margin: "0 0 8px" }}>
+          <label className="field-label">Data nomina
+            <input type="date" value={nominaIssueDate} onChange={(e) => setNominaIssueDate(e.target.value)} />
+          </label>
+        </div>
+        <label className="file-drop" htmlFor="nomine-nomina-file-input">
+          <Paperclip size={15} /><span>{apptNominaFile ? apptNominaFile.name : "Allega nomina (PDF o immagine)"}</span>
+          <input id="nomine-nomina-file-input" type="file" accept=".pdf,image/*" onChange={onApptNominaFileChange} hidden />
+        </label>
+      </fieldset>
+
+      <fieldset className="config-group">
+        <legend>Corso di formazione</legend>
+        <div className="row-form" style={{ margin: "0 0 8px" }}>
+          <label className="field-label">Data corso
+            <input type="date" value={issueDate} onChange={(e) => handleIssueChange(e.target.value)} />
+          </label>
+          <label className="field-label">Anni di validità (opzionale)
+            <input type="number" min="0" step="1" placeholder="es. 5" value={validityYears} onChange={(e) => handleYearsChange(e.target.value)} className="num" />
+          </label>
+          <label className="field-label">Data scadenza corso
+            <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
+          </label>
+        </div>
+        <label className="file-drop" htmlFor="nomine-attestato-file-input">
+          <Paperclip size={15} /><span>{apptAttestatoFile ? apptAttestatoFile.name : "Allega attestato/i di formazione (PDF o immagine)"}</span>
+          <input id="nomine-attestato-file-input" type="file" accept=".pdf,image/*" onChange={onApptAttestatoFileChange} hidden />
+        </label>
+      </fieldset>
+
+      <p className="sub" style={{ marginTop: -6 }}>Compila almeno una delle due date (nomina o corso) per registrare la scheda — l'altra puoi aggiungerla in un secondo momento con "Modifica".</p>
+      <input type="text" placeholder="Nota (opzionale)" value={apptNote} onChange={(e) => setApptNote(e.target.value)} className="full-input" />
+      {apptError && <span className="file-error"><AlertTriangle size={13} /> {apptError}</span>}
+      <div className="row-form" style={{ margin: "4px 0 0" }}>
+        <button type="submit" className="btn-primary" disabled={apptBusy}>
+          <Plus size={16} /> {apptBusy ? "Salvataggio…" : "Registra incarico"}
+        </button>
+        <button type="button" className="link-btn" onClick={() => setAddingFor(null)}>Annulla</button>
+      </div>
+    </form>
+  );
 
   // --- Form Attrezzature e Verifiche ---
   const [equipType, setEquipType] = useState(EQUIPMENT_TYPE_OPTIONS[0]);
@@ -553,160 +734,176 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
 
       {subTab === "nomine" && (
         <>
-          <form onSubmit={submitAppointment} className="traccia-form">
-            <div className="row-form">
-              <select value={role} onChange={(e) => setRole(e.target.value)}>
-                {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
-              </select>
-              {employees.length > 0 && (
-                <select
-                  value=""
-                  onChange={(e) => {
-                    const emp = employees.find((x) => x.id === e.target.value);
-                    if (emp) setPersonName(`${emp.first_name} ${emp.last_name}`);
-                  }}
-                >
-                  <option value="">Scegli dall'elenco dipendenti…</option>
-                  {employees.map((emp) => <option key={emp.id} value={emp.id}>{emp.first_name} {emp.last_name}</option>)}
-                </select>
-              )}
-              <input type="text" placeholder="Nominativo" required value={personName} onChange={(e) => setPersonName(e.target.value)} className="note-input" />
-            </div>
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={() => (addingFor === "" ? setAddingFor(null) : openAddFor(""))}
+            style={{ marginBottom: 16 }}
+          >
+            <Plus size={16} /> Nuova nomina o attestato
+          </button>
 
-            <fieldset className="config-group">
-              <legend>Nomina</legend>
-              <div className="row-form" style={{ margin: "0 0 8px" }}>
-                <label className="field-label">Data nomina
-                  <input type="date" value={nominaIssueDate} onChange={(e) => setNominaIssueDate(e.target.value)} />
-                </label>
-              </div>
-              <label className="file-drop" htmlFor="nomine-nomina-file-input">
-                <Paperclip size={15} /><span>{apptNominaFile ? apptNominaFile.name : "Allega nomina (PDF o immagine)"}</span>
-                <input id="nomine-nomina-file-input" type="file" accept=".pdf,image/*" onChange={onApptNominaFileChange} hidden />
-              </label>
-            </fieldset>
-
-            <fieldset className="config-group">
-              <legend>Corso di formazione</legend>
-              <div className="row-form" style={{ margin: "0 0 8px" }}>
-                <label className="field-label">Data corso
-                  <input type="date" value={issueDate} onChange={(e) => handleIssueChange(e.target.value)} />
-                </label>
-                <label className="field-label">Anni di validità (opzionale)
-                  <input type="number" min="0" step="1" placeholder="es. 5" value={validityYears} onChange={(e) => handleYearsChange(e.target.value)} className="num" />
-                </label>
-                <label className="field-label">Data scadenza corso
-                  <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} />
-                </label>
-              </div>
-              <label className="file-drop" htmlFor="nomine-attestato-file-input">
-                <Paperclip size={15} /><span>{apptAttestatoFile ? apptAttestatoFile.name : "Allega attestato/i di formazione (PDF o immagine)"}</span>
-                <input id="nomine-attestato-file-input" type="file" accept=".pdf,image/*" onChange={onApptAttestatoFileChange} hidden />
-              </label>
-            </fieldset>
-
-            <p className="sub" style={{ marginTop: -6 }}>Compila almeno una delle due date (nomina o corso) per registrare la scheda — l'altra puoi aggiungerla in un secondo momento con "Modifica".</p>
-            <input type="text" placeholder="Nota (opzionale)" value={apptNote} onChange={(e) => setApptNote(e.target.value)} className="full-input" />
-            {apptError && <span className="file-error"><AlertTriangle size={13} /> {apptError}</span>}
-            <button type="submit" className="btn-primary" disabled={apptBusy} style={{ alignSelf: "flex-start" }}>
-              <Plus size={16} /> {apptBusy ? "Salvataggio…" : "Registra nomina / attestato"}
-            </button>
-          </form>
+          {addingFor === "" && appointmentForm(null)}
 
           {appointmentsLoading ? (
             <p className="sub">Caricamento…</p>
-          ) : appointments.length === 0 ? (
+          ) : appointmentGroups.length === 0 ? (
             <div className="empty"><p>Nessuna nomina o attestato registrato.</p></div>
           ) : (
             <ul className="dish-list">
-              {appointments.map((item) => {
-                const info = expiryInfo(item.expiry_date);
-                const isEditing = editingApptId === item.id;
+              {appointmentGroups.map((group) => (
+                <li key={group.name} className="dish-row">
+                  <div className="dish-top">
+                    <div>
+                      <strong>{group.name}</strong>
+                      <span className="lot-tag">
+                        {group.items.length} {group.items.length === 1 ? "incarico" : "incarichi"}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="link-btn"
+                      onClick={() => (addingFor === group.name ? setAddingFor(null) : openAddFor(group.name))}
+                    >
+                      {addingFor === group.name ? "Annulla" : "+ Aggiungi incarico"}
+                    </button>
+                  </div>
 
-                if (isEditing) {
-                  return (
-                    <li key={item.id} className="dish-row">
-                      <div className="dish-top">
-                        <div>
-                          <strong>{item.role}</strong>
-                          <span className="lot-tag">{item.person_name}</span>
-                        </div>
-                      </div>
-                      <div className="nc-edit-block">
-                        <fieldset className="config-group">
-                          <legend>Nomina</legend>
-                          <label className="field-label">Data nomina
-                            <input type="date" value={editNominaIssueDate} onChange={(e) => setEditNominaIssueDate(e.target.value)} />
-                          </label>
-                          <label className="file-drop" htmlFor={`edit-nomina-${item.id}`} style={{ marginTop: 8 }}>
-                            <Paperclip size={15} />
-                            <span>{editNominaFile ? editNominaFile.name : (item.nomina_attachment_path ? "Sostituisci nomina allegata" : "Allega nomina (PDF o immagine)")}</span>
-                            <input id={`edit-nomina-${item.id}`} type="file" accept=".pdf,image/*" onChange={(e) => setEditNominaFile(e.target.files?.[0] || null)} hidden />
-                          </label>
-                        </fieldset>
-                        <fieldset className="config-group">
-                          <legend>Corso di formazione</legend>
-                          <div className="row-form" style={{ margin: "0 0 8px" }}>
-                            <label className="field-label">Data corso
-                              <input type="date" value={editIssueDate} onChange={(e) => handleEditIssueChange(e.target.value)} />
-                            </label>
-                            <label className="field-label">Anni di validità (opzionale)
-                              <input type="number" min="0" step="1" placeholder="es. 5" value={editValidityYears} onChange={(e) => handleEditYearsChange(e.target.value)} className="num" />
-                            </label>
-                            <label className="field-label">Data scadenza corso
-                              <input type="date" value={editExpiryDate} onChange={(e) => setEditExpiryDate(e.target.value)} />
-                            </label>
+                  {addingFor === group.name && appointmentForm(group.name)}
+
+                  <ul className="appt-list">
+                    {group.items.map((item) => {
+                      const info = appointmentStatus(item.id);
+                      const corsi = trainingsFor(item.id);
+                      const isEditing = editingApptId === item.id;
+
+                      if (isEditing) {
+                        return (
+                          <li key={item.id} className="appt-item">
+                            <p className="appt-role">{item.role}</p>
+                            <div className="nc-edit-block">
+                              <fieldset className="config-group">
+                                <legend>Nomina</legend>
+                                <label className="field-label">Data nomina
+                                  <input type="date" value={editNominaIssueDate} onChange={(e) => setEditNominaIssueDate(e.target.value)} />
+                                </label>
+                                <label className="file-drop" htmlFor={`edit-nomina-${item.id}`} style={{ marginTop: 8 }}>
+                                  <Paperclip size={15} />
+                                  <span>{editNominaFile ? editNominaFile.name : (item.nomina_attachment_path ? "Sostituisci nomina allegata" : "Allega nomina (PDF o immagine)")}</span>
+                                  <input id={`edit-nomina-${item.id}`} type="file" accept=".pdf,image/*" onChange={(e) => setEditNominaFile(e.target.files?.[0] || null)} hidden />
+                                </label>
+                              </fieldset>
+                              <p className="sub" style={{ margin: 0 }}>
+                                I corsi di formazione si gestiscono uno per uno dall'elenco degli attestati, qui sotto.
+                              </p>
+                              <input type="text" placeholder="Nota (opzionale)" value={editNote} onChange={(e) => setEditNote(e.target.value)} className="full-input" />
+                              {editError && <span className="file-error"><AlertTriangle size={13} /> {editError}</span>}
+                              <div className="row-form" style={{ margin: "10px 0 0" }}>
+                                <button type="button" className="btn-primary" onClick={() => saveEditAppointment(item)} disabled={editBusy}>
+                                  <Check size={14} /> Salva
+                                </button>
+                                <button type="button" className="icon-btn" onClick={cancelEditAppointment} aria-label="Annulla"><X size={14} /> Annulla</button>
+                              </div>
+                            </div>
+                          </li>
+                        );
+                      }
+
+                      return (
+                        <li key={item.id} className={"appt-item" + (info?.cls === "pill-alert" ? " row-warn" : "")}>
+                          <div className="appt-top">
+                            <p className="appt-role">{item.role}</p>
+                            <div>
+                              <button className="icon-btn" onClick={() => startEditAppointment(item)} aria-label="Modifica"><Pencil size={14} /></button>
+                              <button className="icon-btn" onClick={() => removeAppointment(item.id)} aria-label="Elimina"><Trash2 size={14} /></button>
+                            </div>
                           </div>
-                          <label className="file-drop" htmlFor={`edit-attestato-${item.id}`}>
-                            <Paperclip size={15} />
-                            <span>{editAttestatoFile ? editAttestatoFile.name : (item.attestato_attachment_path ? "Sostituisci attestato allegato" : "Allega attestato/i di formazione")}</span>
-                            <input id={`edit-attestato-${item.id}`} type="file" accept=".pdf,image/*" onChange={(e) => setEditAttestatoFile(e.target.files?.[0] || null)} hidden />
-                          </label>
-                        </fieldset>
-                        <input type="text" placeholder="Nota (opzionale)" value={editNote} onChange={(e) => setEditNote(e.target.value)} className="full-input" />
-                        {editError && <span className="file-error"><AlertTriangle size={13} /> {editError}</span>}
-                        <div className="row-form" style={{ margin: "10px 0 0" }}>
-                          <button type="button" className="btn-primary" onClick={() => saveEditAppointment(item)} disabled={editBusy}>
-                            <Check size={14} /> Salva
-                          </button>
-                          <button type="button" className="icon-btn" onClick={cancelEditAppointment} aria-label="Annulla"><X size={14} /> Annulla</button>
-                        </div>
-                      </div>
-                    </li>
-                  );
-                }
+                          <div className="traccia-meta">
+                            {item.nomina_issue_date && <span className="doc-type-tag">Nomina del {fmtDate(item.nomina_issue_date)}</span>}
+                            {info
+                              ? <span className={"pill " + info.cls}>{info.label}</span>
+                              : <span className="pill pill-alert">Nessun corso registrato</span>}
+                          </div>
+                          {item.note && <p className="pest-note">{item.note}</p>}
 
-                return (
-                  <li key={item.id} className={"dish-row" + (info?.cls === "pill-alert" ? " row-warn" : "")}>
-                    <div className="dish-top">
-                      <div>
-                        <strong>{item.role}</strong>
-                        <span className="lot-tag">{item.person_name}</span>
-                      </div>
-                      <div>
-                        <button className="icon-btn" onClick={() => startEditAppointment(item)} aria-label="Modifica"><Pencil size={14} /></button>
-                        <button className="icon-btn" onClick={() => removeAppointment(item.id)} aria-label="Elimina"><Trash2 size={14} /></button>
-                      </div>
-                    </div>
-                    <div className="traccia-meta">
-                      {item.nomina_issue_date && <span className="doc-type-tag">Nomina del {fmtDate(item.nomina_issue_date)}</span>}
-                      {item.issue_date && <span className="doc-type-tag">Corso del {fmtDate(item.issue_date)}</span>}
-                      {info && <span className={"pill " + info.cls}>{info.label}</span>}
-                    </div>
-                    {item.note && <p className="pest-note">{item.note}</p>}
-                    <div className="row-form" style={{ margin: "6px 0 0" }}>
-                      <div>
-                        <span className="none-label" style={{ display: "block", marginBottom: 4 }}>Nomina</span>
-                        <AttachmentLink path={item.nomina_attachment_path} />
-                      </div>
-                      <div>
-                        <span className="none-label" style={{ display: "block", marginBottom: 4 }}>Attestato/i formazione</span>
-                        <AttachmentLink path={item.attestato_attachment_path} />
-                      </div>
-                    </div>
-                  </li>
-                );
-              })}
+                          <div style={{ margin: "6px 0 10px" }}>
+                            <span className="none-label" style={{ display: "block", marginBottom: 4 }}>Nomina</span>
+                            <AttachmentLink path={item.nomina_attachment_path} />
+                          </div>
+
+                          <div className="tr-head">
+                            <span className="none-label">
+                              Attestati di formazione{corsi.length > 0 ? ` (${corsi.length})` : ""}
+                            </span>
+                            <button
+                              type="button"
+                              className="link-btn"
+                              onClick={() => (trainingFor === item.id ? setTrainingFor(null) : openTrainingFor(item.id))}
+                            >
+                              {trainingFor === item.id ? "Annulla" : "+ Aggiungi attestato"}
+                            </button>
+                          </div>
+
+                          {trainingFor === item.id && (
+                            <div className="nc-edit-block">
+                              <div className="row-form" style={{ margin: "0 0 8px" }}>
+                                <label className="field-label">Tipo
+                                  <select value={trKind} onChange={(e) => setTrKind(e.target.value)}>
+                                    {COURSE_KIND_OPTIONS.map((k) => <option key={k} value={k}>{k}</option>)}
+                                  </select>
+                                </label>
+                                <label className="field-label">Data corso
+                                  <input type="date" value={trIssueDate} onChange={(e) => handleTrIssueChange(e.target.value)} />
+                                </label>
+                                <label className="field-label">Anni di validità
+                                  <input type="number" min="0" step="1" placeholder="es. 5" value={trValidityYears} onChange={(e) => handleTrYearsChange(e.target.value)} className="num" />
+                                </label>
+                                <label className="field-label">Scadenza
+                                  <input type="date" value={trExpiryDate} onChange={(e) => setTrExpiryDate(e.target.value)} />
+                                </label>
+                              </div>
+                              <label className="file-drop" htmlFor={`tr-file-${item.id}`}>
+                                <Paperclip size={15} /><span>{trFile ? trFile.name : "Allega attestato (PDF o immagine)"}</span>
+                                <input id={`tr-file-${item.id}`} type="file" accept=".pdf,image/*" onChange={onTrFileChange} hidden />
+                              </label>
+                              <input type="text" placeholder="Nota (opzionale)" value={trNote} onChange={(e) => setTrNote(e.target.value)} className="full-input" style={{ marginTop: 8 }} />
+                              {trError && <span className="file-error"><AlertTriangle size={13} /> {trError}</span>}
+                              <div className="row-form" style={{ margin: "10px 0 0" }}>
+                                <button type="button" className="btn-primary" onClick={() => submitTraining(item.id)} disabled={trBusy}>
+                                  <Plus size={14} /> {trBusy ? "Salvataggio…" : "Salva attestato"}
+                                </button>
+                                <button type="button" className="link-btn" onClick={() => setTrainingFor(null)}>Annulla</button>
+                              </div>
+                            </div>
+                          )}
+
+                          {corsi.length === 0 ? (
+                            <p className="none-label" style={{ margin: "4px 0 0" }}>Nessun attestato registrato</p>
+                          ) : (
+                            <ul className="tr-list">
+                              {corsi.map((t) => {
+                                const tInfo = expiryInfo(t.expiry_date);
+                                return (
+                                  <li key={t.id} className="tr-item">
+                                    <div className="tr-item-top">
+                                      <span className="tr-kind">{t.course_kind}</span>
+                                      {t.issue_date && <span className="doc-type-tag">del {fmtDate(t.issue_date)}</span>}
+                                      {tInfo && <span className={"pill " + tInfo.cls}>{tInfo.label}</span>}
+                                      <button className="icon-btn" onClick={() => removeTraining(t.id)} aria-label="Elimina attestato"><Trash2 size={13} /></button>
+                                    </div>
+                                    {t.note && <p className="pest-note" style={{ margin: "4px 0 0" }}>{t.note}</p>}
+                                    <AttachmentLink path={t.attachment_path} />
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </li>
+              ))}
             </ul>
           )}
         </>

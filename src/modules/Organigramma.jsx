@@ -21,6 +21,17 @@ export default function Organigramma() {
   const { company } = useAuth();
   const { items: employees, add: addEmployee, remove: removeEmployee, loading: employeesLoading } = useTable("employees", company?.id);
   const { items: appointments, add: addAppointment } = useTable("work_safety_appointments", company?.id);
+  const { items: trainings } = useTable("work_safety_trainings", company?.id);
+
+  // La validità di un ruolo dipende dall'ultimo corso fatto, non dalla nomina:
+  // la nomina di per sé non scade, scade la formazione.
+  const roleStatus = (appointmentId) => {
+    const withExpiry = trainings.filter((t) => t.appointment_id === appointmentId && t.expiry_date);
+    if (withExpiry.length === 0) return null;
+    const latest = withExpiry.reduce((best, t) =>
+      !best || new Date(t.expiry_date) > new Date(best.expiry_date) ? t : best, null);
+    return expiryInfo(latest.expiry_date);
+  };
 
   // --- Nuova persona ---
   const [showAddPerson, setShowAddPerson] = useState(false);
@@ -320,7 +331,7 @@ export default function Organigramma() {
                 {roles.length > 0 && (
                   <div className="chip-grid" style={{ margin: "8px 0" }}>
                     {roles.map((r) => {
-                      const info = expiryInfo(r.expiry_date);
+                      const info = roleStatus(r.id);
                       return (
                         <span key={r.id} className={"pill " + (info ? info.cls : "pill-ok")}>
                           <Award size={12} /> {r.role}

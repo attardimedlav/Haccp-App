@@ -45,6 +45,7 @@ export default function Dashboard({ goTo, openWorkSafety }) {
   const water = useTable("water_controls", company?.id);
   const docs = useTable("haccp_documents", company?.id);
   const workSafety = useTable("work_safety_appointments", company?.id);
+  const trainings = useTable("work_safety_trainings", company?.id);
   const equipmentChecks = useTable("equipment_checks", company?.id);
   const medicalVisits = useTable("medical_visits", company?.id);
   const employees = useTable("employees", company?.id);
@@ -118,9 +119,17 @@ export default function Dashboard({ goTo, openWorkSafety }) {
       });
     };
 
-    collect(workSafety.items, "nomine", Award,
-      (a) => a.role || "Nomina",
-      (a) => a.person_name);
+    // Le scadenze degli incarichi stanno nei corsi di formazione: si segnala
+    // il corso, dicendo per quale incarico e per quale persona vale.
+    collect(trainings.items, "nomine", Award,
+      (t) => {
+        const appt = workSafety.items.find((a) => a.id === t.appointment_id);
+        return appt?.role || "Corso di formazione";
+      },
+      (t) => {
+        const appt = workSafety.items.find((a) => a.id === t.appointment_id);
+        return [appt?.person_name, t.course_kind].filter(Boolean).join(" — ");
+      });
 
     if (company?.active_medical_surveillance) {
       collect(medicalVisits.items, "visitemediche", Stethoscope,
