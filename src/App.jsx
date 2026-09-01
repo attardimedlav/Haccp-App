@@ -303,8 +303,7 @@ function SubscriptionBlockScreen({ company, signOut }) {
 }
 
 function Gate() {
-  const { session, company, homeCompanyId, loadingCompany, error, recoveryMode, signOut } = useAuth();
-
+  const { session, company, homeCompanyId, consultantCompanies, loadingCompany, error, recoveryMode, signOut } = useAuth();
   if (recoveryMode) return <ResetPassword />;
   if (session === undefined) return <div className="loading-screen">Caricamento…</div>;
   if (!session) return <Login />;
@@ -319,7 +318,13 @@ function Gate() {
 
   // Il blocco riguarda solo l'azienda "propria" dell'utente (il cliente stesso),
   // mai un'azienda che il consulente sta visitando tramite "I miei clienti".
-  if (company.id === homeCompanyId && isSubscriptionBlocked(company)) {
+  // Un consulente non viene mai bloccato: la sua azienda è quella da cui eroga
+  // il servizio, non una di quelle che lo acquistano. Senza questa esclusione
+  // basterebbe una data di scadenza lasciata per sbaglio nella propria
+  // Configurazione per chiudersi fuori dal programma da soli.
+  const isConsultant = consultantCompanies.length > 0;
+
+  if (!isConsultant && company.id === homeCompanyId && isSubscriptionBlocked(company)) {
     return <SubscriptionBlockScreen company={company} signOut={signOut} />;
   }
 
