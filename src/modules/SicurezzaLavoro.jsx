@@ -777,10 +777,19 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
                       const corsi = trainingsFor(item.id);
                       const isEditing = editingApptId === item.id;
 
-                      if (isEditing) {
-                        return (
-                          <li key={item.id} className="appt-item">
+                      return (
+                        <li key={item.id} className={"appt-item" + (!isEditing && info?.cls === "pill-alert" ? " row-warn" : "")}>
+                          <div className="appt-top">
                             <p className="appt-role">{item.role}</p>
+                            {!isEditing && (
+                              <div>
+                                <button className="icon-btn" onClick={() => startEditAppointment(item)} aria-label="Modifica"><Pencil size={14} /></button>
+                                <button className="icon-btn" onClick={() => removeAppointment(item.id)} aria-label="Elimina"><Trash2 size={14} /></button>
+                              </div>
+                            )}
+                          </div>
+
+                          {isEditing ? (
                             <div className="nc-edit-block">
                               <fieldset className="config-group">
                                 <legend>Nomina</legend>
@@ -793,9 +802,6 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
                                   <input id={`edit-nomina-${item.id}`} type="file" accept=".pdf,image/*" onChange={(e) => setEditNominaFile(e.target.files?.[0] || null)} hidden />
                                 </label>
                               </fieldset>
-                              <p className="sub" style={{ margin: 0 }}>
-                                I corsi di formazione si gestiscono uno per uno dall'elenco degli attestati, qui sotto.
-                              </p>
                               <input type="text" placeholder="Nota (opzionale)" value={editNote} onChange={(e) => setEditNote(e.target.value)} className="full-input" />
                               {editError && <span className="file-error"><AlertTriangle size={13} /> {editError}</span>}
                               <div className="row-form" style={{ margin: "10px 0 0" }}>
@@ -805,32 +811,24 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
                                 <button type="button" className="icon-btn" onClick={cancelEditAppointment} aria-label="Annulla"><X size={14} /> Annulla</button>
                               </div>
                             </div>
-                          </li>
-                        );
-                      }
+                          ) : (
+                            <>
+                              <div className="traccia-meta">
+                                {item.nomina_issue_date && <span className="doc-type-tag">Nomina del {fmtDate(item.nomina_issue_date)}</span>}
+                                {info
+                                  ? <span className={"pill " + info.cls}>{info.label}</span>
+                                  : <span className="pill pill-alert">Nessun corso registrato</span>}
+                              </div>
+                              {item.note && <p className="pest-note">{item.note}</p>}
+                              <div style={{ margin: "6px 0 10px" }}>
+                                <span className="none-label" style={{ display: "block", marginBottom: 4 }}>Nomina</span>
+                                <AttachmentLink path={item.nomina_attachment_path} />
+                              </div>
+                            </>
+                          )}
 
-                      return (
-                        <li key={item.id} className={"appt-item" + (info?.cls === "pill-alert" ? " row-warn" : "")}>
-                          <div className="appt-top">
-                            <p className="appt-role">{item.role}</p>
-                            <div>
-                              <button className="icon-btn" onClick={() => startEditAppointment(item)} aria-label="Modifica"><Pencil size={14} /></button>
-                              <button className="icon-btn" onClick={() => removeAppointment(item.id)} aria-label="Elimina"><Trash2 size={14} /></button>
-                            </div>
-                          </div>
-                          <div className="traccia-meta">
-                            {item.nomina_issue_date && <span className="doc-type-tag">Nomina del {fmtDate(item.nomina_issue_date)}</span>}
-                            {info
-                              ? <span className={"pill " + info.cls}>{info.label}</span>
-                              : <span className="pill pill-alert">Nessun corso registrato</span>}
-                          </div>
-                          {item.note && <p className="pest-note">{item.note}</p>}
-
-                          <div style={{ margin: "6px 0 10px" }}>
-                            <span className="none-label" style={{ display: "block", marginBottom: 4 }}>Nomina</span>
-                            <AttachmentLink path={item.nomina_attachment_path} />
-                          </div>
-
+                          {/* Gli attestati restano visibili e modificabili anche mentre
+                              si sta correggendo la nomina: sono due cose indipendenti. */}
                           <div className="tr-head">
                             <span className="none-label">
                               Attestati di formazione{corsi.length > 0 ? ` (${corsi.length})` : ""}
