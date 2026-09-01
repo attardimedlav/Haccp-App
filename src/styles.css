@@ -131,6 +131,13 @@ nav { display: flex; flex-direction: column; gap: 2px; }
 .validity-row { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-end; margin: 4px 0; }
 .computed-field { background: #F1F4F0 !important; color: #2F6F4E !important; font-weight: 500; border-color: #D8E3DA !important; cursor: default; }
 
+/* ---- Riga RSPP, presente su ogni scheda ---- */
+.rspp-line { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #1B2A22;
+  background: #F1F4F0; border: 1px solid #E1E5DF; border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.rspp-label { text-transform: uppercase; letter-spacing: 0.06em; font-size: 11px; color: #6E7C73; }
+.rspp-name { font-weight: 500; }
+.rspp-missing { color: #B3432E; font-style: italic; }
+
 /* ---- Toolbar / stampa PDF ---- */
 .content-toolbar { display: flex; justify-content: flex-end; margin-bottom: 12px; }
 .print-btn { display: flex; align-items: center; gap: 6px; background: #fff; color: #2F6F4E; border: 1px solid #C9D6CD; padding: 7px 12px; border-radius: 8px; font: inherit; font-size: 12.5px; cursor: pointer; }

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Thermometer, SprayCan, Bug, ChevronRight, ChevronDown, LogOut, ShieldCheck, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen, Snowflake, HardHat, FileText, Paperclip, Award, Wrench, Stethoscope, Network } from "lucide-react";
 import { AuthProvider, useAuth } from "./AuthContext";
+import { useTable } from "./hooks/useTable";
 import Login from "./Login";
 import ResetPassword from "./ResetPassword";
 import Dashboard from "./modules/Dashboard";
@@ -59,6 +60,37 @@ const TABS = [
 const HACCP_TAB_IDS = new Set([...MAIN_TABS, ...STATIC_TABS].map((t) => t.id));
 
 const SETTINGS_TAB = { id: "config", label: "Configurazione", icon: Settings };
+
+const RSPP_ROLES = ["RSPP Datore di Lavoro", "RSPP Esterno"];
+
+// Riga sempre presente in cima a ogni scheda: chi è il Responsabile del
+// Servizio di Prevenzione e Protezione di questa azienda. È il riferimento
+// che serve avere sott'occhio mentre si lavora, e comparendo anche in stampa
+// finisce sui registri esportati. Il nome si prende sia dalle nomine
+// registrate sia dal ruolo di sicurezza in anagrafica, così compare anche
+// prima che la nomina sia protocollata.
+function RsppLine() {
+  const { company } = useAuth();
+  const { items: employees } = useTable("employees", company?.id);
+  const { items: appointments } = useTable("work_safety_appointments", company?.id);
+
+  if (!company?.active_work_safety) return null;
+
+  const names = [...new Set([
+    ...appointments.filter((a) => RSPP_ROLES.includes(a.role)).map((a) => (a.person_name || "").trim()),
+    ...employees.filter((e) => RSPP_ROLES.includes(e.security_role)).map((e) => `${e.first_name} ${e.last_name}`.trim()),
+  ])].filter(Boolean);
+
+  return (
+    <div className="rspp-line">
+      <ShieldCheck size={14} color="#2F6F4E" />
+      <span className="rspp-label">RSPP</span>
+      {names.length > 0
+        ? <span className="rspp-name">{names.join(", ")}</span>
+        : <span className="rspp-missing">non ancora nominato</span>}
+    </div>
+  );
+}
 
 function Shell() {
   const { company, signOut, homeCompanyId, consultantCompanies, switchCompany } = useAuth();
@@ -215,6 +247,7 @@ function Shell() {
             </span>
           </div>
         )}
+        <RsppLine />
         <div className="content-toolbar">
           <button type="button" className="print-btn" onClick={() => window.print()}>
             <Printer size={14} /> Esporta PDF
