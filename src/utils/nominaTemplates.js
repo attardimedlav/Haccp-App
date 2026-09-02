@@ -10,6 +10,17 @@ import { uploadAttachment } from "../hooks/useAttachment";
 // codice è necessaria, il modulo che crea/assegna il ruolo lo userà da solo.
 const TEMPLATES = {
   "RSPP Datore di Lavoro": "/templates/modello_nomina_rspp_datore_lavoro.docx",
+  "Preposto": "/templates/modello_nomina_preposto.docx",
+};
+
+// Come si chiama, in ciascun modello, il segnaposto della persona che riceve
+// la nomina. Non è sempre lo stesso: nella nomina RSPP la persona nominata è
+// il datore di lavoro, nella nomina a preposto il datore di lavoro è invece
+// chi firma, e il nominato è un'altra persona. Tenere le due cose distinte
+// evita di scrivere il nome del preposto al posto di quello del titolare.
+const PERSON_PLACEHOLDER = {
+  "RSPP Datore di Lavoro": "[NOME E COGNOME DATORE DI LAVORO]",
+  "Preposto": "[NOME E COGNOME PREPOSTO]",
 };
 
 function escapeXml(value) {
@@ -47,7 +58,7 @@ function formatDateIt(isoDate) {
 // chi chiama questa funzione deve trattare null come "nessun allegato
 // automatico", e lasciare che la nomina venga comunque salvata (l'utente
 // potrà sempre allegare il documento a mano in un secondo momento).
-export async function generateNominaAttachment({ role, company, personName, nominaDate, rlsName }) {
+export async function generateNominaAttachment({ role, company, personName, nominaDate, rlsName, datoreName }) {
   const templateUrl = TEMPLATES[role];
   if (!templateUrl || !company?.id) return null;
 
@@ -64,8 +75,14 @@ export async function generateNominaAttachment({ role, company, personName, nomi
 
     const comune = extractComune(company.sede_legale);
 
+    // Prima si sostituisce il segnaposto della persona nominata, poi quello del
+    // datore di lavoro: nella nomina RSPP i due coincidono, e in quel caso la
+    // prima sostituzione ha già consumato il segnaposto.
+    const personPlaceholder = PERSON_PLACEHOLDER[role] || "[NOME E COGNOME]";
+
     const REPLACEMENTS = [
-      ["[NOME E COGNOME DATORE DI LAVORO]", escapeXml(personName) || "[NOME E COGNOME DATORE DI LAVORO]"],
+      [personPlaceholder, escapeXml(personName) || personPlaceholder],
+      ["[NOME E COGNOME DATORE DI LAVORO]", escapeXml(datoreName) || "[NOME E COGNOME DATORE DI LAVORO]"],
       ["[DENOMINAZIONE SOCIALE AZIENDA]", escapeXml(company.name) || "[DENOMINAZIONE SOCIALE AZIENDA]"],
       ["[FORMA GIURIDICA]", escapeXml(company.forma_giuridica) || "[FORMA GIURIDICA]"],
       ["[CODICE FISCALE / P.IVA]", escapeXml(company.piva) || "[CODICE FISCALE / P.IVA]"],
@@ -105,4 +122,16 @@ export async function generateNominaAttachment({ role, company, personName, nomi
 export function findRlsName(appointments) {
   const rls = (appointments || []).find((a) => a.role === "RLS");
   return rls?.person_name || "";
+}
+
+// Cerca il nominativo del datore di lavoro: serve a firmare le nomine in cui
+// il nominato è un'altra persona, come quella a preposto. Si guarda prima tra
+// le nomine registrate e poi, come riserva, tra i ruoli di sicurezza in
+// anagrafica, così il nome si trova anche prima che la nomina sia protocollata.
+export function findDatoreName(appointments, employees) {
+  const ROLES = ["Datore di Lavoro", "RSPP Datore di Lavoro"];
+  const nomina = (appointments || []).find((a) => ROLES.includes(a.role));
+  if (nomina?.person_name) return nomina.person_name;
+  const emp = (employees || []).find((e) => ROLES.includes(e.security_role));
+  return emp ? `${emp.first_name} ${emp.last_name}`.trim() : "";
 }
