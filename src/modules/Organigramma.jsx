@@ -227,11 +227,24 @@ export default function Organigramma() {
         <div className="org-chart">
           <div className="org-chart-head">
             <h3>{company?.name || "Azienda"}</h3>
-            {(company?.sede_legale || company?.sede_operativa) && (
-              <p className="org-sede">
-                Sede legale ed operativa: {company.sede_legale || company.sede_operativa}
-              </p>
-            )}
+            {/* Le due sedi vanno mostrate entrambe quando sono diverse: prima
+                compariva solo la sede legale, e chi compilava la sede operativa
+                non la vedeva mai apparire. Se coincidono, o ne è compilata una
+                sola, resta la riga unica. */}
+            {(() => {
+              const legale = (company?.sede_legale || "").trim();
+              const operativa = (company?.sede_operativa || "").trim();
+              if (!legale && !operativa) return null;
+              if (!legale || !operativa || legale === operativa) {
+                return <p className="org-sede">Sede legale ed operativa: {legale || operativa}</p>;
+              }
+              return (
+                <>
+                  <p className="org-sede">Sede legale: {legale}</p>
+                  <p className="org-sede">Sede operativa: {operativa}</p>
+                </>
+              );
+            })()}
             <p className="org-intro">
               Organigramma delle risorse che a vari livelli sono coinvolte funzionalmente
               secondo le disposizioni contenute nel D.Lgs. 81/08.
