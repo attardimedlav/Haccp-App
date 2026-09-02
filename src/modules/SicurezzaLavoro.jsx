@@ -903,7 +903,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
                               </div>
                               {item.note && <p className="pest-note">{item.note}</p>}
                               <div style={{ margin: "6px 0 10px" }}>
-                                <span className="none-label" style={{ display: "block", marginBottom: 4 }}>Nomina</span>
+                                <span className="appt-section-label">Nomina</span>
                                 <AttachmentLink path={item.nomina_attachment_path} />
                               </div>
                             </>
@@ -912,7 +912,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
                           {/* Gli attestati restano visibili e modificabili anche mentre
                               si sta correggendo la nomina: sono due cose indipendenti. */}
                           <div className="tr-head">
-                            <span className="none-label">
+                            <span className="appt-section-label">
                               Attestati di formazione{corsi.length > 0 ? ` (${corsi.length})` : ""}
                             </span>
                             <button
@@ -1068,7 +1068,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
       {subTab === "visitemediche" && (
         <>
           <div className="tr-head">
-            <span className="none-label">Medico competente</span>
+            <span className="appt-section-label">Medico competente</span>
             {!medicoCompetente && !mcOpen && (
               <button type="button" className="link-btn" onClick={() => setMcOpen(true)}>+ Nomina medico competente</button>
             )}
