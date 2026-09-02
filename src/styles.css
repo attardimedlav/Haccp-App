@@ -95,6 +95,22 @@ nav { display: flex; flex-direction: column; gap: 2px; }
 .doc-type-tag { font-size: 11.5px; color: #6E7C73; border: 1px solid #E1E5DF; padding: 2px 8px; border-radius: 999px; }
 .pest-note { margin: 0 0 8px; font-size: 12.5px; color: #4C5A52; }
 .none-label { font-size: 12.5px; color: #97A199; }
+
+/* Titoletti delle due sezioni dentro la scheda di un incarico: "Nomina" e
+   "Attestati di formazione". Prima erano in grigio chiaro come i testi
+   segnaposto e si leggevano come informazioni assenti invece che come
+   intestazioni: qui diventano etichette vere, così a colpo d'occhio si
+   distingue il documento di nomina dai corsi. */
+.appt-section-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #2F6F4E;
+  margin-bottom: 5px;
+}
+.tr-head .appt-section-label { margin-bottom: 0; }
 .attachment-link { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 7px; background: #fff; border: 1px solid #E1E5DF; text-decoration: none; color: #1B2A22; font-size: 12.5px; width: fit-content; max-width: 100%; }
 .attachment-link:hover { border-color: #2F6F4E; }
 .attachment-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -223,7 +239,21 @@ nav { display: flex; flex-direction: column; gap: 2px; }
   .print-allergen-badges { display: flex; flex-wrap: wrap; gap: 6px; }
   .print-allergen-badge { display: inline-block; font-size: 10.5px; padding: 4px 10px; border-radius: 999px; background: #2F6F4E; color: #fff; font-weight: 500; }
   .print-allergen-none { font-size: 11px; color: #97A199; font-style: italic; }
+
+  /* Organigramma da esporre: in pagina resta solo lo schema. */
+  body.print-organigramma .print-header,
+  body.print-organigramma .panel-head,
+  body.print-organigramma .rspp-line { display: none !important; }
+  body.print-organigramma .panel { padding: 0 !important; border: none !important; box-shadow: none !important; }
+  body.print-organigramma .org-chart { margin-top: 0; gap: 10px; }
+  body.print-organigramma .org-row { gap: 10px; }
+  body.print-organigramma .org-box, body.print-organigramma .org-top { padding: 9px 10px; }
+  body.print-organigramma .org-box-title { font-size: 10.5px; }
+  body.print-organigramma .org-names { font-size: 12px; gap: 2px; }
+  body.print-organigramma .org-chart-head h3 { font-size: 15px; }
 }
+
+@page { size: A4 portrait; margin: 12mm; }
 
 /* ---- Login: link e messaggi ---- */
 .link-btn { background: none; border: none; color: #2F6F4E; font: inherit; font-size: 12.5px; cursor: pointer; padding: 4px 0; text-align: left; text-decoration: underline; }
