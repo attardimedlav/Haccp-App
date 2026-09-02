@@ -13,6 +13,22 @@ import { supabase } from "../supabaseClient";
 // cliente vedrebbe i registri di tutte le sue aziende mescolati in un unico
 // elenco. Filtrare qui rende anche molto più leggere le pagine, perché
 // scarica solo le righe dell'azienda aperta invece di tutto lo storico.
+
+// Ripulisce gli spazi iniziali e finali da tutti i campi di testo prima di
+// scrivere sul database. Non è una pulizia estetica: in questa app le persone
+// si collegano alle nomine, ai corsi e alle visite mediche confrontando il
+// nome come stringa, quindi un solo spazio invisibile spezza il collegamento
+// senza dare nessun errore. È già successo con un dipendente salvato come
+// "MARIA ANGELA ANICETO ": le sue nomine risultavano di un'altra persona.
+function trimStrings(row) {
+  const out = {};
+  for (const key of Object.keys(row)) {
+    const value = row[key];
+    out[key] = typeof value === "string" ? value.trim() : value;
+  }
+  return out;
+}
+
 export function useTable(tableName, companyId) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -39,7 +55,7 @@ export function useTable(tableName, companyId) {
   const add = useCallback(async (row) => {
     const { data, error: insertError } = await supabase
       .from(tableName)
-      .insert([{ ...row, company_id: companyId }])
+      .insert([{ ...trimStrings(row), company_id: companyId }])
       .select()
       .single();
     if (insertError) { setError(insertError.message); return false; }
@@ -64,7 +80,7 @@ export function useTable(tableName, companyId) {
   const update = useCallback(async (id, fields) => {
     const { error: updateError } = await supabase
       .from(tableName)
-      .update(fields)
+      .update(trimStrings(fields))
       .eq("id", id)
       .eq("company_id", companyId);
     if (updateError) { setError(updateError.message); return false; }
