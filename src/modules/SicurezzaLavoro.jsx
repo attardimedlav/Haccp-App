@@ -393,6 +393,24 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
 
   // Le nomine si leggono per persona, non in ordine cronologico: chi ricopre
   // più ruoli deve comparire una volta sola, con sotto tutti i suoi documenti.
+  //
+  // L'ordine non è alfabetico ma per peso dell'incarico: prima chi ha una
+  // responsabilità di sistema (RSPP), poi chi ricopre un incarico operativo,
+  // e in fondo chi ha soltanto la formazione da lavoratore. In un'azienda da
+  // venti dipendenti l'elenco alfabetico costringe a cercare le figure
+  // chiave in mezzo a tutti gli altri. Dentro ciascuna fascia resta
+  // l'ordine alfabetico.
+  const ROLE_RANK = {
+    "RSPP Datore di Lavoro": 0,
+    "RSPP Esterno": 0,
+    "RLS": 1,
+    "Preposto": 2,
+    "Addetto al Primo Soccorso": 3,
+    "Addetto Antincendio": 4,
+    "Consegna DPI": 5,
+    "Formazione Generale e Specifica Lavoratori": 9,
+  };
+
   const appointmentGroups = (() => {
     const map = new Map();
     appointments.filter((a) => a.role !== MEDICO_ROLE).forEach((a) => {
@@ -401,8 +419,14 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
       map.get(name).push(a);
     });
     return [...map.entries()]
-      .map(([name, items]) => ({ name, items }))
-      .sort((a, b) => a.name.localeCompare(b.name, "it"));
+      .map(([name, items]) => ({
+        name,
+        items,
+        // La persona vale per il suo incarico più importante: chi è preposto
+        // e ha anche la formazione lavoratori sta tra i preposti, non in fondo.
+        rank: Math.min(...items.map((a) => (a.role in ROLE_RANK ? ROLE_RANK[a.role] : 6))),
+      }))
+      .sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name, "it"));
   })();
 
   // Un solo modulo di inserimento, riusato in due punti: in cima quando si
