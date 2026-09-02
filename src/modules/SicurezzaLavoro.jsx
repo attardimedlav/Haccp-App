@@ -815,9 +815,20 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
                             <>
                               <div className="traccia-meta">
                                 {item.nomina_issue_date && <span className="doc-type-tag">Nomina del {fmtDate(item.nomina_issue_date)}</span>}
-                                {info
-                                  ? <span className={"pill " + info.cls}>{info.label}</span>
-                                  : <span className="pill pill-alert">Nessun corso registrato</span>}
+                                                               {/* La nomina non scade: resta valida finché non viene
+                                    revocata. Quello che scade è la formazione, e questa
+                                    pill riassume la scadenza dell'attestato più recente.
+                                    Il testo lo dice esplicitamente, altrimenti si legge
+                                    come se a scadere fosse l'incarico. */}
+                                {(() => {
+                                  const ultimo = latestTraining(item.id);
+                                  if (!info || !ultimo) return <span className="pill pill-alert">Nessun corso registrato</span>;
+                                  const testo =
+                                    info.cls === "pill-alert" ? "Formazione scaduta il " :
+                                    info.cls === "pill-warn"  ? "Formazione in scadenza il " :
+                                                                "Formazione valida fino al ";
+                                  return <span className={"pill " + info.cls}>{testo}{fmtDate(ultimo.expiry_date)}</span>;
+                                })()}
                               </div>
                               {item.note && <p className="pest-note">{item.note}</p>}
                               <div style={{ margin: "6px 0 10px" }}>
