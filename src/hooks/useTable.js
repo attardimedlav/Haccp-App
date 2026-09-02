@@ -14,17 +14,23 @@ import { supabase } from "../supabaseClient";
 // elenco. Filtrare qui rende anche molto più leggere le pagine, perché
 // scarica solo le righe dell'azienda aperta invece di tutto lo storico.
 
-// Ripulisce gli spazi iniziali e finali da tutti i campi di testo prima di
-// scrivere sul database. Non è una pulizia estetica: in questa app le persone
-// si collegano alle nomine, ai corsi e alle visite mediche confrontando il
-// nome come stringa, quindi un solo spazio invisibile spezza il collegamento
-// senza dare nessun errore. È già successo con un dipendente salvato come
-// "MARIA ANGELA ANICETO ": le sue nomine risultavano di un'altra persona.
+// Normalizza gli spazi in tutti i campi di testo prima di scrivere sul
+// database: via quelli iniziali e finali, e ogni sequenza interna ridotta a
+// un solo spazio. Non è una pulizia estetica: in questa app le persone si
+// collegano alle nomine, ai corsi e alle visite mediche confrontando il nome
+// come stringa, quindi uno spazio invisibile spezza il collegamento senza
+// dare nessun errore. È già successo due volte: "MARIA ANGELA ANICETO " con
+// lo spazio in coda, che ha prodotto nomine doppie, e "JADER MARIA
+// CASTROGIOVANNI" con due spazi in mezzo, che compariva due volte
+// nell'organigramma.
+//
+// Gli a capo restano intatti: si normalizzano solo spazi e tabulazioni, così
+// le note su più righe non vengono appiattite.
 function trimStrings(row) {
   const out = {};
   for (const key of Object.keys(row)) {
     const value = row[key];
-    out[key] = typeof value === "string" ? value.trim() : value;
+    out[key] = typeof value === "string" ? value.trim().replace(/[ \t]+/g, " ") : value;
   }
   return out;
 }
