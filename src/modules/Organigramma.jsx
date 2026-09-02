@@ -3,7 +3,7 @@ import { Plus, Trash2, UserPlus, Award, Users, Network, Stethoscope, HeartPulse,
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { supabase } from "../supabaseClient";
-import { ROLE_OPTIONS, expiryInfo } from "./SicurezzaLavoro";
+import { ROLE_OPTIONS, MEDICO_ROLE, expiryInfo } from "./SicurezzaLavoro";
 import { generateNominaAttachment, findRlsName } from "../utils/nominaTemplates";
 
 export const SECURITY_ROLE_OPTIONS = [
@@ -345,7 +345,9 @@ export default function Organigramma() {
                   <div className="nc-edit-block">
                     <div className="row-form">
                       <select value={assignRole} onChange={(e) => setAssignRole(e.target.value)}>
-                        {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                        {/* Il medico competente non è un dipendente a cui si assegna un ruolo:
+                            si nomina dalla scheda Visite Mediche. */}
+                        {ROLE_OPTIONS.filter((r) => r !== MEDICO_ROLE).map((r) => <option key={r} value={r}>{r}</option>)}
                       </select>
                       <label className="field-label">Data nomina
                         <input type="date" value={assignIssueDate} onChange={(e) => setAssignIssueDate(e.target.value)} />

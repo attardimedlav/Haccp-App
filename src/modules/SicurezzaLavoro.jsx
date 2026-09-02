@@ -40,6 +40,13 @@ export const EQUIPMENT_TYPE_OPTIONS = [
 
 export const COURSE_KIND_OPTIONS = ["Corso base", "Aggiornamento", "Altro"];
 
+// Il medico competente è l'unico incarico che non appartiene a un lavoratore:
+// non riceve formazione da aggiornare, ed è lui a svolgere le visite. Per
+// questo si inserisce e si consulta dalla scheda "Visite Mediche" invece che
+// da "Nomine e Attestati". Nel database resta una nomina come le altre, così
+// l'organigramma continua a ritrovarlo senza modifiche.
+export const MEDICO_ROLE = "Nomina Medico Competente";
+
 const ORGANIGRAMMA_SUB_TAB = { id: "organigramma", label: "Organigramma", icon: Network };
 
 const BASE_SUB_TABS = [
@@ -387,7 +394,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
   // più ruoli deve comparire una volta sola, con sotto tutti i suoi documenti.
   const appointmentGroups = (() => {
     const map = new Map();
-    appointments.forEach((a) => {
+    appointments.filter((a) => a.role !== MEDICO_ROLE).forEach((a) => {
       const name = (a.person_name || "").trim() || "Senza nominativo";
       if (!map.has(name)) map.set(name, []);
       map.get(name).push(a);
@@ -427,7 +434,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
 
       <label className="field-label">Incarico
         <select value={role} onChange={(e) => setRole(e.target.value)}>
-          {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+          {ROLE_OPTIONS.filter((r) => r !== MEDICO_ROLE).map((r) => <option key={r} value={r}>{r}</option>)}
         </select>
       </label>
 
@@ -545,6 +552,12 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
   const [medFile, setMedFile] = useState(null);
   const [medNote, setMedNote] = useState("");
   const [medError, setMedError] = useState("");
+  const [mcOpen, setMcOpen] = useState(false);
+  const [mcName, setMcName] = useState("");
+  const [mcDate, setMcDate] = useState("");
+  const [mcFile, setMcFile] = useState(null);
+  const [mcError, setMcError] = useState("");
+  const [mcBusy, setMcBusy] = useState(false);
   const [medBusy, setMedBusy] = useState(false);
 
   const handleMedVisitChange = (value) => {
@@ -554,6 +567,39 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
   const handleMedYearsChange = (value) => {
     setMedValidityYears(value);
     if (medVisitDate) setMedExpiryDate(addYears(medVisitDate, value));
+  };
+
+  const medicoCompetente = appointments.find((a) => a.role === MEDICO_ROLE) || null;
+
+  const onMcFileChange = (e) => {
+    const f = e.target.files?.[0] || null;
+    setMcError("");
+    if (f && f.size > MAX_FILE_BYTES) { setMcError("File troppo grande (limite 8 MB)."); setMcFile(null); e.target.value = ""; return; }
+    setMcFile(f);
+  };
+
+  const submitMedicoCompetente = async () => {
+    if (!mcName.trim()) { setMcError("Indica il nome del medico competente."); return; }
+    setMcBusy(true);
+    setMcError("");
+    try {
+      let nomina_attachment_path = null;
+      if (mcFile) nomina_attachment_path = await uploadAttachment(company.id, mcFile);
+      // Nessuna data corso e nessuna scadenza: per il medico competente non
+      // esiste un attestato che scade, e inventarne una farebbe comparire
+      // avvisi inesistenti in Panoramica e nell'email delle scadenze.
+      await addAppointment({
+        role: MEDICO_ROLE,
+        person_name: mcName,
+        nomina_issue_date: mcDate || null,
+        nomina_attachment_path,
+      });
+      setMcName(""); setMcDate(""); setMcFile(null); setMcOpen(false);
+    } catch (err) {
+      setMcError(err.message || "Errore nel salvataggio.");
+    } finally {
+      setMcBusy(false);
+    }
   };
 
   const onMedFileChange = (e) => {
@@ -815,7 +861,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
                             <>
                               <div className="traccia-meta">
                                 {item.nomina_issue_date && <span className="doc-type-tag">Nomina del {fmtDate(item.nomina_issue_date)}</span>}
-                                                               {/* La nomina non scade: resta valida finché non viene
+                                {/* La nomina non scade: resta valida finché non viene
                                     revocata. Quello che scade è la formazione, e questa
                                     pill riassume la scadenza dell'attestato più recente.
                                     Il testo lo dice esplicitamente, altrimenti si legge
@@ -996,6 +1042,54 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
 
       {subTab === "visitemediche" && (
         <>
+          <div className="tr-head">
+            <span className="none-label">Medico competente</span>
+            {!medicoCompetente && !mcOpen && (
+              <button type="button" className="link-btn" onClick={() => setMcOpen(true)}>+ Nomina medico competente</button>
+            )}
+          </div>
+
+          {medicoCompetente ? (
+            <ul className="appt-list" style={{ marginBottom: 20 }}>
+              <li className="appt-item">
+                <div className="appt-top">
+                  <p className="appt-role">{medicoCompetente.person_name}</p>
+                  <button className="icon-btn" onClick={() => removeAppointment(medicoCompetente.id)} aria-label="Elimina nomina"><Trash2 size={14} /></button>
+                </div>
+                <div className="traccia-meta">
+                  {medicoCompetente.nomina_issue_date
+                    ? <span className="doc-type-tag">Nomina del {fmtDate(medicoCompetente.nomina_issue_date)}</span>
+                    : <span className="none-label">Data nomina non indicata</span>}
+                </div>
+                <AttachmentLink path={medicoCompetente.nomina_attachment_path} />
+              </li>
+            </ul>
+          ) : !mcOpen ? (
+            <p className="none-label" style={{ margin: "4px 0 20px" }}>Nessun medico competente nominato</p>
+          ) : null}
+
+          {mcOpen && !medicoCompetente && (
+            <div className="nc-edit-block" style={{ marginBottom: 20 }}>
+              <div className="row-form">
+                <input type="text" placeholder="Nome e cognome del medico competente" value={mcName} onChange={(e) => setMcName(e.target.value)} className="note-input" />
+                <label className="field-label">Data nomina
+                  <input type="date" value={mcDate} onChange={(e) => setMcDate(e.target.value)} />
+                </label>
+              </div>
+              <label className="file-drop" htmlFor="mc-file-input">
+                <Paperclip size={15} /><span>{mcFile ? mcFile.name : "Allega lettera di incarico (PDF o immagine)"}</span>
+                <input id="mc-file-input" type="file" accept=".pdf,image/*" onChange={onMcFileChange} hidden />
+              </label>
+              {mcError && <span className="file-error"><AlertTriangle size={13} /> {mcError}</span>}
+              <div className="row-form" style={{ margin: "10px 0 0" }}>
+                <button type="button" className="btn-primary" onClick={submitMedicoCompetente} disabled={mcBusy}>
+                  <Plus size={14} /> {mcBusy ? "Salvataggio…" : "Salva nomina"}
+                </button>
+                <button type="button" className="link-btn" onClick={() => { setMcOpen(false); setMcError(""); }}>Annulla</button>
+              </div>
+            </div>
+          )}
+
           {medicalComplianceList.length > 0 && (
             <div className="panel-head" style={{ marginBottom: 12 }}>
               <div>
