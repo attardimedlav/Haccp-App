@@ -202,6 +202,8 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
   // null = chiuso, "" = nuovo nominativo libero, altrimenti il nome della
   // persona a cui si sta aggiungendo un incarico.
   const [addingFor, setAddingFor] = useState(null);
+  // "elenco" = le schede per persona; "quadro" = la matrice riassuntiva.
+  const [nomineView, setNomineView] = useState("elenco");
 
   const openAddFor = (name) => {
     setAddingFor(name);
@@ -435,6 +437,41 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
       }))
       .sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name, "it"));
   })();
+
+  // Quadro riassuntivo della formazione: una riga per persona, una colonna per
+  // incarico, e in ogni casella la scadenza dell'attestato più recente. Serve
+  // a vedere in una sola immagine chi è coperto, chi sta per scadere e chi non
+  // ha mai fatto il corso — cosa che nell'elenco per persona si capisce solo
+  // scorrendo tutte le schede una a una.
+  const ROLE_SHORT = {
+    "RSPP Datore di Lavoro": "RSPP datore di lavoro",
+    "RSPP Esterno": "RSPP esterno",
+    "RLS": "RLS",
+    "Preposto": "Preposto",
+    "Addetto al Primo Soccorso": "Primo soccorso",
+    "Addetto Antincendio": "Antincendio",
+    "Consegna DPI": "Consegna DPI",
+    "Formazione Generale e Specifica Lavoratori": "Formazione lavoratori",
+  };
+
+  // In colonna solo gli incarichi che qualcuno ricopre davvero: una tabella con
+  // colonne sempre vuote si legge peggio e non aggiunge niente.
+  const matriceRoles = [...new Set(
+    appointments.filter((a) => a.role !== MEDICO_ROLE).map((a) => a.role)
+  )].sort((a, b) => ((a in ROLE_RANK ? ROLE_RANK[a] : 6) - (b in ROLE_RANK ? ROLE_RANK[b] : 6))
+                    || a.localeCompare(b, "it"));
+
+  const matriceCell = (personName, role) => {
+    const appt = appointments.find(
+      (a) => a.role === role && (a.person_name || "").trim() === personName
+    );
+    if (!appt) return null;
+    const t = latestTraining(appt.id);
+    if (!t) return { cls: "pill-alert", label: "mai svolto" };
+    const info = expiryInfo(t.expiry_date);
+    if (!info) return { cls: "pill-warn", label: "senza scadenza" };
+    return { cls: info.cls, label: fmtDate(t.expiry_date) };
+  };
 
   // Un solo modulo di inserimento, riusato in due punti: in cima quando si
   // registra un incarico per un nominativo nuovo, e dentro la scheda della
@@ -812,6 +849,73 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
 
       {subTab === "nomine" && (
         <>
+          <div className="config-subtabs">
+            <button
+              type="button"
+              className={"config-subtab" + (nomineView === "elenco" ? " active" : "")}
+              onClick={() => setNomineView("elenco")}
+            >
+              <Award size={15} /> Elenco per persona
+            </button>
+            <button
+              type="button"
+              className={"config-subtab" + (nomineView === "quadro" ? " active" : "")}
+              onClick={() => setNomineView("quadro")}
+            >
+              <Network size={15} /> Quadro della formazione
+            </button>
+          </div>
+
+          {nomineView === "quadro" && (
+            <div className="matrice">
+              <p className="matrice-intro">
+                Scadenza dell'attestato più recente per ogni persona e ogni incarico.
+                Le caselle vuote sono incarichi che la persona non ricopre.
+              </p>
+              {matriceRoles.length === 0 ? (
+                <div className="empty"><p>Nessuna nomina registrata.</p></div>
+              ) : (
+                <div className="matrice-scroll">
+                  <table className="matrice-table">
+                    <thead>
+                      <tr>
+                        <th className="mx-name">Persona</th>
+                        {matriceRoles.map((r) => (
+                          <th key={r}>{ROLE_SHORT[r] || r}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {appointmentGroups.map((g) => (
+                        <tr key={g.name}>
+                          <td className="mx-name">{g.name}</td>
+                          {matriceRoles.map((r) => {
+                            const c = matriceCell(g.name, r);
+                            return (
+                              <td key={r}>
+                                {c
+                                  ? <span className={"pill " + c.cls}>{c.label}</span>
+                                  : <span className="mx-empty">—</span>}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <div className="matrice-legenda">
+                <span className="pill pill-ok">valido</span>
+                <span className="pill pill-warn">in scadenza entro 60 giorni</span>
+                <span className="pill pill-alert">scaduto o mai svolto</span>
+                <span className="mx-empty">—&nbsp;incarico non ricoperto</span>
+              </div>
+            </div>
+          )}
+
+          {nomineView === "elenco" && (
+          <>
           <button
             type="button"
             className="btn-primary"
@@ -999,6 +1103,8 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
                 </li>
               ))}
             </ul>
+          )}
+          </>
           )}
         </>
       )}
