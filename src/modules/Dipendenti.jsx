@@ -4,7 +4,7 @@ import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { supabase } from "../supabaseClient";
 import { SECURITY_ROLE_OPTIONS } from "./Organigramma";
-import { generateNominaAttachment, findRlsName } from "../utils/nominaTemplates";
+import { generateNominaAttachment, findRlsName, findDatoreName } from "../utils/nominaTemplates";
 
 export default function Dipendenti() {
   const { company } = useAuth();
@@ -43,6 +43,7 @@ export default function Dipendenti() {
         personName: `${firstName} ${lastName}`,
         nominaDate: nominaDateToUse,
         rlsName: findRlsName(appointments),
+        datoreName: findDatoreName(appointments, items),
       });
       await addAppointment({
         role: securityRole,

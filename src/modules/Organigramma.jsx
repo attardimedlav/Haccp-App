@@ -4,7 +4,7 @@ import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { supabase } from "../supabaseClient";
 import { ROLE_OPTIONS, MEDICO_ROLE, expiryInfo } from "./SicurezzaLavoro";
-import { generateNominaAttachment, findRlsName } from "../utils/nominaTemplates";
+import { generateNominaAttachment, findRlsName, findDatoreName } from "../utils/nominaTemplates";
 
 export const SECURITY_ROLE_OPTIONS = [
   "Dipendente",
@@ -65,6 +65,7 @@ export default function Organigramma() {
         personName: `${firstName} ${lastName}`,
         nominaDate: nominaDateToUse,
         rlsName: findRlsName(appointments),
+        datoreName: findDatoreName(appointments, employees),
       });
       await addAppointment({
         role: securityRole,
@@ -117,6 +118,7 @@ export default function Organigramma() {
       personName: `${emp.first_name} ${emp.last_name}`,
       nominaDate: assignIssueDate,
       rlsName: findRlsName(appointments),
+      datoreName: findDatoreName(appointments, employees),
     });
     await addAppointment({
       role: assignRole,

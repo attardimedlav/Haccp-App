@@ -5,7 +5,7 @@ import { useAuth } from "../AuthContext";
 import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
 import { supabase } from "../supabaseClient";
 import Organigramma from "./Organigramma";
-import { generateNominaAttachment, findRlsName } from "../utils/nominaTemplates";
+import { generateNominaAttachment, findRlsName, findDatoreName } from "../utils/nominaTemplates";
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
 
@@ -247,6 +247,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
           personName,
           nominaDate: nominaIssueDate || issueDate,
           rlsName: findRlsName(appointments),
+          datoreName: findDatoreName(appointments, employees),
         });
       }
       if (apptAttestatoFile) attestato_attachment_path = await uploadAttachment(company.id, apptAttestatoFile);
