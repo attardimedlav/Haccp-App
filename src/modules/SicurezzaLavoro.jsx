@@ -202,7 +202,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
   // null = chiuso, "" = nuovo nominativo libero, altrimenti il nome della
   // persona a cui si sta aggiungendo un incarico.
   const [addingFor, setAddingFor] = useState(null);
-  // "elenco" = le schede per persona; "quadro" = la matrice riassuntiva.
+  // "elenco" = le schede per persona; "quadro" = lo schema riassuntivo.
   const [nomineView, setNomineView] = useState("elenco");
 
   const openAddFor = (name) => {
@@ -438,40 +438,67 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
       .sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name, "it"));
   })();
 
-  // Quadro riassuntivo della formazione: una riga per persona, una colonna per
-  // incarico, e in ogni casella la scadenza dell'attestato più recente. Serve
-  // a vedere in una sola immagine chi è coperto, chi sta per scadere e chi non
-  // ha mai fatto il corso — cosa che nell'elenco per persona si capisce solo
-  // scorrendo tutte le schede una a una.
-  const ROLE_SHORT = {
-    "RSPP Datore di Lavoro": "RSPP datore di lavoro",
-    "RSPP Esterno": "RSPP esterno",
-    "RLS": "RLS",
-    "Preposto": "Preposto",
-    "Addetto al Primo Soccorso": "Primo soccorso",
-    "Addetto Antincendio": "Antincendio",
-    "Consegna DPI": "Consegna DPI",
-    "Formazione Generale e Specifica Lavoratori": "Formazione lavoratori",
+  // Quadro della formazione: la stessa grafica dell'organigramma da esporre,
+  // ma a uso interno, con dentro le scadenze. Serve a riassumere in una sola
+  // immagine chi è coperto, chi sta per scadere e chi non ha mai fatto il
+  // corso — cosa che nell'elenco per persona si capisce solo scorrendo tutte
+  // le schede una a una.
+  //
+  // I riquadri sono ridisegnati qui e non riusati da Organigramma di
+  // proposito: quello è il documento che il cliente affigge in bacheca e non
+  // deve riportare le scadenze, questo è lo strumento di lavoro del
+  // consulente. Le due viste sono destinate a divergere.
+  const quadroRighe = (roles) => {
+    const wanted = new Set(Array.isArray(roles) ? roles : [roles]);
+    return appointments
+      .filter((a) => wanted.has(a.role))
+      .map((a) => {
+        const t = latestTraining(a.id);
+        const info = t ? expiryInfo(t.expiry_date) : null;
+        return {
+          key: a.id,
+          name: (a.person_name || "").trim(),
+          cls: !t ? "pill-alert" : info ? info.cls : "pill-warn",
+          label: !t ? "mai svolto" : info ? fmtDate(t.expiry_date) : "senza scadenza",
+        };
+      })
+      .sort((x, y) => x.name.localeCompare(y.name, "it"));
   };
 
-  // In colonna solo gli incarichi che qualcuno ricopre davvero: una tabella con
-  // colonne sempre vuote si legge peggio e non aggiunge niente.
-  const matriceRoles = [...new Set(
-    appointments.filter((a) => a.role !== MEDICO_ROLE).map((a) => a.role)
-  )].sort((a, b) => ((a in ROLE_RANK ? ROLE_RANK[a] : 6) - (b in ROLE_RANK ? ROLE_RANK[b] : 6))
-                    || a.localeCompare(b, "it"));
-
-  const matriceCell = (personName, role) => {
-    const appt = appointments.find(
-      (a) => a.role === role && (a.person_name || "").trim() === personName
-    );
-    if (!appt) return null;
-    const t = latestTraining(appt.id);
-    if (!t) return { cls: "pill-alert", label: "mai svolto" };
-    const info = expiryInfo(t.expiry_date);
-    if (!info) return { cls: "pill-warn", label: "senza scadenza" };
-    return { cls: info.cls, label: fmtDate(t.expiry_date) };
+  // Il datore di lavoro e il medico competente compaiono senza scadenza: il
+  // primo perché la sua formazione è già nel riquadro RSPP, il secondo perché
+  // non ha corsi da aggiornare.
+  const quadroNomi = (roles, securityRoles) => {
+    const wanted = new Set(Array.isArray(roles) ? roles : [roles]);
+    const daNomine = appointments.filter((a) => wanted.has(a.role)).map((a) => (a.person_name || "").trim());
+    const daAnagrafica = (securityRoles || []).length
+      ? employees.filter((e) => securityRoles.includes(e.security_role)).map((e) => `${e.first_name} ${e.last_name}`.trim())
+      : [];
+    return [...new Set([...daNomine, ...daAnagrafica])].filter(Boolean).sort((a, b) => a.localeCompare(b, "it"));
   };
+
+  const QuadroBox = ({ icon: Icon, title, note, righe, nomi, tone }) => (
+    <div className={"org-box org-box-" + tone}>
+      <p className="org-box-title"><Icon size={15} /> {title}</p>
+      {note && <p className="org-box-note">{note}</p>}
+      {nomi ? (
+        nomi.length > 0
+          ? <ul className="org-names quadro-names">{nomi.map((n) => <li key={n}><span className="quadro-nome">{n}</span></li>)}</ul>
+          : <p className="org-empty">Da nominare</p>
+      ) : righe.length > 0 ? (
+        <ul className="org-names quadro-names">
+          {righe.map((r) => (
+            <li key={r.key} className="quadro-riga">
+              <span className="quadro-nome">{r.name}</span>
+              <span className={"pill " + r.cls}>{r.label}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="org-empty">Da nominare</p>
+      )}
+    </div>
+  );
 
   // Un solo modulo di inserimento, riusato in due punti: in cima quando si
   // registra un incarico per un nominativo nuovo, e dentro la scheda della
@@ -867,49 +894,53 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
           </div>
 
           {nomineView === "quadro" && (
-            <div className="matrice">
-              <p className="matrice-intro">
-                Scadenza dell'attestato più recente per ogni persona e ogni incarico.
-                Le caselle vuote sono incarichi che la persona non ricopre.
-              </p>
-              {matriceRoles.length === 0 ? (
-                <div className="empty"><p>Nessuna nomina registrata.</p></div>
-              ) : (
-                <div className="matrice-scroll">
-                  <table className="matrice-table">
-                    <thead>
-                      <tr>
-                        <th className="mx-name">Persona</th>
-                        {matriceRoles.map((r) => (
-                          <th key={r}>{ROLE_SHORT[r] || r}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {appointmentGroups.map((g) => (
-                        <tr key={g.name}>
-                          <td className="mx-name">{g.name}</td>
-                          {matriceRoles.map((r) => {
-                            const c = matriceCell(g.name, r);
-                            return (
-                              <td key={r}>
-                                {c
-                                  ? <span className={"pill " + c.cls}>{c.label}</span>
-                                  : <span className="mx-empty">—</span>}
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-              <div className="matrice-legenda">
+            <div className="org-chart">
+              <div className="org-chart-head">
+                <h3>{company?.name || "Azienda"}</h3>
+                <p className="org-intro">
+                  Quadro della formazione — scadenza dell'attestato più recente per ciascun incarico.
+                  Documento a uso interno, non destinato all'affissione.
+                </p>
+              </div>
+
+              <div className="org-top">
+                <p className="org-box-title"><HardHat size={15} /> DATORE DI LAVORO / LEGALE RAPPRESENTANTE</p>
+                {quadroNomi(["RSPP Datore di Lavoro"], ["Datore di Lavoro", "RSPP Datore di Lavoro"]).length > 0 ? (
+                  <ul className="org-names quadro-names">
+                    {quadroNomi(["RSPP Datore di Lavoro"], ["Datore di Lavoro", "RSPP Datore di Lavoro"]).map((n) => (
+                      <li key={n}><span className="quadro-nome">{n}</span></li>
+                    ))}
+                  </ul>
+                ) : <p className="org-empty">Da nominare</p>}
+              </div>
+
+              <div className="org-row org-row-2">
+                <QuadroBox icon={Award} tone="rspp" title="RESPONSABILE DEL SERVIZIO DI PREVENZIONE E PROTEZIONE (RSPP)"
+                  righe={quadroRighe(["RSPP Datore di Lavoro", "RSPP Esterno"])} />
+                <QuadroBox icon={Stethoscope} tone="medico" title="MEDICO COMPETENTE"
+                  nomi={quadroNomi([MEDICO_ROLE])} />
+              </div>
+
+              <div className="org-row org-row-3">
+                <QuadroBox icon={Award} tone="soccorso" title="ADDETTI AL PRIMO SOCCORSO"
+                  righe={quadroRighe(["Addetto al Primo Soccorso"])} />
+                <QuadroBox icon={Award} tone="rls" title="RAPPRESENTANTE DEI LAVORATORI PER LA SICUREZZA (RLS)"
+                  righe={quadroRighe(["RLS"])} />
+                <QuadroBox icon={Award} tone="antincendio" title="ADDETTI ALLA PREVENZIONE INCENDI"
+                  righe={quadroRighe(["Addetto Antincendio"])} />
+              </div>
+
+              <div className="org-row org-row-2">
+                <QuadroBox icon={HardHat} tone="neutro" title="PREPOSTI" note="art. 37 D.Lgs. 81/08"
+                  righe={quadroRighe(["Preposto"])} />
+                <QuadroBox icon={Award} tone="neutro" title="FORMAZIONE DEI LAVORATORI" note="art. 37 D.Lgs. 81/08"
+                  righe={quadroRighe([FORMAZIONE_ROLE])} />
+              </div>
+
+              <div className="quadro-legenda">
                 <span className="pill pill-ok">valido</span>
                 <span className="pill pill-warn">in scadenza entro 60 giorni</span>
-                <span className="pill pill-alert">scaduto o mai svolto</span>
-                <span className="mx-empty">—&nbsp;incarico non ricoperto</span>
+                <span className="pill pill-alert">scaduto, oppure incarico senza attestato</span>
               </div>
             </div>
           )}
