@@ -56,12 +56,12 @@ export const MEDICO_ROLE = "Nomina Medico Competente";
 export const FORMAZIONE_ROLE = "Formazione Generale e Specifica Lavoratori";
 
 const ORGANIGRAMMA_SUB_TAB = { id: "organigramma", label: "Organigramma", icon: Network };
+const CONFORMITA_SUB_TAB = { id: "conformita", label: "Conformità", icon: ShieldAlert };
 
 const BASE_SUB_TABS = [
   { id: "dvr", label: "DVR", icon: FileText },
   { id: "allegati", label: "Allegati al DVR", icon: Paperclip },
   { id: "nomine", label: "Nomine e Attestati", icon: Award },
-  { id: "conformita", label: "Conformità", icon: ShieldAlert },
 ];
 
 const EQUIPMENT_SUB_TAB = { id: "attrezzature", label: "Attrezzature", icon: Wrench };
@@ -118,6 +118,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
     ...BASE_SUB_TABS,
     ...(showEquipmentTab ? [EQUIPMENT_SUB_TAB] : []),
     ...(showMedicalTab ? [MEDICAL_SUB_TAB] : []),
+    CONFORMITA_SUB_TAB,
   ];
 
   React.useEffect(() => {
