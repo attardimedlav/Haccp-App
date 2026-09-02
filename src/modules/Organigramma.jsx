@@ -99,6 +99,17 @@ export default function Organigramma() {
   // --- Assegnazione rapida di un ruolo di sicurezza a una persona ---
   const [assigningFor, setAssigningFor] = useState(null);
   const [assignRole, setAssignRole] = useState(ROLE_OPTIONS[0]);
+
+  // L'organigramma da esporre è un documento che il cliente affigge in
+  // bacheca, non una stampa del gestionale: quando è la vista attiva marchiamo
+  // il body, così il CSS di stampa può togliere intestazione dell'app, titolo
+  // di sezione e pill delle scadenze e lasciare in pagina solo lo schema.
+  React.useEffect(() => {
+    const cls = "print-organigramma";
+    if (view === "schema") document.body.classList.add(cls);
+    else document.body.classList.remove(cls);
+    return () => document.body.classList.remove(cls);
+  }, [view]);
   const [assignIssueDate, setAssignIssueDate] = useState("");
   const [assignBusy, setAssignBusy] = useState(false);
 
