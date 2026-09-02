@@ -1,10 +1,11 @@
 import React, { useState } from "react";
-import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Award, HardHat, Wrench, Stethoscope, Network, Pencil, X, Check } from "lucide-react";
+import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Award, HardHat, Wrench, Stethoscope, Network, Pencil, X, Check, ShieldAlert } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
 import { supabase } from "../supabaseClient";
 import Organigramma from "./Organigramma";
+import Conformita from "./Conformita";
 import { generateNominaAttachment, findRlsName, findDatoreName } from "../utils/nominaTemplates";
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
@@ -60,6 +61,7 @@ const BASE_SUB_TABS = [
   { id: "dvr", label: "DVR", icon: FileText },
   { id: "allegati", label: "Allegati al DVR", icon: Paperclip },
   { id: "nomine", label: "Nomine e Attestati", icon: Award },
+  { id: "conformita", label: "Conformità", icon: ShieldAlert },
 ];
 
 const EQUIPMENT_SUB_TAB = { id: "attrezzature", label: "Attrezzature", icon: Wrench };
@@ -1139,6 +1141,8 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
           )}
         </>
       )}
+
+      {subTab === "conformita" && <Conformita />}
 
       {subTab === "attrezzature" && (
         <>
