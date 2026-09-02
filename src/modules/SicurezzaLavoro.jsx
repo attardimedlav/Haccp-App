@@ -47,6 +47,13 @@ export const COURSE_KIND_OPTIONS = ["Corso base", "Aggiornamento", "Altro"];
 // l'organigramma continua a ritrovarlo senza modifiche.
 export const MEDICO_ROLE = "Nomina Medico Competente";
 
+// La formazione generale e specifica dei lavoratori sta tra gli "incarichi"
+// solo per comodità: è l'unica voce che non è una nomina, ma un obbligo che
+// riguarda ogni lavoratore. Per questo nella sua scheda non si mostrano né la
+// data di nomina né il riquadro del verbale: non esistono, e mostrarli vuoti
+// faceva sembrare che mancasse un documento.
+export const FORMAZIONE_ROLE = "Formazione Generale e Specifica Lavoratori";
+
 const ORGANIGRAMMA_SUB_TAB = { id: "organigramma", label: "Organigramma", icon: Network };
 
 const BASE_SUB_TABS = [
@@ -847,6 +854,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
                       const info = appointmentStatus(item.id);
                       const corsi = trainingsFor(item.id);
                       const isEditing = editingApptId === item.id;
+                      const isFormazione = item.role === FORMAZIONE_ROLE;
 
                       return (
                         <li key={item.id} className={"appt-item" + (!isEditing && info?.cls === "pill-alert" ? " row-warn" : "")}>
@@ -862,17 +870,21 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
 
                           {isEditing ? (
                             <div className="nc-edit-block">
-                              <fieldset className="config-group">
-                                <legend>Nomina</legend>
-                                <label className="field-label">Data nomina
-                                  <input type="date" value={editNominaIssueDate} onChange={(e) => setEditNominaIssueDate(e.target.value)} />
-                                </label>
-                                <label className="file-drop" htmlFor={`edit-nomina-${item.id}`} style={{ marginTop: 8 }}>
-                                  <Paperclip size={15} />
-                                  <span>{editNominaFile ? editNominaFile.name : (item.nomina_attachment_path ? "Sostituisci nomina allegata" : "Allega nomina (PDF o immagine)")}</span>
-                                  <input id={`edit-nomina-${item.id}`} type="file" accept=".pdf,image/*" onChange={(e) => setEditNominaFile(e.target.files?.[0] || null)} hidden />
-                                </label>
-                              </fieldset>
+                              {/* Per la formazione lavoratori non c'è nessuna nomina da
+                                  datare o allegare: si modifica solo la nota. */}
+                              {!isFormazione && (
+                                <fieldset className="config-group">
+                                  <legend>Nomina</legend>
+                                  <label className="field-label">Data nomina
+                                    <input type="date" value={editNominaIssueDate} onChange={(e) => setEditNominaIssueDate(e.target.value)} />
+                                  </label>
+                                  <label className="file-drop" htmlFor={`edit-nomina-${item.id}`} style={{ marginTop: 8 }}>
+                                    <Paperclip size={15} />
+                                    <span>{editNominaFile ? editNominaFile.name : (item.nomina_attachment_path ? "Sostituisci nomina allegata" : "Allega nomina (PDF o immagine)")}</span>
+                                    <input id={`edit-nomina-${item.id}`} type="file" accept=".pdf,image/*" onChange={(e) => setEditNominaFile(e.target.files?.[0] || null)} hidden />
+                                  </label>
+                                </fieldset>
+                              )}
                               <input type="text" placeholder="Nota (opzionale)" value={editNote} onChange={(e) => setEditNote(e.target.value)} className="full-input" />
                               {editError && <span className="file-error"><AlertTriangle size={13} /> {editError}</span>}
                               <div className="row-form" style={{ margin: "10px 0 0" }}>
@@ -885,7 +897,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
                           ) : (
                             <>
                               <div className="traccia-meta">
-                                {item.nomina_issue_date && <span className="doc-type-tag">Nomina del {fmtDate(item.nomina_issue_date)}</span>}
+                                {!isFormazione && item.nomina_issue_date && <span className="doc-type-tag">Nomina del {fmtDate(item.nomina_issue_date)}</span>}
                                 {/* La nomina non scade: resta valida finché non viene
                                     revocata. Quello che scade è la formazione, e questa
                                     pill riassume la scadenza dell'attestato più recente.
@@ -902,10 +914,12 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
                                 })()}
                               </div>
                               {item.note && <p className="pest-note">{item.note}</p>}
-                              <div style={{ margin: "6px 0 10px" }}>
-                                <span className="appt-section-label">Nomina</span>
-                                <AttachmentLink path={item.nomina_attachment_path} />
-                              </div>
+                              {!isFormazione && (
+                                <div style={{ margin: "6px 0 10px" }}>
+                                  <span className="appt-section-label">Nomina</span>
+                                  <AttachmentLink path={item.nomina_attachment_path} />
+                                </div>
+                              )}
                             </>
                           )}
 
