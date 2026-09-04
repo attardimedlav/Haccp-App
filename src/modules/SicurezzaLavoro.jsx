@@ -844,7 +844,9 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
     .filter((emp) => emp.security_role !== "RSPP Datore di Lavoro")
     .map((emp) => {
       const fullName = `${emp.first_name} ${emp.last_name}`;
-      const visits = medicalVisits.filter((v) => v.employee_name === fullName);
+      const visits = medicalVisits
+        .filter((v) => v.employee_name === fullName)
+        .sort((a, b) => new Date(b.visit_date || 0) - new Date(a.visit_date || 0));
       const latest = visits.reduce((best, v) => {
         if (!v.visit_date) return best;
         if (!best || new Date(v.visit_date) > new Date(best.visit_date)) return v;
@@ -859,8 +861,32 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
       } else {
         status = { label: "Registrata (senza scadenza)", cls: "pill-ok" };
       }
-      return { emp, fullName, status };
+      return { emp, fullName, status, visits };
     });
+
+  // "Altre visite" sono solo quelle il cui nominativo non compare nell'elenco
+  // qui sopra: persone esterne, cessate, oppure il datore di lavoro, che
+  // dall'elenco per dipendente e' escluso. Cosi' nessuna visita compare due volte.
+  const nomiInElenco = new Set(medicalComplianceList.map((r) => r.fullName));
+  const altreVisite = medicalVisits.filter((v) => !nomiInElenco.has(v.employee_name));
+
+  // conScadenza: la pillola della scadenza si ripete solo dove serve. Sulla riga
+  // del lavoratore c'e' gia' quella della visita piu' recente, quindi la si mostra
+  // nel dettaglio solo se le visite sono piu' d'una.
+  const dettaglioVisita = (item, conScadenza) => {
+    const info = expiryInfo(item.expiry_date);
+    return (
+      <div key={item.id} className="med-visit-detail">
+        <div className="traccia-meta">
+          <span className="doc-type-tag">Visita del {fmtDate(item.visit_date)}</span>
+          {conScadenza && info && <span className={"pill " + info.cls}>{info.label}</span>}
+          <button className="icon-btn" onClick={() => removeMedicalVisit(item.id)} aria-label="Elimina visita"><Trash2 size={14} /></button>
+        </div>
+        {item.note && <p className="pest-note">{item.note}</p>}
+        <AttachmentLink path={item.attachment_path} />
+      </div>
+    );
+  };
 
   return (
     <div className="panel">
@@ -1354,7 +1380,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
           )}
           {medicalComplianceList.length > 0 && (
             <ul className="dish-list" style={{ marginBottom: 20 }}>
-              {medicalComplianceList.map(({ emp, fullName, status }) => (
+              {medicalComplianceList.map(({ emp, fullName, status, visits }) => (
                 <li key={emp.id} className="dish-row">
                   <div className="dish-top">
                     <div>
@@ -1372,6 +1398,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
                       </button>
                     </div>
                   </div>
+                  {visits.map((v) => dettaglioVisita(v, visits.length > 1))}
                   {visitFor === emp.id && (
                     <div className="nc-edit-block">{campiVisita(emp.id, false)}</div>
                   )}
@@ -1396,30 +1423,23 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
 
           {medicalLoading ? (
             <p className="sub">Caricamento…</p>
-          ) : medicalVisits.length === 0 ? (
-            <div className="empty"><p>Nessuna visita medica registrata.</p></div>
+          ) : altreVisite.length === 0 ? (
+            <p className="none-label" style={{ margin: "4px 0 0" }}>
+              Nessuna visita fuori elenco: sono tutte abbinate al lavoratore qui sopra.
+            </p>
           ) : (
             <ul className="dish-list">
-              {medicalVisits.map((item) => {
-                const info = expiryInfo(item.expiry_date);
-                return (
-                  <li key={item.id} className={"dish-row" + (info?.cls === "pill-alert" ? " row-warn" : "")}>
-                    <div className="dish-top">
-                      <div>
-                        <strong>{item.employee_name}</strong>
-                        {item.job_role && <span className="lot-tag">{item.job_role}</span>}
-                      </div>
-                      <button className="icon-btn" onClick={() => removeMedicalVisit(item.id)} aria-label="Elimina"><Trash2 size={14} /></button>
+              {altreVisite.map((item) => (
+                <li key={item.id} className="dish-row">
+                  <div className="dish-top">
+                    <div>
+                      <strong>{item.employee_name}</strong>
+                      {item.job_role && <span className="lot-tag">{item.job_role}</span>}
                     </div>
-                    <div className="traccia-meta">
-                      <span className="doc-type-tag">Visita del {fmtDate(item.visit_date)}</span>
-                      {info && <span className={"pill " + info.cls}>{info.label}</span>}
-                    </div>
-                    {item.note && <p className="pest-note">{item.note}</p>}
-                    <AttachmentLink path={item.attachment_path} />
-                  </li>
-                );
-              })}
+                  </div>
+                  {dettaglioVisita(item, true)}
+                </li>
+              ))}
             </ul>
           )}
         </>
