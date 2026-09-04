@@ -659,6 +659,39 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
   const [mcBusy, setMcBusy] = useState(false);
   const [medBusy, setMedBusy] = useState(false);
 
+  // La visita si registra dalla riga del lavoratore, non da un form in fondo
+  // alla pagina: si apre un riquadro sotto il nome, come per gli attestati.
+  // `visitFor` tiene l'id del dipendente aperto; `otherVisitOpen` è la via di
+  // servizio per chi non compare in elenco (il datore di lavoro, o una persona
+  // non ancora in organigramma).
+  const [visitFor, setVisitFor] = useState(null);
+  const [otherVisitOpen, setOtherVisitOpen] = useState(false);
+
+  const resetCampiVisita = () => {
+    setMedVisitDate(""); setMedValidityYears(""); setMedExpiryDate("");
+    setMedFile(null); setMedNote(""); setMedError("");
+    document.querySelectorAll('input[id^="med-file-"]').forEach((i) => { i.value = ""; });
+  };
+
+  const openVisitFor = (emp) => {
+    setOtherVisitOpen(false);
+    setVisitFor(emp.id);
+    setMedEmployeeName(`${emp.first_name} ${emp.last_name}`.trim());
+    setMedJobRole(emp.job_role || "");
+    resetCampiVisita();
+  };
+
+  const openOtherVisit = () => {
+    setVisitFor(null);
+    setOtherVisitOpen(true);
+    setMedEmployeeName(""); setMedJobRole("");
+    resetCampiVisita();
+  };
+
+  const closeVisitForm = () => {
+    setVisitFor(null); setOtherVisitOpen(false); setMedError("");
+  };
+
   const handleMedVisitChange = (value) => {
     setMedVisitDate(value);
     if (medValidityYears) setMedExpiryDate(addYears(value, medValidityYears));
@@ -709,7 +742,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
   };
 
   const submitMedicalVisit = async (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     if (!medEmployeeName.trim() || !medVisitDate) return;
     setMedBusy(true);
     setMedError("");
@@ -752,15 +785,53 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
         attachment_path,
         note: medNote,
       });
-      setMedEmployeeName(""); setMedJobRole(""); setMedVisitDate(""); setMedValidityYears(""); setMedExpiryDate(""); setMedFile(null); setMedNote("");
-      const input = document.getElementById("visitemediche-file-input");
-      if (input) input.value = "";
+      setMedEmployeeName(""); setMedJobRole("");
+      resetCampiVisita();
+      setVisitFor(null); setOtherVisitOpen(false);
     } catch (err) {
       setMedError("Errore durante il caricamento: " + err.message);
     } finally {
       setMedBusy(false);
     }
   };
+
+  // I campi sono gli stessi nel riquadro accanto al lavoratore e in quello per
+  // chi non è in elenco: si scrivono una volta sola. È una funzione che
+  // restituisce JSX, non un componente: chiamandola direttamente i campi non
+  // vengono rimontati a ogni battuta e non si perde il fuoco.
+  const campiVisita = (idSuffix, chiediNome) => (
+    <>
+      {chiediNome && (
+        <div className="row-form" style={{ margin: "0 0 8px" }}>
+          <input type="text" placeholder="Nome e Cognome" value={medEmployeeName} onChange={(e) => setMedEmployeeName(e.target.value)} className="note-input" />
+          <input type="text" placeholder="Mansione" value={medJobRole} onChange={(e) => setMedJobRole(e.target.value)} className="note-input" />
+        </div>
+      )}
+      <div className="row-form" style={{ margin: "0 0 8px" }}>
+        <label className="field-label">Data della visita
+          <input type="date" value={medVisitDate} onChange={(e) => handleMedVisitChange(e.target.value)} />
+        </label>
+        <label className="field-label">Anni di validità
+          <input type="number" min="0" step="1" placeholder="es. 2" value={medValidityYears} onChange={(e) => handleMedYearsChange(e.target.value)} className="num" />
+        </label>
+        <label className="field-label">Prossima visita
+          <input type="date" value={medExpiryDate} onChange={(e) => setMedExpiryDate(e.target.value)} />
+        </label>
+      </div>
+      <label className="file-drop" htmlFor={`med-file-${idSuffix}`}>
+        <Paperclip size={15} /><span>{medFile ? medFile.name : "Allega giudizio di idoneità (PDF o immagine)"}</span>
+        <input id={`med-file-${idSuffix}`} type="file" accept=".pdf,image/*" onChange={onMedFileChange} hidden />
+      </label>
+      <input type="text" placeholder="Nota (opzionale)" value={medNote} onChange={(e) => setMedNote(e.target.value)} className="full-input" style={{ marginTop: 8 }} />
+      {medError && <span className="file-error"><AlertTriangle size={13} /> {medError}</span>}
+      <div className="row-form" style={{ margin: "10px 0 0" }}>
+        <button type="button" className="btn-primary" onClick={() => submitMedicalVisit()} disabled={medBusy || !medEmployeeName.trim() || !medVisitDate}>
+          <Plus size={14} /> {medBusy ? "Salvataggio…" : "Registra visita"}
+        </button>
+        <button type="button" className="link-btn" onClick={closeVisitForm}>Annulla</button>
+      </div>
+    </>
+  );
 
   const medicalExpiringSoon = medicalVisits.filter((a) => {
     const info = expiryInfo(a.expiry_date);
@@ -1290,54 +1361,38 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
                       <strong>{fullName}</strong>
                       {emp.job_role && <span className="lot-tag">{emp.job_role}</span>}
                     </div>
-                    <span className={"pill " + status.cls}>{status.label}</span>
+                    <div className="med-row-actions">
+                      <span className={"pill " + status.cls}>{status.label}</span>
+                      <button
+                        type="button"
+                        className="link-btn"
+                        onClick={() => (visitFor === emp.id ? closeVisitForm() : openVisitFor(emp))}
+                      >
+                        {visitFor === emp.id ? "Annulla" : "+ Visita medica"}
+                      </button>
+                    </div>
                   </div>
+                  {visitFor === emp.id && (
+                    <div className="nc-edit-block">{campiVisita(emp.id, false)}</div>
+                  )}
                 </li>
               ))}
             </ul>
           )}
 
-          <form onSubmit={submitMedicalVisit} className="traccia-form">
-            {employees.length > 0 && (
-              <select
-                value=""
-                onChange={(e) => {
-                  const emp = employees.find((x) => x.id === e.target.value);
-                  if (emp) {
-                    setMedEmployeeName(`${emp.first_name} ${emp.last_name}`);
-                    if (emp.job_role) setMedJobRole(emp.job_role);
-                  }
-                }}
-              >
-                <option value="">Scegli dall'elenco dipendenti…</option>
-                {employees.map((emp) => <option key={emp.id} value={emp.id}>{emp.first_name} {emp.last_name}</option>)}
-              </select>
+          <div className="tr-head" style={{ marginBottom: 12 }}>
+            <span className="appt-section-label">Altre visite</span>
+            {!otherVisitOpen && (
+              <button type="button" className="link-btn" onClick={openOtherVisit}>
+                + Registra visita per una persona non in elenco
+              </button>
             )}
-            <div className="row-form">
-              <input type="text" placeholder="Nome e Cognome dipendente" required value={medEmployeeName} onChange={(e) => setMedEmployeeName(e.target.value)} className="note-input" />
-              <input type="text" placeholder="Mansione" value={medJobRole} onChange={(e) => setMedJobRole(e.target.value)} className="note-input" />
+          </div>
+          {otherVisitOpen && (
+            <div className="nc-edit-block" style={{ marginBottom: 20 }}>
+              {campiVisita("altro", true)}
             </div>
-            <div className="row-form">
-              <label className="field-label">Data della visita
-                <input type="date" required value={medVisitDate} onChange={(e) => handleMedVisitChange(e.target.value)} />
-              </label>
-              <label className="field-label">Anni di validità (opzionale)
-                <input type="number" min="0" step="1" placeholder="es. 2" value={medValidityYears} onChange={(e) => handleMedYearsChange(e.target.value)} className="num" />
-              </label>
-              <label className="field-label">Data scadenza (prossima visita)
-                <input type="date" value={medExpiryDate} onChange={(e) => setMedExpiryDate(e.target.value)} />
-              </label>
-            </div>
-            <input type="text" placeholder="Nota (opzionale)" value={medNote} onChange={(e) => setMedNote(e.target.value)} className="full-input" />
-            <label className="file-drop" htmlFor="visitemediche-file-input">
-              <Paperclip size={15} /><span>{medFile ? medFile.name : "Allega giudizio di idoneità del medico competente (PDF o immagine)"}</span>
-              <input id="visitemediche-file-input" type="file" accept=".pdf,image/*" onChange={onMedFileChange} hidden />
-            </label>
-            {medError && <span className="file-error"><AlertTriangle size={13} /> {medError}</span>}
-            <button type="submit" className="btn-primary" disabled={medBusy} style={{ alignSelf: "flex-start" }}>
-              <Plus size={16} /> {medBusy ? "Salvataggio…" : "Registra visita"}
-            </button>
-          </form>
+          )}
 
           {medicalLoading ? (
             <p className="sub">Caricamento…</p>
