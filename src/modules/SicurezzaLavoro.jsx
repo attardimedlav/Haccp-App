@@ -468,6 +468,43 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
       .sort((x, y) => x.name.localeCompare(y.name, "it"));
   };
 
+  // La formazione dei lavoratori e' l'unico riquadro che non puo' partire dalle
+  // nomine: un lavoratore che il corso non l'ha mai fatto non ha alcuna riga in
+  // work_safety_appointments, e cosi' spariva dal quadro proprio nel caso in cui
+  // serviva vederlo. Qui si parte dall'anagrafica e vi si uniscono i nominativi
+  // presenti solo nelle nomine (esterni, o persone tolte dall'elenco).
+  const quadroRigheFormazione = () => {
+    const perNome = new Map();
+    employees.forEach((e) => {
+      const nome = `${e.first_name} ${e.last_name}`.trim();
+      if (nome && !perNome.has(nome)) perNome.set(nome, { key: "emp-" + e.id, name: nome, appts: [] });
+    });
+    appointments
+      .filter((a) => a.role === FORMAZIONE_ROLE)
+      .forEach((a) => {
+        const nome = (a.person_name || "").trim();
+        if (!nome) return;
+        if (!perNome.has(nome)) perNome.set(nome, { key: "app-" + a.id, name: nome, appts: [] });
+        perNome.get(nome).appts.push(a);
+      });
+    return [...perNome.values()]
+      .map(({ key, name, appts }) => {
+        // fra piu' nomine per la stessa persona vale l'attestato che scade piu' tardi
+        const t = appts
+          .map((a) => latestTraining(a.id))
+          .filter(Boolean)
+          .reduce((best, x) => (!best || new Date(x.expiry_date) > new Date(best.expiry_date) ? x : best), null);
+        const info = t ? expiryInfo(t.expiry_date) : null;
+        return {
+          key,
+          name,
+          cls: !t ? "pill-alert" : info ? info.cls : "pill-warn",
+          label: !t ? "mai svolto" : info ? fmtDate(t.expiry_date) : "senza scadenza",
+        };
+      })
+      .sort((x, y) => x.name.localeCompare(y.name, "it"));
+  };
+
   // Il datore di lavoro e il medico competente compaiono senza scadenza: il
   // primo perché la sua formazione è già nel riquadro RSPP, il secondo perché
   // non ha corsi da aggiornare.
@@ -1033,14 +1070,15 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
               <div className="org-row org-row-2">
                 <QuadroBox icon={HardHat} tone="neutro" title="PREPOSTI" note="art. 37 D.Lgs. 81/08"
                   righe={quadroRighe(["Preposto"])} />
-                <QuadroBox icon={Award} tone="neutro" title="FORMAZIONE DEI LAVORATORI" note="art. 37 D.Lgs. 81/08"
-                  righe={quadroRighe([FORMAZIONE_ROLE])} />
+                <QuadroBox icon={Award} tone="neutro" title="FORMAZIONE DEI LAVORATORI"
+                  note="art. 37 D.Lgs. 81/08 — tutti i lavoratori in anagrafica"
+                  righe={quadroRigheFormazione()} />
               </div>
 
               <div className="quadro-legenda">
                 <span className="pill pill-ok">valido</span>
                 <span className="pill pill-warn">in scadenza entro 60 giorni</span>
-                <span className="pill pill-alert">scaduto, oppure incarico senza attestato</span>
+                <span className="pill pill-alert">scaduto, oppure lavoratore senza attestato</span>
               </div>
             </div>
           )}
