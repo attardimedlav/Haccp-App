@@ -5,7 +5,91 @@ import { useAuth } from "../AuthContext";
 import { supabase } from "../supabaseClient";
 import { SECURITY_ROLE_OPTIONS } from "./Organigramma";
 import { generateNominaAttachment, findRlsName, findDatoreName } from "../utils/nominaTemplates";
-import { rinominaPersona, nomeCompleto, conteggioCollegamenti, pulisci } from "../utils/rinominaPersona";
+
+// --- Rinomina di una persona -------------------------------------------------
+//
+// In Cardine una persona non ha una chiave: nomine, visite mediche e corsi
+// HACCP sono collegati all'anagrafica confrontando nome e cognome come
+// stringa. Cambiare il nome solo qui in "Dipendenti" quindi non rinomina la
+// persona, la sdoppia: le sue visite e i suoi attestati restano attaccati al
+// nome vecchio e spariscono dalla sua scheda.
+//
+// work_safety_trainings non compare in questo elenco di proposito: gli
+// attestati sono legati alla nomina per appointment_id, quindi seguono da soli.
+const TABELLE_COLLEGATE = [
+  { table: "work_safety_appointments", column: "person_name", label: "nomine e attestati di sicurezza" },
+  { table: "medical_visits", column: "employee_name", label: "visite mediche" },
+  { table: "training_records", column: "employee_name", label: "corsi HACCP" },
+];
+
+// Stessa normalizzazione degli spazi che useTable applica in scrittura: uno
+// spazio invisibile in coda spezza il collegamento senza dare nessun errore.
+function pulisci(s) {
+  return String(s || "").trim().replace(/[ \t]+/g, " ");
+}
+
+function nomeCompleto(nome, cognome) {
+  return `${pulisci(nome)} ${pulisci(cognome)}`.trim();
+}
+
+// Quante righe sono agganciate a questo nome. Si conta sui dati gia' caricati
+// in pagina, cosi' il numero si puo' mostrare prima di salvare.
+function conteggioCollegamenti(nome, { nomine = [], visite = [], corsiHaccp = [] }) {
+  const n = pulisci(nome);
+  return {
+    nomine: nomine.filter((r) => pulisci(r.person_name) === n).length,
+    visite: visite.filter((r) => pulisci(r.employee_name) === n).length,
+    corsiHaccp: corsiHaccp.filter((r) => pulisci(r.employee_name) === n).length,
+  };
+}
+
+async function spostaCollegamenti(companyId, da, a, soloQueste) {
+  const elenco = soloQueste || TABELLE_COLLEGATE;
+  const fatte = [];
+  for (const t of elenco) {
+    const { error } = await supabase
+      .from(t.table)
+      .update({ [t.column]: a })
+      .eq("company_id", companyId)
+      .eq(t.column, da);
+    if (error) return { ok: false, errore: `${t.label}: ${error.message}`, fatte };
+    fatte.push(t);
+  }
+  return { ok: true, fatte };
+}
+
+// Ordine voluto: prima si spostano i collegamenti, poi si cambia l'anagrafica.
+// Se il primo passo fallisce non e' stato toccato niente. Se fallisce il
+// secondo, i collegamenti tornano com'erano: meglio un salvataggio non
+// riuscito che una persona spezzata in due.
+async function rinominaPersona({ companyId, employeeId, nomeVecchio, nome, cognome, altriCampi = {} }) {
+  const nuovo = nomeCompleto(nome, cognome);
+  const vecchio = pulisci(nomeVecchio);
+  if (!pulisci(nome) || !pulisci(cognome)) {
+    return { ok: false, errore: "Nome e cognome non possono restare vuoti." };
+  }
+
+  const cambiaNome = nuovo !== vecchio;
+  let spostati = { ok: true, fatte: [] };
+
+  if (cambiaNome) {
+    spostati = await spostaCollegamenti(companyId, vecchio, nuovo);
+    if (!spostati.ok) return { ok: false, errore: spostati.errore };
+  }
+
+  const { error } = await supabase
+    .from("employees")
+    .update({ first_name: pulisci(nome), last_name: pulisci(cognome), ...altriCampi })
+    .eq("id", employeeId)
+    .eq("company_id", companyId);
+
+  if (error) {
+    if (cambiaNome) await spostaCollegamenti(companyId, nuovo, vecchio, spostati.fatte);
+    return { ok: false, errore: error.message };
+  }
+
+  return { ok: true, nuovo, cambiaNome };
+}
 
 export default function Dipendenti() {
   const { company } = useAuth();
