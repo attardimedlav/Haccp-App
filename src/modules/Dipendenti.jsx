@@ -1,15 +1,19 @@
 import React, { useState } from "react";
-import { Plus, Trash2, User } from "lucide-react";
+import { Plus, Trash2, User, Pencil, Check, X } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { supabase } from "../supabaseClient";
 import { SECURITY_ROLE_OPTIONS } from "./Organigramma";
 import { generateNominaAttachment, findRlsName, findDatoreName } from "../utils/nominaTemplates";
+import { rinominaPersona, nomeCompleto, conteggioCollegamenti, pulisci } from "../utils/rinominaPersona";
 
 export default function Dipendenti() {
   const { company } = useAuth();
-  const { items, add, remove, loading } = useTable("employees", company?.id);
-  const { items: appointments, add: addAppointment } = useTable("work_safety_appointments", company?.id);
+  const { items, add, remove, loading, reload } = useTable("employees", company?.id);
+  const { items: appointments, add: addAppointment, reload: reloadAppointments } = useTable("work_safety_appointments", company?.id);
+  // Servono solo per contare i collegamenti prima di rinominare una persona.
+  const { items: medicalVisits, reload: reloadVisits } = useTable("medical_visits", company?.id);
+  const { items: trainingRecords, reload: reloadCorsi } = useTable("training_records", company?.id);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [jobRole, setJobRole] = useState("");
@@ -18,6 +22,15 @@ export default function Dipendenti() {
   const [securityRole, setSecurityRole] = useState("Dipendente");
   const [nominaDate, setNominaDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [busy, setBusy] = useState(false);
+
+  // --- Modifica di una persona gia' in elenco ---
+  const [editId, setEditId] = useState(null);
+  const [eNome, setENome] = useState("");
+  const [eCognome, setECognome] = useState("");
+  const [eMansione, setEMansione] = useState("");
+  const [eReparto, setEReparto] = useState("");
+  const [eBusy, setEBusy] = useState(false);
+  const [eErr, setEErr] = useState("");
 
   const submit = async (e) => {
     e.preventDefault();
@@ -74,6 +87,48 @@ export default function Dipendenti() {
     setBusy(false);
   };
 
+  const apriModifica = (emp) => {
+    setEditId(emp.id);
+    setENome(emp.first_name || "");
+    setECognome(emp.last_name || "");
+    setEMansione(emp.job_role || "");
+    setEReparto(emp.department || "");
+    setEErr("");
+  };
+
+  const chiudiModifica = () => { setEditId(null); setEErr(""); };
+
+  const salvaModifica = async (emp) => {
+    const vecchio = nomeCompleto(emp.first_name, emp.last_name);
+    const nuovo = nomeCompleto(eNome, eCognome);
+    if (!nuovo) { setEErr("Nome e cognome non possono restare vuoti."); return; }
+
+    // Se il nome nuovo e' gia' di un'altra persona, rinominare unirebbe le due
+    // posizioni senza dare errore: visite e attestati finirebbero mescolati.
+    const collisione = items.some(
+      (x) => x.id !== emp.id && nomeCompleto(x.first_name, x.last_name) === nuovo
+    );
+    if (collisione) {
+      setEErr(`In elenco c'e' gia' ${nuovo}. Due persone non possono avere lo stesso nome: le loro visite e i loro attestati si mescolerebbero.`);
+      return;
+    }
+
+    setEBusy(true);
+    const esito = await rinominaPersona({
+      companyId: company.id,
+      employeeId: emp.id,
+      nomeVecchio: vecchio,
+      nome: eNome,
+      cognome: eCognome,
+      altriCampi: { job_role: pulisci(eMansione) || null, department: pulisci(eReparto) || null },
+    });
+    setEBusy(false);
+
+    if (!esito.ok) { setEErr(esito.errore); return; }
+    await Promise.all([reload(), reloadAppointments(), reloadVisits(), reloadCorsi()]);
+    chiudiModifica();
+  };
+
   return (
     <div className="panel">
       <div className="panel-head">
@@ -122,15 +177,57 @@ export default function Dipendenti() {
         <div className="empty"><p>Nessun dipendente registrato. Aggiungine uno per iniziare a usarlo nelle altre sezioni.</p></div>
       ) : (
         <ul className="log-list">
-          {items.map((item) => (
-            <li key={item.id} className="log-row">
-              <User size={15} color="#2F6F4E" />
-              <span className="log-main"><strong>{item.first_name} {item.last_name}</strong></span>
-              {item.job_role && <span className="log-unit">{item.job_role}</span>}
-              {item.department && <span className="log-note">{item.department}</span>}
-              <button className="icon-btn" onClick={() => remove(item.id)} aria-label="Elimina"><Trash2 size={14} /></button>
-            </li>
-          ))}
+          {items.map((item) => {
+            const inModifica = editId === item.id;
+            const legami = inModifica
+              ? conteggioCollegamenti(nomeCompleto(item.first_name, item.last_name),
+                  { nomine: appointments, visite: medicalVisits, corsiHaccp: trainingRecords })
+              : null;
+            const totaleLegami = legami ? legami.nomine + legami.visite + legami.corsiHaccp : 0;
+            const cambiaNome = inModifica
+              && nomeCompleto(eNome, eCognome) !== nomeCompleto(item.first_name, item.last_name);
+
+            return (
+              <li key={item.id} className={"log-row" + (inModifica ? " editing log-row-wrap" : "")}>
+                <User size={15} color="#2F6F4E" />
+                {inModifica ? (
+                  <>
+                    <input type="text" value={eNome} onChange={(e) => setENome(e.target.value)}
+                      className="note-input edit-input" placeholder="Nome" aria-label="Nome" />
+                    <input type="text" value={eCognome} onChange={(e) => setECognome(e.target.value)}
+                      className="note-input edit-input" placeholder="Cognome" aria-label="Cognome" />
+                    <input type="text" value={eMansione} onChange={(e) => setEMansione(e.target.value)}
+                      className="note-input edit-input" placeholder="Mansione" aria-label="Mansione" />
+                    <input type="text" value={eReparto} onChange={(e) => setEReparto(e.target.value)}
+                      className="note-input edit-input" placeholder="Reparto" aria-label="Reparto" />
+                    <button className="icon-btn icon-btn-ok" onClick={() => salvaModifica(item)}
+                      disabled={eBusy} aria-label="Salva"><Check size={15} /></button>
+                    <button className="icon-btn" onClick={chiudiModifica} disabled={eBusy}
+                      aria-label="Annulla"><X size={15} /></button>
+                    <p className="dip-edit-note">
+                      {eBusy
+                        ? "Salvataggio in corso…"
+                        : cambiaNome
+                          ? (totaleLegami > 0
+                              ? `Salvando, insieme al nome si spostano i suoi collegamenti — nomine e attestati di sicurezza: ${legami.nomine} · visite mediche: ${legami.visite} · corsi HACCP: ${legami.corsiHaccp} — così restano attaccati alla persona.`
+                              : "Questa persona non ha ancora nomine, visite o corsi collegati.")
+                          : "Le persone sono collegate a nomine, visite e corsi tramite nome e cognome: cambiandoli, i collegamenti vengono spostati insieme."}
+                    </p>
+                    {eErr && <p className="dip-edit-err">{eErr}</p>}
+                  </>
+                ) : (
+                  <>
+                    <span className="log-main"><strong>{item.first_name} {item.last_name}</strong></span>
+                    {item.job_role && <span className="log-unit">{item.job_role}</span>}
+                    {item.department && <span className="log-note">{item.department}</span>}
+                    <button className="icon-btn" onClick={() => apriModifica(item)}
+                      aria-label="Modifica nome e mansione"><Pencil size={14} /></button>
+                    <button className="icon-btn" onClick={() => remove(item.id)} aria-label="Elimina"><Trash2 size={14} /></button>
+                  </>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
