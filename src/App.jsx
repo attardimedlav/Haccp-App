@@ -16,6 +16,7 @@ import Tracciabilita from "./modules/Tracciabilita";
 import RegistrazioneSanitaria from "./modules/RegistrazioneSanitaria";
 import Configurazione from "./modules/Configurazione";
 import PrintHeader from "./PrintHeader";
+import RicercaDocumenti from "./RicercaDocumenti";
 import NonConformita from "./modules/NonConformita";
 import AcquePotabili from "./modules/AcquePotabili";
 import MieiClienti from "./modules/MieiClienti";
@@ -64,33 +65,42 @@ const SETTINGS_TAB = { id: "config", label: "Configurazione", icon: Settings };
 
 const RSPP_ROLES = ["RSPP Datore di Lavoro", "RSPP Esterno"];
 
-// Riga sempre presente in cima a ogni scheda: chi è il Responsabile del
-// Servizio di Prevenzione e Protezione di questa azienda. È il riferimento
-// che serve avere sott'occhio mentre si lavora, e comparendo anche in stampa
-// finisce sui registri esportati. Il nome si prende sia dalle nomine
-// registrate sia dal ruolo di sicurezza in anagrafica, così compare anche
-// prima che la nomina sia protocollata.
-function RsppLine() {
-  const { company } = useAuth();
-  const { items: employees } = useTable("employees", company?.id);
-  const { items: appointments } = useTable("work_safety_appointments", company?.id);
+// Riga in cima a ogni scheda con il responsabile della materia a cui la
+// scheda appartiene: il Responsabile HACCP sulle schede di autocontrollo,
+// l'RSPP su quelle di sicurezza sul lavoro. È il riferimento che serve avere
+// sott'occhio mentre si compila.
+//
+// Prima mostrava sempre l'RSPP, anche sui registri HACCP, dove non c'entra
+// nulla: finiva così anche sulle stampe di autocontrollo. Ora la riga non
+// compare mai in stampa (vedi @media print in styles.css); sul foglio il
+// nominativo lo porta l'intestazione di stampa, con l'etichetta giusta.
+function ResponsabileLine({ tab, showHaccp, rsppNames, haccpManager, activeWorkSafety }) {
+  if (tab === "sicurezzalavoro") {
+    if (!activeWorkSafety) return null;
+    return (
+      <div className="rspp-line">
+        <ShieldCheck size={14} color="#2F6F4E" />
+        <span className="rspp-label">RSPP</span>
+        {rsppNames
+          ? <span className="rspp-name">{rsppNames}</span>
+          : <span className="rspp-missing">non ancora nominato</span>}
+      </div>
+    );
+  }
 
-  if (!company?.active_work_safety) return null;
+  if (showHaccp && (tab === "dashboard" || HACCP_TAB_IDS.has(tab))) {
+    return (
+      <div className="rspp-line">
+        <ShieldCheck size={14} color="#2F6F4E" />
+        <span className="rspp-label">Responsabile HACCP</span>
+        {haccpManager
+          ? <span className="rspp-name">{haccpManager}</span>
+          : <span className="rspp-missing">non ancora indicato in Configurazione</span>}
+      </div>
+    );
+  }
 
-  const names = [...new Set([
-    ...appointments.filter((a) => RSPP_ROLES.includes(a.role)).map((a) => (a.person_name || "").trim()),
-    ...employees.filter((e) => RSPP_ROLES.includes(e.security_role)).map((e) => `${e.first_name} ${e.last_name}`.trim()),
-  ])].filter(Boolean);
-
-  return (
-    <div className="rspp-line">
-      <ShieldCheck size={14} color="#2F6F4E" />
-      <span className="rspp-label">RSPP</span>
-      {names.length > 0
-        ? <span className="rspp-name">{names.join(", ")}</span>
-        : <span className="rspp-missing">non ancora nominato</span>}
-    </div>
-  );
+  return null;
 }
 
 function Shell() {
@@ -105,6 +115,16 @@ function Shell() {
   // esplicitamente disattivato in Configurazione (valore false), non se la
   // colonna è semplicemente vuota/non ancora impostata.
   const showHaccp = company?.active_haccp !== false;
+
+  // Lette qui e non dentro ResponsabileLine perché lo stesso nominativo serve
+  // in due posti: la riga a schermo e l'intestazione di stampa.
+  const { items: employees } = useTable("employees", company?.id);
+  const { items: appointments } = useTable("work_safety_appointments", company?.id);
+  const rsppNames = [...new Set([
+    ...appointments.filter((a) => RSPP_ROLES.includes(a.role)).map((a) => (a.person_name || "").trim()),
+    ...employees.filter((e) => RSPP_ROLES.includes(e.security_role)).map((e) => `${e.first_name} ${e.last_name}`.trim()),
+  ])].filter(Boolean).join(", ");
+  const haccpManager = (company?.haccp_manager || "").trim();
   const visibleMainTabs = MAIN_TABS.filter((t) => t.id !== "abbattimento" || company?.serves_raw_fish);
   const visibleWorkSafetyItems = WORK_SAFETY_SUB_ITEMS.filter((t) => !t.requires || company?.[t.requires]);
 
@@ -248,14 +268,19 @@ function Shell() {
             </span>
           </div>
         )}
-        <RsppLine />
+        <ResponsabileLine tab={tab} showHaccp={showHaccp} rsppNames={rsppNames} haccpManager={haccpManager} activeWorkSafety={!!company?.active_work_safety} />
         <div className="content-toolbar">
+          <RicercaDocumenti goTo={setTab} openWorkSafety={openWorkSafety} />
           <button type="button" className="print-btn" onClick={() => window.print()}>
             <Printer size={14} /> Esporta PDF
           </button>
         </div>
         {tab !== "allergeni" && (
-          <PrintHeader sectionLabel={(TABS.find((t) => t.id === tab) || SETTINGS_TAB).label} />
+          <PrintHeader
+            sectionLabel={(TABS.find((t) => t.id === tab) || SETTINGS_TAB).label}
+            responsabileLabel={tab === "sicurezzalavoro" ? "RSPP" : "Responsabile HACCP"}
+            responsabileName={tab === "sicurezzalavoro" ? rsppNames : haccpManager}
+          />
         )}
         {tab === "dashboard" && <Dashboard goTo={setTab} openWorkSafety={openWorkSafety} />}
         {tab === "temperature" && <Temperature />}
