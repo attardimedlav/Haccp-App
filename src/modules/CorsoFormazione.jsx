@@ -2,7 +2,289 @@ import React, { useState } from "react";
 import { Plus, Trash2, FileDown, Save, X, AlertTriangle } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
-import { scaricaRegistro } from "../utils/registroCorso";
+
+// Costruzione del registro presenze in formato Word (.docx).
+//
+// Perche' non si usa un modello con i segnaposto come per le nomine: il
+// registro non ha una forma fissa. Ha una pagina per ogni giornata del corso e
+// una riga per ogni partecipante, numeri che cambiano da corso a corso. La
+// sostituzione di segnaposto sa riempire caselle, non sa moltiplicare pagine
+// e righe: il documento va costruito.
+//
+// Questa funzione non conosce ne' JSZip ne' il browser: ritorna soltanto la
+// mappa "percorso interno -> contenuto" dei file che compongono un .docx.
+// Cosi' la si puo' provare fuori dall'app, generando un documento vero e
+// guardandolo, invece di scoprire gli errori in produzione.
+
+const GIORNI = ["domenica", "lunedi'", "martedi'", "mercoledi'", "giovedi'", "venerdi'", "sabato"];
+
+function esc(v) {
+  return String(v ?? "")
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function dataEstesa(iso) {
+  if (!iso) return "";
+  const [y, m, d] = String(iso).split("-");
+  if (!d) return String(iso);
+  const g = new Date(Number(y), Number(m) - 1, Number(d));
+  return `${d}/${m}/${y} (${GIORNI[g.getDay()]})`;
+}
+
+function dataBreve(iso) {
+  if (!iso) return "";
+  const [y, m, d] = String(iso).split("-");
+  return d ? `${d}/${m}/${y}` : String(iso);
+}
+
+function ora(t) {
+  return t ? String(t).slice(0, 5) : "";
+}
+
+// --- mattoni WordprocessingML ------------------------------------------------
+
+function par(testo, o = {}) {
+  const rpr =
+    `<w:rPr>` +
+    (o.bold ? "<w:b/>" : "") +
+    (o.italic ? "<w:i/>" : "") +
+    `<w:sz w:val="${o.size || 20}"/><w:szCs w:val="${o.size || 20}"/>` +
+    (o.color ? `<w:color w:val="${o.color}"/>` : "") +
+    `</w:rPr>`;
+  const ppr =
+    `<w:pPr>` +
+    (o.align ? `<w:jc w:val="${o.align}"/>` : "") +
+    `<w:spacing w:before="${o.before || 0}" w:after="${o.after == null ? 60 : o.after}"/>` +
+    (o.pageBreakBefore ? "<w:pageBreakBefore/>" : "") +
+    (o.bordoSotto ? `<w:pBdr><w:bottom w:val="single" w:sz="6" w:color="777777"/></w:pBdr>` : "") +
+    `</w:pPr>`;
+  const righe = String(testo ?? "").split("\n");
+  const runs = righe
+    .map((r, i) => `<w:r>${rpr}${i ? "<w:br/>" : ""}<w:t xml:space="preserve">${esc(r)}</w:t></w:r>`)
+    .join("");
+  return `<w:p>${ppr}${runs}</w:p>`;
+}
+
+function cella(contenuto, larghezza, o = {}) {
+  return (
+    `<w:tc><w:tcPr><w:tcW w:w="${larghezza}" w:type="dxa"/>` +
+    (o.sfondo ? `<w:shd w:val="clear" w:color="auto" w:fill="${o.sfondo}"/>` : "") +
+    `<w:vAlign w:val="center"/></w:tcPr>${contenuto}</w:tc>`
+  );
+}
+
+function tabella(larghezze, righe) {
+  const grid = larghezze.map((w) => `<w:gridCol w:w="${w}"/>`).join("");
+  return (
+    `<w:tbl><w:tblPr><w:tblW w:w="${larghezze.reduce((a, b) => a + b, 0)}" w:type="dxa"/>` +
+    `<w:tblBorders>` +
+    ["top", "left", "bottom", "right", "insideH", "insideV"]
+      .map((b) => `<w:${b} w:val="single" w:sz="6" w:space="0" w:color="666666"/>`)
+      .join("") +
+    `</w:tblBorders></w:tblPr><w:tblGrid>${grid}</w:tblGrid>${righe.join("")}</w:tbl>`
+  );
+}
+
+function riga(celle, o = {}) {
+  // altezza minima: le righe da firmare devono avere lo spazio per la firma,
+  // altrimenti il registro e' inutilizzabile a penna.
+  const pr =
+    o.intestazione ? "<w:trPr><w:tblHeader/></w:trPr>" :
+    o.altezza ? `<w:trPr><w:trHeight w:val="${o.altezza}"/></w:trPr>` : "";
+  return `<w:tr>${pr}${celle}</w:tr>`;
+}
+
+// --- il documento ------------------------------------------------------------
+
+// dati = {
+//   azienda, sede, organizzatore, responsabileProgetto,
+//   titolo, riferimentoNormativo, classeRischio, oreTotali,
+//   sessioni: [{ data, oraInizio, oraFine, ore, modulo, argomenti, docente }],
+//   partecipanti: [{ nome, codiceFiscale, mansione }],
+// }
+function corpoRegistro(dati) {
+  const L = [8300, 1200, 2600, 1900, 1300, 1300]; // n. | nome | CF | mansione -> ricalcolate sotto
+  const COL = [700, 3000, 2600, 1900, 1900];      // N. | COGNOME E NOME | CODICE FISCALE | FIRMA ENTRATA | FIRMA USCITA
+  const p = [];
+
+  // --- copertina
+  p.push(par(dati.titolo || "CORSO DI FORMAZIONE DEI LAVORATORI", { bold: true, size: 28, align: "center", after: 80 }));
+  if (dati.classeRischio) {
+    p.push(par(`Classe di rischio ${dati.classeRischio} — durata ${dati.oreTotali || "—"} ore`,
+      { bold: true, size: 22, align: "center", after: 60 }));
+  }
+  p.push(par(dati.riferimentoNormativo ||
+    "art. 37 c. 12 del D.Lgs. 81/08 e Accordo Stato-Regioni del 17 aprile 2025 — Rep. Atti n. 59/CSR",
+    { italic: true, size: 18, align: "center", after: 240 }));
+  p.push(par("REGISTRO PRESENZE ALLIEVI", { bold: true, size: 26, align: "center", after: 300 }));
+
+  const box = (etichetta, valore) =>
+    riga(
+      cella(par(etichetta, { bold: true, size: 19 }), 3200, { sfondo: "EDF1F8" }) +
+      cella(par(valore || "—", { size: 19 }), 6900)
+    );
+
+  p.push(tabella([3200, 6900], [
+    box("Soggetto organizzatore", dati.organizzatore || dati.azienda),
+    box("Sede di svolgimento", dati.sede),
+    box("Responsabile del progetto formativo", dati.responsabileProgetto),
+    box("Docente/i", [...new Set((dati.sessioni || []).map((s) => s.docente).filter(Boolean))].join(", ")),
+    box("Periodo formativo", (dati.sessioni || []).map((s) => dataBreve(s.data)).filter(Boolean).join(" · ")),
+    box("Ore totali", dati.oreTotali ? `${dati.oreTotali} ore` : "—"),
+    box("Partecipanti", String((dati.partecipanti || []).length)),
+  ]));
+
+  p.push(par("", { after: 200 }));
+  p.push(par(
+    "Il presente registro e' composto dalle pagine numerate in calce. La frequenza minima per essere " +
+    "ammessi alla verifica finale e' del 90% delle ore previste.",
+    { italic: true, size: 18, color: "444444" }));
+
+  // --- una pagina per ogni giornata
+  (dati.sessioni || []).forEach((s, idx) => {
+    p.push(par(dati.titolo || "CORSO DI FORMAZIONE DEI LAVORATORI",
+      { bold: true, size: 20, pageBreakBefore: true, after: 40, bordoSotto: true }));
+    p.push(par(
+      `PRESENZE DEL GIORNO ${dataEstesa(s.data)} — DALLE ORE ${ora(s.oraInizio)} ALLE ORE ${ora(s.oraFine)}`,
+      { bold: true, size: 21, before: 80, after: 40 }));
+    p.push(par(`${s.modulo || `Modulo ${idx + 1}`}${s.ore ? ` — ${s.ore} ore` : ""}`,
+      { bold: true, size: 19, color: "1F3864", after: 120 }));
+
+    if (s.argomenti) {
+      p.push(par("Argomenti trattati", { bold: true, size: 18, after: 40 }));
+      String(s.argomenti).split("\n").filter((r) => r.trim()).forEach((r) => {
+        p.push(par(`•  ${r.trim()}`, { size: 18, after: 20 }));
+      });
+      p.push(par("", { after: 120 }));
+    }
+
+    const intest = riga(
+      ["N.", "COGNOME E NOME", "CODICE FISCALE", "FIRMA ENTRATA", "FIRMA USCITA"]
+        .map((t, i) => cella(par(t, { bold: true, size: 17, align: "center" }), COL[i], { sfondo: "EDF1F8" }))
+        .join(""),
+      { intestazione: true });
+
+    const corpo = (dati.partecipanti || []).map((x, i) =>
+      riga(
+        cella(par(String(i + 1), { size: 18, align: "center" }), COL[0]) +
+        cella(par(x.nome, { size: 18 }), COL[1]) +
+        cella(par(x.codiceFiscale || "", { size: 16 }), COL[2]) +
+        cella(par("", { size: 18 }), COL[3]) +
+        cella(par("", { size: 18 }), COL[4]),
+        { altezza: 560 }
+      ));
+
+    p.push(tabella(COL, [intest, ...corpo]));
+    p.push(par(`Firma del docente (${s.docente || "—"}):  ______________________________`,
+      { size: 18, before: 200 }));
+  });
+
+  // --- chiusura
+  p.push(par("CHIUSURA DEL REGISTRO", { bold: true, size: 21, pageBreakBefore: true, after: 120, bordoSotto: true }));
+  p.push(par(
+    "Il sottoscritto responsabile del progetto formativo attesta che il presente registro e' stato " +
+    "compilato durante lo svolgimento del corso e che le firme in esso apposte sono state raccolte in " +
+    "entrata e in uscita da ciascuna giornata formativa.",
+    { size: 19, before: 80, after: 300 }));
+  p.push(tabella([5050, 5050], [
+    riga(
+      cella(par("Il responsabile del progetto formativo", { bold: true, size: 18 }) +
+            par(dati.responsabileProgetto || "", { size: 18, before: 40 }) +
+            par("", { after: 400 }) + par("____________________________", { size: 18 }), 5050) +
+      cella(par("Il legale rappresentante", { bold: true, size: 18 }) +
+            par(dati.legaleRappresentante || "", { size: 18, before: 40 }) +
+            par("", { after: 400 }) + par("____________________________", { size: 18 }), 5050)
+    ),
+  ]));
+  p.push(par(`Luogo e data:  ${dati.sede || "____________________"},  ____ / ____ / ________`,
+    { size: 18, before: 300 }));
+
+  return p.join("");
+}
+
+// Piè di pagina con "Pagina X di Y": il totale lo calcola Word da solo, cosi'
+// il numero dichiarato non puo' essere sbagliato.
+const FOOTER_XML =
+  `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+<w:p><w:pPr><w:jc w:val="center"/></w:pPr>
+<w:r><w:rPr><w:sz w:val="16"/><w:color w:val="666666"/></w:rPr><w:t xml:space="preserve">Pagina </w:t></w:r>
+<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> PAGE </w:instrText></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r>
+<w:r><w:rPr><w:sz w:val="16"/><w:color w:val="666666"/></w:rPr><w:t xml:space="preserve"> di </w:t></w:r>
+<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> NUMPAGES </w:instrText></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r>
+</w:p></w:ftr>`;
+
+function fileRegistro(dati) {
+  const document =
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+ xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<w:body>${corpoRegistro(dati)}
+<w:sectPr>
+<w:footerReference w:type="default" r:id="rId10"/>
+<w:pgSz w:w="11906" w:h="16838"/>
+<w:pgMar w:top="1134" w:right="850" w:bottom="1134" w:left="850" w:header="708" w:footer="708" w:gutter="0"/>
+</w:sectPr></w:body></w:document>`;
+
+  return {
+    "[Content_Types].xml":
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+<Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>
+</Types>`,
+    "_rels/.rels":
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`,
+    "word/_rels/document.xml.rels":
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+<Relationship Id="rId10" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>
+</Relationships>`,
+    "word/styles.xml":
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+<w:docDefaults><w:rPrDefault><w:rPr>
+<w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:cs="Calibri"/>
+<w:sz w:val="20"/><w:szCs w:val="20"/><w:lang w:val="it-IT"/>
+</w:rPr></w:rPrDefault></w:docDefaults>
+</w:styles>`,
+    "word/footer1.xml": FOOTER_XML,
+    "word/document.xml": document,
+  };
+}
+
+// Confeziona i file in un .docx e lo fa scaricare. JSZip e' importato qui
+// dentro e in modo dinamico di proposito: cosi' fileRegistro resta una
+// funzione pura, provabile fuori dal browser.
+async function scaricaRegistro(dati, nomeFile) {
+  const JSZip = (await import("jszip")).default;
+  const zip = new JSZip();
+  const files = fileRegistro(dati);
+  for (const [percorso, contenuto] of Object.entries(files)) {
+    zip.file(percorso, contenuto);
+  }
+  const blob = await zip.generateAsync({
+    type: "blob",
+    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nomeFile || "Registro_presenze.docx";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
 
 // Corso di formazione organizzato dall'azienda stessa (art. 37 D.Lgs. 81/08,
 // Accordo Stato-Regioni 17/04/2025, Rep. Atti n. 59/CSR).
