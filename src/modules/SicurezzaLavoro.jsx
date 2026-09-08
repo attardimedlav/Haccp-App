@@ -55,6 +55,11 @@ export const MEDICO_ROLE = "Nomina Medico Competente";
 // faceva sembrare che mancasse un documento.
 export const FORMAZIONE_ROLE = "Formazione Generale e Specifica Lavoratori";
 
+// Ruoli che identificano il datore di lavoro: e' escluso dagli elenchi dei
+// lavoratori (sorveglianza sanitaria e formazione art. 37), perche' quegli
+// obblighi riguardano i lavoratori, non lui.
+export const DATORE_ROLES = ["Datore di Lavoro", "RSPP Datore di Lavoro"];
+
 const ORGANIGRAMMA_SUB_TAB = { id: "organigramma", label: "Organigramma", icon: Network };
 const CONFORMITA_SUB_TAB = { id: "conformita", label: "Conformità", icon: ShieldAlert };
 
@@ -475,10 +480,16 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
   // presenti solo nelle nomine (esterni, o persone tolte dall'elenco).
   const quadroRigheFormazione = () => {
     const perNome = new Map();
-    employees.forEach((e) => {
-      const nome = `${e.first_name} ${e.last_name}`.trim();
-      if (nome && !perNome.has(nome)) perNome.set(nome, { key: "emp-" + e.id, name: nome, appts: [] });
-    });
+    employees
+      // Il datore di lavoro non e' un lavoratore ai sensi dell'art. 2 c. 1
+      // lett. a del D.Lgs. 81/08: la formazione dell'art. 37 non lo riguarda.
+      // La sua e' un'altra - 16 ore da datore di lavoro, piu' il modulo RSPP
+      // se assume il ruolo - e compare nel riquadro RSPP.
+      .filter((e) => !DATORE_ROLES.includes(e.security_role))
+      .forEach((e) => {
+        const nome = `${e.first_name} ${e.last_name}`.trim();
+        if (nome && !perNome.has(nome)) perNome.set(nome, { key: "emp-" + e.id, name: nome, appts: [] });
+      });
     appointments
       .filter((a) => a.role === FORMAZIONE_ROLE)
       .forEach((a) => {
