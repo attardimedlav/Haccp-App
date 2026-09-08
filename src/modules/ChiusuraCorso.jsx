@@ -465,7 +465,14 @@ export default function ArchivioCorsi({ formazioneRole }) {
   const { items: partecipanti } = useTable("training_course_participants", company?.id);
   const [apertoId, setApertoId] = useState(null);
 
-  if (loading || corsi.length === 0) return null;
+  if (loading) return <p className="sub">Caricamento…</p>;
+  if (corsi.length === 0) {
+    return (
+      <p className="none-label" style={{ margin: "16px 0 0" }}>
+        Nessun corso registrato. I corsi che salvi restano qui, con i loro documenti.
+      </p>
+    );
+  }
   const aperto = corsi.find((c) => c.id === apertoId);
 
   return (

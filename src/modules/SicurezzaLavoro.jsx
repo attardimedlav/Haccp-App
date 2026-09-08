@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Award, HardHat, Wrench, Stethoscope, Network, Pencil, X, Check, ShieldAlert } from "lucide-react";
+import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Award, HardHat, Wrench, Stethoscope, Network, Pencil, X, Check, ShieldAlert, GraduationCap } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
@@ -65,11 +65,16 @@ export const DATORE_ROLES = ["Datore di Lavoro", "RSPP Datore di Lavoro"];
 const ORGANIGRAMMA_SUB_TAB = { id: "organigramma", label: "Organigramma", icon: Network };
 const CONFORMITA_SUB_TAB = { id: "conformita", label: "Conformità", icon: ShieldAlert };
 
-const BASE_SUB_TABS = [
+const DVR_SUB_TABS = [
   { id: "dvr", label: "DVR", icon: FileText },
   { id: "allegati", label: "Allegati al DVR", icon: Paperclip },
-  { id: "nomine", label: "Nomine e Attestati", icon: Award },
 ];
+
+// I corsi organizzati dall'azienda stanno prima delle nomine di proposito:
+// nell'ordine di lavoro si eroga la formazione e poi si registra l'attestato,
+// non il contrario.
+const CORSI_SUB_TAB = { id: "corsi", label: "Corsi", icon: GraduationCap };
+const NOMINE_SUB_TAB = { id: "nomine", label: "Nomine e Attestati", icon: Award };
 
 const EQUIPMENT_SUB_TAB = { id: "attrezzature", label: "Attrezzature", icon: Wrench };
 const MEDICAL_SUB_TAB = { id: "visitemediche", label: "Visite Mediche", icon: Stethoscope };
@@ -122,7 +127,9 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
   const showMedicalTab = !!company?.active_medical_surveillance;
   const visibleSubTabs = [
     ORGANIGRAMMA_SUB_TAB,
-    ...BASE_SUB_TABS,
+    ...DVR_SUB_TABS,
+    CORSI_SUB_TAB,
+    NOMINE_SUB_TAB,
     ...(showEquipmentTab ? [EQUIPMENT_SUB_TAB] : []),
     ...(showMedicalTab ? [MEDICAL_SUB_TAB] : []),
     CONFORMITA_SUB_TAB,
@@ -1095,26 +1102,15 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
                 <span className="pill pill-alert">scaduto, oppure lavoratore senza attestato</span>
               </div>
 
-              {/* Dal quadro si passa direttamente all'azione: chi e' in rosso
-                  qui sopra e' chi va formato, e da qui si organizza il corso. */}
               <div className="quadro-azione">
-                <button type="button" className="btn-primary" onClick={() => setCorsoAperto(!corsoAperto)}>
-                  <Award size={15} /> {corsoAperto ? "Chiudi" : "Organizza un corso di formazione lavoratori"}
+                <button type="button" className="btn-primary" onClick={() => setSubTab("corsi")}>
+                  <GraduationCap size={15} /> Vai ai corsi
                 </button>
                 <span className="sub">
-                  L'azienda puo' formare i propri lavoratori (art. 37 D.Lgs. 81/08, Accordo 17/04/2025).
+                  Chi è in rosso qui sopra è chi va formato: nella scheda <strong>Corsi</strong> lo
+                  trovi già spuntato.
                 </span>
               </div>
-
-              {corsoAperto && (
-                <CorsoFormazione
-                  righeFormazione={quadroRigheFormazione()}
-                  employees={employees}
-                  onChiudi={() => setCorsoAperto(false)}
-                />
-              )}
-
-              <ArchivioCorsi formazioneRole={FORMAZIONE_ROLE} />
             </div>
           )}
 
@@ -1310,6 +1306,41 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
           )}
           </>
           )}
+        </>
+      )}
+
+      {subTab === "corsi" && (
+        <>
+          <div className="panel-head">
+            <div>
+              <h3 style={{ margin: "0 0 6px" }}>Corsi organizzati dall'azienda</h3>
+              <p className="sub" style={{ margin: 0 }}>
+                L'azienda può formare i propri lavoratori con un docente qualificato
+                (art. 37 D.Lgs. 81/08 e Accordo Stato-Regioni del 17/04/2025). Da qui escono il
+                progetto formativo, il registro presenze, il verbale di verifica finale e gli
+                attestati; alla chiusura del corso gli attestati si registrano da soli.
+              </p>
+            </div>
+          </div>
+
+          <div className="quadro-azione" style={{ marginTop: 4 }}>
+            <button type="button" className="btn-primary" onClick={() => setCorsoAperto(!corsoAperto)}>
+              <Plus size={15} /> {corsoAperto ? "Chiudi" : "Organizza un nuovo corso"}
+            </button>
+            <span className="sub">
+              Chi non ha mai fatto il corso o ce l'ha scaduto è già spuntato.
+            </span>
+          </div>
+
+          {corsoAperto && (
+            <CorsoFormazione
+              righeFormazione={quadroRigheFormazione()}
+              employees={employees}
+              onChiudi={() => setCorsoAperto(false)}
+            />
+          )}
+
+          <ArchivioCorsi formazioneRole={FORMAZIONE_ROLE} />
         </>
       )}
 
