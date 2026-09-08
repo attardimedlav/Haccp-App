@@ -172,37 +172,126 @@ function corpoVerbale(d) {
   return p.join("");
 }
 
+// L'attestato e' l'unico documento di tutto il pacchetto che finisce in mano
+// al lavoratore e viene appeso, mostrato, fotocopiato. Merita una veste da
+// documento e non da stampato di servizio: cornice di pagina, un carattere con
+// le grazie per le parti solenni, e il programma sul retro.
+const SERIF = "Cambria";
+const BLU = "1F3864";
+
 function corpoAttestati(d) {
   const p = [];
+  const anno = String(d.dataVerifica || "").slice(0, 4) || new Date().getFullYear();
+  const filetto = (o = {}) => par("✦", {
+    size: 20, align: "center", color: "B08D57", before: o.before ?? 300, after: o.after ?? 300,
+  });
+
   d.partecipanti.forEach((x, i) => {
-    p.push(par(d.organizzatore || "", {
-      bold: true, size: 22, align: "center", after: 40,
-      pageBreakBefore: i > 0, bordoSotto: true,
-    }));
-    p.push(par("Soggetto organizzatore della formazione", { italic: true, size: 17, align: "center", after: 300 }));
-    p.push(par("ATTESTATO DI FREQUENZA", { bold: true, size: 30, align: "center", after: 40 }));
-    p.push(par("con verifica dell'apprendimento", { size: 21, align: "center", after: 300 }));
+    const numero = `${String(i + 1).padStart(2, "0")}/${anno}`;
 
-    p.push(par("Si attesta che", { size: 20, align: "center", after: 100 }));
-    p.push(par(x.nome, { bold: true, size: 28, align: "center", after: 60 }));
-    p.push(par(x.codiceFiscale ? `codice fiscale ${x.codiceFiscale}` : "codice fiscale non indicato",
-      { size: 19, align: "center", after: 240, color: x.codiceFiscale ? "444444" : "B03A2E" }));
+    // Il salto pagina sta su un paragrafo, non sulla tabella: una tabella non
+    // porta pageBreakBefore, e senza questa riga il secondo attestato
+    // ripartirebbe in coda al programma del primo.
+    if (i > 0) p.push(par("", { size: 2, after: 0, saltoPagina: true }));
 
-    p.push(par("ha frequentato il corso", { size: 20, align: "center", after: 80 }));
-    p.push(par(d.titolo, { bold: true, size: 21, align: "center", after: 80 }));
+    // --- fascia dell'organizzatore
+    p.push(tabella([10100], [
+      riga(cella(
+        par("SOGGETTO ORGANIZZATORE DEL CORSO", {
+          size: 15, align: "center", color: "6E7C73", spaziatura: 60, after: 30 }) +
+        par(d.organizzatore || d.azienda, {
+          bold: true, size: 22, align: "center", font: SERIF, color: BLU, after: 0 }),
+        10100, { sfondo: "F2F5FA" }),
+      { altezza: 900 }),
+    ], { senzaBordi: true }));
+
+    p.push(filetto({ before: 460, after: 260 }));
+
+    p.push(par("Attestato di Frequenza", {
+      bold: true, size: 52, align: "center", font: SERIF, color: BLU, after: 150 }));
+    p.push(par("Formazione Generale e Specifica dei Lavoratori", {
+      size: 24, align: "center", font: SERIF, after: 110 }));
     p.push(par(
-      `della durata di ${d.oreTotali} ore, svolto in presenza nel periodo ${d.periodo} presso ${d.sede || "la sede aziendale"}, ` +
-      `superando la verifica finale di apprendimento svoltasi il ${dataBreve(d.dataVerifica)}.`,
-      { size: 19, align: "center", after: 200 }));
-    p.push(par(RIF_NORMATIVO, { italic: true, size: 18, align: "center", after: 200 }));
-    p.push(par(
-      `L'attestato ha validita' di ${VALIDITA_ANNI} anni: l'aggiornamento dovra' essere effettuato entro il ${dataBreve(d.scadenza)}.`,
-      { bold: true, size: 19, align: "center", after: 300 }));
+      `settori della classe di rischio ${String(d.classeRischio || "")}` +
+      (d.ateco ? `  ·  codice ATECO ${d.ateco}` : ""),
+      { size: 17, align: "center", color: "6E7C73", maiuscoletto: true, spaziatura: 40, after: 0 }));
 
-    p.push(par(`${d.sede || "____________________"},  ${dataBreve(d.dataVerifica)}`, { size: 19, after: 300 }));
-    p.push(par("Il legale rappresentante", { bold: true, size: 18 }));
-    p.push(par(d.legaleRappresentante || "", { size: 18 }));
-    p.push(par("____________________________", { size: 18, before: 300 }));
+    p.push(filetto());
+
+    p.push(par("Si attesta che", { size: 20, align: "center", italic: true, font: SERIF, after: 220 }));
+    p.push(par(x.nome, {
+      bold: true, size: 36, align: "center", font: SERIF, color: BLU, spaziatura: 30, after: 170 }));
+    p.push(par(
+      `codice fiscale ${x.codiceFiscale || "non indicato"}` +
+      (x.mansione ? `  ·  dipendente di ${d.azienda} con la qualifica di ${x.mansione}` : `  ·  dipendente di ${d.azienda}`),
+      { size: 18, align: "center", color: x.codiceFiscale ? "6E7C73" : "B03A2E", after: 560 }));
+
+    p.push(par(
+      `ha frequentato con profitto — con almeno il 90% delle ore previste e con superamento del test finale ` +
+      `di verifica — il corso di formazione generale e specifica dei lavoratori per i settori della classe di ` +
+      `rischio ${String(d.classeRischio || "").toLowerCase()}, della durata complessiva di ${d.oreTotali} ore ` +
+      `(${d.oreGenerale} di formazione generale e ${d.oreSpecifica} di formazione specifica), svoltosi presso ` +
+      `${d.sede || "la sede aziendale"} nei giorni ${d.giorni}, secondo la durata, le modalita' ed i contenuti ` +
+      `previsti dall'art. 37 del D.Lgs. 81/08 e s.m.i. e dall'Accordo Stato-Regioni del 17 aprile 2025 ` +
+      `(Rep. Atti n. 59/CSR) e s.m.i.`,
+      { size: 19, align: "both", interlinea: 300, after: 460 }));
+
+    p.push(tabella([10100], [
+      riga(cella(par(
+        `L'attestato ha validita' di ${VALIDITA_ANNI} anni. L'aggiornamento dovra' essere effettuato entro il ${dataBreve(d.scadenza)}.`,
+        { bold: true, size: 19, align: "center", color: BLU, after: 0 }),
+        10100, { sfondo: "F2F5FA" }), { altezza: 620 }),
+    ], { senzaBordi: true }));
+
+    p.push(par("", { after: 1500 }));
+    p.push(tabella([5050, 5050], [
+      riga(
+        cella(par("_____________________________", { size: 18, align: "center", color: "888888", after: 60 }) +
+              par("Il Soggetto Organizzatore", { bold: true, size: 17, align: "center", after: 20 }) +
+              par(d.organizzatore || d.azienda, { size: 16, align: "center", color: "6E7C73" }), 5050) +
+        cella(par("_____________________________", { size: 18, align: "center", color: "888888", after: 60 }) +
+              par("Il Responsabile del Progetto Formativo", { bold: true, size: 17, align: "center", after: 20 }) +
+              par(d.responsabileProgetto || "", { size: 16, align: "center", color: "6E7C73" }), 5050)
+      ),
+    ], { senzaBordi: true }));
+
+    p.push(par(
+      `${d.sede || "____________________"}, li' ${dataBreve(d.dataVerifica)}      ·      Attestato n. ${numero}`,
+      { size: 16, align: "center", color: "6E7C73", before: 620 }));
+
+    // --- retro: il programma, per ogni attestato
+    p.push(par("Programma del corso", {
+      bold: true, size: 30, align: "center", font: SERIF, color: BLU,
+      after: 50, saltoPagina: true }));
+    p.push(par(`Formazione lavoratori — rischio ${String(d.classeRischio || "").toLowerCase()}  ·  ${d.oreTotali} ore`,
+      { size: 19, align: "center", maiuscoletto: true, spaziatura: 30, color: "6E7C73", after: 40 }));
+    p.push(par(
+      "(art. 37 del D.Lgs. 81/2008 e Accordo Stato-Regioni del 17 aprile 2025, Rep. Atti n. 59/CSR)",
+      { italic: true, size: 16, align: "center", color: "888888", after: 60 }));
+    p.push(par(`Rilasciato a ${x.nome} — attestato n. ${numero}`,
+      { size: 17, align: "center", color: "6E7C73", after: 260 }));
+
+    (d.moduli || []).forEach((m, k) => {
+      p.push(tabella([10100], [
+        riga(cella(par(
+          `${k + 1}.  ${m.modulo || `Modulo ${k + 1}`}${m.ore ? `   ·   ${m.ore} ore` : ""}`,
+          { bold: true, size: 20, font: SERIF, color: BLU, after: 0 }),
+          10100, { sfondo: "F2F5FA" }), { altezza: 420 }),
+      ], { senzaBordi: true }));
+      p.push(par("", { after: 60 }));
+      String(m.argomenti || "").split("\n").filter((r) => r.trim()).forEach((r) => {
+        p.push(par(`—   ${r.trim()}`, { size: 18, after: 40, interlinea: 260 }));
+      });
+      p.push(par("", { after: 140 }));
+    });
+
+    p.push(par("Metodologia didattica:  lezioni frontali interattive, analisi di casi ed esercitazioni pratiche.",
+      { italic: true, size: 17, color: "6E7C73", before: 180, after: 30 }));
+    p.push(par("Modalita' di verifica:  test finale e colloquio, con esito documentato a verbale.",
+      { italic: true, size: 17, color: "6E7C73", after: 320 }));
+    p.push(par("_____________________________", { size: 18, color: "888888", after: 60 }));
+    p.push(par("Il Responsabile del Progetto Formativo", { bold: true, size: 17, after: 20 }));
+    p.push(par(d.responsabileProgetto || "", { size: 16, color: "6E7C73" }));
   });
   return p.join("");
 }
@@ -241,6 +330,15 @@ function SchedaCorso({ corso, sessioni, partecipanti, formazioneRole, onChiudi, 
   const concluso = corso.status === "concluso";
   const docenti = [...new Set(sessioni.map((s) => s.teacher_name).filter(Boolean))].join(", ");
   const periodo = date.length ? date.map(dataBreve).join(" · ") : "-";
+  const giorni = date.length
+    ? date.map(dataBreve).reduce((t, d, i, arr) =>
+        i === 0 ? d : i === arr.length - 1 ? `${t} e ${d}` : `${t}, ${d}`, "")
+    : "-";
+  // Le ore si dividono leggendo il titolo del modulo: e' il generale a essere
+  // riconoscibile, tutto il resto e' specifica.
+  const oreGenerale = sessioni
+    .filter((x) => /generale/i.test(x.module_title || ""))
+    .reduce((n, x) => n + (Number(x.hours) || 0), 0);
 
   const calcolati = partecipanti.map((p) => {
     const frequentate = Number(ore[p.id]) || 0;
@@ -258,9 +356,14 @@ function SchedaCorso({ corso, sessioni, partecipanti, formazioneRole, onChiudi, 
 
   const datiDoc = (elenco) => ({
     organizzatore: corso.organizer || company?.name || "",
+    azienda: company?.name || "",
+    ateco: company?.codice_ateco || "",
     titolo: (corso.title || "").toUpperCase(),
     classeRischio: corso.risk_class,
     oreTotali: oreCorso,
+    oreGenerale,
+    oreSpecifica: Math.max(oreCorso - oreGenerale, 0),
+    giorni,
     sede: corso.venue,
     responsabileProgetto: corso.project_manager,
     legaleRappresentante: legale,
@@ -284,7 +387,9 @@ function SchedaCorso({ corso, sessioni, partecipanti, formazioneRole, onChiudi, 
   const scaricaAttestati = () => {
     if (idonei.length === 0) { setErrore("Nessun partecipante idoneo: non ci sono attestati da rilasciare."); return; }
     setErrore("");
-    return scaricaDocx(pacchettoDocx(corpoAttestati(datiDoc(idonei)), { conPiePagina: false }), nomeFile("Attestati"));
+    return scaricaDocx(
+      pacchettoDocx(corpoAttestati(datiDoc(idonei)), { conPiePagina: false, cornice: true }),
+      nomeFile("Attestati"));
   };
   const scaricaIlRegistro = () => scaricaDocx(fileRegistro({
     organizzatore: corso.organizer || company?.name || "",
@@ -338,9 +443,14 @@ function SchedaCorso({ corso, sessioni, partecipanti, formazioneRole, onChiudi, 
       });
       if (ok) {
         creati++;
+        // Il numero dell'attestato e' lo stesso stampato sul documento: si
+        // salva perche' un attestato senza un numero rintracciabile agli atti
+        // non si puo' ritrovare quando qualcuno lo esibisce.
+        const numero = `${String(idonei.indexOf(x) + 1).padStart(2, "0")}/${String(dataVerifica).slice(0, 4)}`;
         await aggiornaPartecipante(x.id, {
           hours_attended: x.frequentate,
           outcome: x.esito,
+          certificate_number: numero,
           exported_at: new Date().toISOString(),
         });
       }

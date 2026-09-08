@@ -47,23 +47,35 @@ function ora(t) {
 export function par(testo, o = {}) {
   const rpr =
     `<w:rPr>` +
+    (o.font ? `<w:rFonts w:ascii="${o.font}" w:hAnsi="${o.font}" w:cs="${o.font}"/>` : "") +
     (o.bold ? "<w:b/>" : "") +
     (o.italic ? "<w:i/>" : "") +
+    (o.spaziatura ? `<w:spacing w:val="${o.spaziatura}"/>` : "") +
+    (o.maiuscoletto ? "<w:smallCaps/>" : "") +
     `<w:sz w:val="${o.size || 20}"/><w:szCs w:val="${o.size || 20}"/>` +
     (o.color ? `<w:color w:val="${o.color}"/>` : "") +
     `</w:rPr>`;
+  // L'ordine di questi elementi NON e' libero: lo schema di Word lo fissa
+  // (pageBreakBefore, poi i bordi, poi la spaziatura, poi l'allineamento) e
+  // gli elementi fuori posto vengono ignorati in silenzio. Ci e' gia' costato
+  // un salto pagina che non avveniva.
   const ppr =
     `<w:pPr>` +
-    (o.align ? `<w:jc w:val="${o.align}"/>` : "") +
-    `<w:spacing w:before="${o.before || 0}" w:after="${o.after == null ? 60 : o.after}"/>` +
     (o.pageBreakBefore ? "<w:pageBreakBefore/>" : "") +
     (o.bordoSotto ? `<w:pBdr><w:bottom w:val="single" w:sz="6" w:color="777777"/></w:pBdr>` : "") +
+    `<w:spacing w:before="${o.before || 0}" w:after="${o.after == null ? 60 : o.after}"` +
+      (o.interlinea ? ` w:line="${o.interlinea}" w:lineRule="auto"` : "") + `/>` +
+    (o.align ? `<w:jc w:val="${o.align}"/>` : "") +
     `</w:pPr>`;
   const righe = String(testo ?? "").split("\n");
+  // Interruzione di pagina esplicita: pageBreakBefore viene onorato solo su
+  // paragrafi con del testo e non prima di una tabella, mentre questa vale
+  // sempre. Per i salti che devono avvenire per forza si usa questa.
+  const salto = o.saltoPagina ? `<w:r><w:br w:type="page"/></w:r>` : "";
   const runs = righe
     .map((r, i) => `<w:r>${rpr}${i ? "<w:br/>" : ""}<w:t xml:space="preserve">${esc(r)}</w:t></w:r>`)
     .join("");
-  return `<w:p>${ppr}${runs}</w:p>`;
+  return `<w:p>${ppr}${salto}${runs}</w:p>`;
 }
 
 export function cella(contenuto, larghezza, o = {}) {
@@ -74,15 +86,17 @@ export function cella(contenuto, larghezza, o = {}) {
   );
 }
 
-export function tabella(larghezze, righe) {
+export function tabella(larghezze, righe, o = {}) {
   const grid = larghezze.map((w) => `<w:gridCol w:w="${w}"/>`).join("");
+  const bordi = ["top", "left", "bottom", "right", "insideH", "insideV"]
+    .map((b) => o.senzaBordi
+      ? `<w:${b} w:val="none" w:sz="0" w:space="0" w:color="auto"/>`
+      : `<w:${b} w:val="single" w:sz="6" w:space="0" w:color="666666"/>`)
+    .join("");
   return (
     `<w:tbl><w:tblPr><w:tblW w:w="${larghezze.reduce((a, b) => a + b, 0)}" w:type="dxa"/>` +
-    `<w:tblBorders>` +
-    ["top", "left", "bottom", "right", "insideH", "insideV"]
-      .map((b) => `<w:${b} w:val="single" w:sz="6" w:space="0" w:color="666666"/>`)
-      .join("") +
-    `</w:tblBorders></w:tblPr><w:tblGrid>${grid}</w:tblGrid>${righe.join("")}</w:tbl>`
+    `<w:tblBorders>${bordi}</w:tblBorders></w:tblPr>` +
+    `<w:tblGrid>${grid}</w:tblGrid>${righe.join("")}</w:tbl>`
   );
 }
 
@@ -229,7 +243,11 @@ export function pacchettoDocx(corpo, opzioni = {}) {
 <w:sectPr>
 ${conPiePagina ? '<w:footerReference w:type="default" r:id="rId10"/>' : ""}
 <w:pgSz w:w="${orizzontale ? 16838 : 11906}" w:h="${orizzontale ? 11906 : 16838}"${orizzontale ? ' w:orient="landscape"' : ""}/>
-<w:pgMar w:top="1134" w:right="850" w:bottom="1134" w:left="850" w:header="708" w:footer="708" w:gutter="0"/>
+<w:pgMar w:top="${opzioni.cornice ? 1418 : 1134}" w:right="${opzioni.cornice ? 1134 : 850}" w:bottom="${opzioni.cornice ? 1418 : 1134}" w:left="${opzioni.cornice ? 1134 : 850}" w:header="708" w:footer="708" w:gutter="0"/>
+${opzioni.cornice ? `<w:pgBorders w:offsetFrom="page">` +
+  ["top", "left", "bottom", "right"]
+    .map((b) => `<w:${b} w:val="double" w:sz="12" w:space="26" w:color="1F3864"/>`).join("") +
+  `</w:pgBorders>` : ""}
 </w:sectPr></w:body></w:document>`;
 
   const files = {
@@ -442,9 +460,34 @@ function programma(classe) {
   return [MODULO_GENERALE, ...(SPECIFICA[classe] || [])];
 }
 
+// I blocchi di programma scelti da tendina. Il modulo generale e' sempre lo
+// stesso; la specifica cambia con la classe di rischio e, sopra le 4 ore, e'
+// divisa in piu' parti da 4. Scegliere da qui invece di scrivere a mano il
+// titolo e gli argomenti e' cio' che toglie la possibilita' di sbagliare
+// modulo: e' il motivo per cui questa tendina esiste.
+const BLOCCHI = [
+  { key: "generale", etichetta: "Formazione Generale — 4 h (uguale per tutte le classi)", ...MODULO_GENERALE },
+  { key: "basso", etichetta: "Specifica rischio BASSO — 4 h", ...SPECIFICA.Basso[0] },
+  { key: "medio-1", etichetta: "Specifica rischio MEDIO — parte 1 di 2, 4 h", ...SPECIFICA.Medio[0] },
+  { key: "medio-2", etichetta: "Specifica rischio MEDIO — parte 2 di 2, 4 h", ...SPECIFICA.Medio[1] },
+  { key: "alto-1", etichetta: "Specifica rischio ALTO — parte 1 di 3, 4 h", ...SPECIFICA.Alto[0] },
+  { key: "alto-2", etichetta: "Specifica rischio ALTO — parte 2 di 3, 4 h", ...SPECIFICA.Alto[1] },
+  { key: "alto-3", etichetta: "Specifica rischio ALTO — parte 3 di 3, 4 h", ...SPECIFICA.Alto[2] },
+  { key: "altro", etichetta: "Altro — titolo e argomenti liberi", modulo: "", ore: 4, argomenti: "" },
+];
+
+const CHIAVI_PROGRAMMA = { Basso: ["generale", "basso"],
+  Medio: ["generale", "medio-1", "medio-2"],
+  Alto: ["generale", "alto-1", "alto-2", "alto-3"] };
+
+function blocco(key) {
+  return BLOCCHI.find((b) => b.key === key) || BLOCCHI[BLOCCHI.length - 1];
+}
+
 function nuovaSessione(o = {}) {
   return {
     key: Math.random().toString(36).slice(2),
+    blocco: o.key || "altro",
     data: o.data || "",
     oraInizio: o.oraInizio || "09:00",
     oraFine: o.oraFine || "13:00",
@@ -456,7 +499,7 @@ function nuovaSessione(o = {}) {
 }
 
 function sessioniDaProgramma(classe) {
-  return programma(classe).map((m) => nuovaSessione(m));
+  return (CHIAVI_PROGRAMMA[classe] || CHIAVI_PROGRAMMA.Alto).map((k) => nuovaSessione(blocco(k)));
 }
 
 export default function CorsoFormazione({ righeFormazione, employees, onChiudi }) {
@@ -614,6 +657,16 @@ export default function CorsoFormazione({ righeFormazione, employees, onChiudi }
   const aggiornaSessione = (key, campo, valore) =>
     setSessioni(sessioni.map((s) => (s.key === key ? { ...s, [campo]: valore } : s)));
 
+  // Cambiando blocco si riscrivono titolo, ore e argomenti: e' il senso della
+  // tendina. Data, orario e docente restano, perche' non dipendono dal
+  // programma e ributtarli via costringerebbe a ridigitarli.
+  const cambiaBlocco = (key, nuovo) => {
+    const b = blocco(nuovo);
+    setSessioni(sessioni.map((s) => (s.key === key
+      ? { ...s, blocco: nuovo, modulo: b.modulo, ore: b.ore, argomenti: b.argomenti }
+      : s)));
+  };
+
   return (
     <div className="corso-panel">
       <div className="panel-head">
@@ -762,13 +815,17 @@ export default function CorsoFormazione({ righeFormazione, employees, onChiudi }
               onClick={() => setSessioni(sessioni.filter((x) => x.key !== s.key))}><Trash2 size={14} /></button>
           </div>
           <div className="row-form" style={{ marginTop: 8 }}>
-            <input type="text" value={s.modulo} className="note-input" placeholder={`Titolo del modulo ${i + 1}`}
-              onChange={(e) => aggiornaSessione(s.key, "modulo", e.target.value)} />
+            <select value={s.blocco} onChange={(e) => cambiaBlocco(s.key, e.target.value)}
+              style={{ flex: 2, minWidth: 260 }}>
+              {BLOCCHI.map((b) => <option key={b.key} value={b.key}>{b.etichetta}</option>)}
+            </select>
             <select value={s.docente} onChange={(e) => aggiornaSessione(s.key, "docente", e.target.value)}>
               <option value="">Docente…</option>
               {docenti.map((d) => <option key={d.id} value={d.full_name}>{d.full_name}</option>)}
             </select>
           </div>
+          <input type="text" value={s.modulo} className="full-input" placeholder={`Titolo del modulo ${i + 1}`}
+            onChange={(e) => aggiornaSessione(s.key, "modulo", e.target.value)} style={{ marginTop: 8 }} />
           <textarea className="full-input nc-textarea" value={s.argomenti}
             placeholder="Argomenti trattati, uno per riga"
             onChange={(e) => aggiornaSessione(s.key, "argomenti", e.target.value)} style={{ marginTop: 8 }} />
