@@ -6,6 +6,7 @@ import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
 import { supabase } from "../supabaseClient";
 import Organigramma from "./Organigramma";
 import Conformita from "./Conformita";
+import CorsoFormazione from "./CorsoFormazione";
 import { generateNominaAttachment, findRlsName, findDatoreName } from "../utils/nominaTemplates";
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
@@ -712,6 +713,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
   // `visitFor` tiene l'id del dipendente aperto; `otherVisitOpen` è la via di
   // servizio per chi non compare in elenco (il datore di lavoro, o una persona
   // non ancora in organigramma).
+  const [corsoAperto, setCorsoAperto] = useState(false);
   const [visitFor, setVisitFor] = useState(null);
   const [otherVisitOpen, setOtherVisitOpen] = useState(false);
 
@@ -1091,6 +1093,25 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
                 <span className="pill pill-warn">in scadenza entro 60 giorni</span>
                 <span className="pill pill-alert">scaduto, oppure lavoratore senza attestato</span>
               </div>
+
+              {/* Dal quadro si passa direttamente all'azione: chi e' in rosso
+                  qui sopra e' chi va formato, e da qui si organizza il corso. */}
+              <div className="quadro-azione">
+                <button type="button" className="btn-primary" onClick={() => setCorsoAperto(!corsoAperto)}>
+                  <Award size={15} /> {corsoAperto ? "Chiudi" : "Organizza un corso di formazione lavoratori"}
+                </button>
+                <span className="sub">
+                  L'azienda puo' formare i propri lavoratori (art. 37 D.Lgs. 81/08, Accordo 17/04/2025).
+                </span>
+              </div>
+
+              {corsoAperto && (
+                <CorsoFormazione
+                  righeFormazione={quadroRigheFormazione()}
+                  employees={employees}
+                  onChiudi={() => setCorsoAperto(false)}
+                />
+              )}
             </div>
           )}
 
