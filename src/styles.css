@@ -379,6 +379,21 @@ nav { display: flex; flex-direction: column; gap: 2px; }
   color: #2F6F4E; font-size: 12.5px; }
 .corso-nota { margin: 0 0 10px; padding: 9px 11px; border-radius: 8px; background: #F4F1E6;
   border: 1px solid #E4DCC2; color: #5C5230; font-size: 12.5px; line-height: 1.5; }
+/* Elenco dei moduli di un corso salvato: dice a colpo d'occhio quali non hanno
+   argomenti, perche' un modulo senza argomenti stampa un attestato col retro in bianco. */
+.corso-moduli-elenco { list-style: none; margin: 0 0 8px; padding: 0; display: flex;
+  flex-direction: column; gap: 4px; font-size: 13px; }
+.corso-manca { color: #B03A2E; font-size: 12.5px; }
+/* Eliminazione di un corso: riquadro rosso, perche' e' l'unica azione del
+   modulo che distrugge dati invece di aggiungerne. */
+.corso-elimina { border: 1px solid #EFC9C1; background: #FDF6F5; border-radius: 8px;
+  padding: 12px 14px; font-size: 13px; color: #7A3A30; }
+.corso-elimina-elenco { margin: 0; padding-left: 18px; }
+.btn-danger { display: inline-flex; align-items: center; gap: 7px; padding: 9px 14px;
+  border-radius: 8px; border: none; background: #B03A2E; color: #fff; font: inherit;
+  font-size: 13px; cursor: pointer; }
+.btn-danger:hover { background: #953124; }
+.btn-danger:disabled { opacity: .6; cursor: default; }
 /* Frequenza ed esiti alla chiusura del corso. Chi e' sotto la soglia del 90%
    si deve vedere a colpo d'occhio: non e' ammesso alla verifica. */
 .corso-esiti { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
