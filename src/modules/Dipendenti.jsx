@@ -6,6 +6,99 @@ import { supabase } from "../supabaseClient";
 import { SECURITY_ROLE_OPTIONS } from "./Organigramma";
 import { generateNominaAttachment, findRlsName, findDatoreName } from "../utils/nominaTemplates";
 
+// Verifica di un codice fiscale. NON lo genera: il codice fiscale vero lo
+// assegna l'Agenzia delle Entrate e, nei casi di omocodia, sostituisce cifre
+// con lettere, quindi un codice calcolato sarebbe una proposta e non una
+// fonte. Qui si controlla soltanto quello che l'utente ha scritto, che e'
+// dove nascono gli errori: una lettera battuta due volte, o il codice di
+// un'altra persona incollato per sbaglio.
+//
+// Il carattere di controllo funziona anche sui codici omocodici, perche' si
+// calcola sul codice cosi' com'e', lettere comprese.
+
+const DISPARI = {
+  "0":1,"1":0,"2":5,"3":7,"4":9,"5":13,"6":15,"7":17,"8":19,"9":21,
+  A:1,B:0,C:5,D:7,E:9,F:13,G:15,H:17,I:19,J:21,K:2,L:4,M:18,N:20,
+  O:11,P:3,Q:6,R:8,S:12,T:14,U:16,V:10,W:22,X:25,Y:24,Z:23,
+};
+const ALFABETO = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+const VOCALI = "AEIOU";
+
+function pari(c) {
+  return c >= "0" && c <= "9" ? c.charCodeAt(0) - 48 : ALFABETO.indexOf(c);
+}
+
+// Via accenti, apostrofi, spazi e trattini: "BORZI'" -> BORZI, "D'URSO" ->
+// DURSO, "LO PRESTI" -> LOPRESTI. E' cosi' che si formano le prime sei lettere.
+function soloLettere(s) {
+  return String(s || "")
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^A-Z]/g, "");
+}
+
+function terna(testo, isNome) {
+  const t = soloLettere(testo);
+  const cons = [...t].filter((c) => !VOCALI.includes(c));
+  const voc = [...t].filter((c) => VOCALI.includes(c));
+  // Nel nome, se le consonanti sono almeno quattro si prendono la prima, la
+  // terza e la quarta. Nel cognome sempre le prime tre.
+  const scelte = isNome && cons.length >= 4 ? [cons[0], cons[2], cons[3]] : cons.slice(0, 3);
+  return (scelte.join("") + voc.join("") + "XXX").slice(0, 3);
+}
+
+function caratteroControllo(primi15) {
+  let tot = 0;
+  for (let i = 0; i < 15; i++) {
+    const c = primi15[i];
+    tot += i % 2 === 0 ? DISPARI[c] : pari(c);
+  }
+  return ALFABETO[tot % 26];
+}
+
+// Ritorna { livello: "ok" | "avviso" | "errore" | "", messaggio }
+// "errore"  = il codice non puo' essere giusto (lunghezza o carattere di controllo)
+// "avviso"  = il codice e' formalmente valido ma non sembra di questa persona
+function verificaCf(cf, nome, cognome) {
+  const v = String(cf || "").toUpperCase().replace(/\s/g, "");
+  if (!v) return { livello: "", messaggio: "" };
+
+  // Ai soggetti non residenti l'Agenzia assegna un codice numerico di 11
+  // cifre: e' legittimo e non si verifica con questo algoritmo.
+  if (/^\d{11}$/.test(v)) {
+    return { livello: "ok", messaggio: "Codice numerico a 11 cifre da soggetto non residente: non verificabile." };
+  }
+
+  if (v.length !== 16) {
+    return { livello: "errore", messaggio: `Sono ${v.length} caratteri invece di 16.` };
+  }
+  if (!/^[A-Z0-9]{16}$/.test(v)) {
+    return { livello: "errore", messaggio: "Contiene caratteri non ammessi." };
+  }
+
+  const atteso = caratteroControllo(v.slice(0, 15));
+  if (atteso !== v[15]) {
+    return {
+      livello: "errore",
+      messaggio: `Carattere di controllo errato: l'ultima lettera dovrebbe essere ${atteso}, non ${v[15]}. Quasi sempre e' un carattere sbagliato o di troppo nel resto del codice.`,
+    };
+  }
+
+  if (soloLettere(cognome) && soloLettere(nome)) {
+    const attesoCognome = terna(cognome, false);
+    const attesoNome = terna(nome, true);
+    if (v.slice(0, 3) !== attesoCognome || v.slice(3, 6) !== attesoNome) {
+      return {
+        livello: "avviso",
+        messaggio: `Il codice e' formalmente valido, ma le prime sei lettere (${v.slice(0, 6)}) non corrispondono a ${cognome} ${nome}: dovrebbero essere ${attesoCognome}${attesoNome}. Controlla che sia la persona giusta, oppure che il cognome in anagrafica sia quello di nascita.`,
+      };
+    }
+  }
+
+  return { livello: "ok", messaggio: "Codice fiscale valido." };
+}
+
 // --- Rinomina di una persona -------------------------------------------------
 //
 // In Cardine una persona non ha una chiave: nomine, visite mediche e corsi
@@ -174,6 +267,11 @@ export default function Dipendenti() {
     setBusy(false);
   };
 
+  // Il controllo gira mentre si scrive: gli errori si vedono quando si e'
+  // ancora davanti al documento da cui si sta copiando, non un mese dopo.
+  const cfNuovo = verificaCf(taxCode, firstName, lastName);
+  const cfModifica = verificaCf(eCf, eNome, eCognome);
+
   const apriModifica = (emp) => {
     setEditId(emp.id);
     setENome(emp.first_name || "");
@@ -238,6 +336,9 @@ export default function Dipendenti() {
             onChange={(e) => setTaxCode(e.target.value.toUpperCase())} maxLength={16}
             className="note-input" style={{ textTransform: "uppercase" }} />
         </div>
+        {cfNuovo.livello && (
+          <p className={"cf-esito cf-" + cfNuovo.livello}>{cfNuovo.messaggio}</p>
+        )}
         <div className="row-form">
           <input type="text" placeholder="Mansione (opzionale)" value={jobRole} onChange={(e) => setJobRole(e.target.value)} className="note-input" />
           <input type="text" placeholder="Reparto (opzionale)" value={department} onChange={(e) => setDepartment(e.target.value)} className="note-input" />
@@ -311,13 +412,24 @@ export default function Dipendenti() {
                               : "Questa persona non ha ancora nomine, visite o corsi collegati.")
                           : "Le persone sono collegate a nomine, visite e corsi tramite nome e cognome: cambiandoli, i collegamenti vengono spostati insieme."}
                     </p>
+                    {cfModifica.livello && cfModifica.livello !== "ok" && (
+                      <p className={"cf-esito cf-" + cfModifica.livello}>{cfModifica.messaggio}</p>
+                    )}
                     {eErr && <p className="dip-edit-err">{eErr}</p>}
                   </>
                 ) : (
                   <>
                     <span className="log-main"><strong>{item.first_name} {item.last_name}</strong></span>
                     {item.tax_code
-                      ? <span className="log-cf">{item.tax_code}</span>
+                      ? (() => {
+                          const v = verificaCf(item.tax_code, item.first_name, item.last_name);
+                          return (
+                            <span className={"log-cf" + (v.livello === "errore" || v.livello === "avviso" ? " log-cf-dubbio" : "")}
+                              title={v.messaggio}>
+                              {item.tax_code}
+                            </span>
+                          );
+                        })()
                       : <span className="log-cf log-cf-manca">codice fiscale mancante</span>}
                     {item.job_role && <span className="log-unit">{item.job_role}</span>}
                     {item.department && <span className="log-note">{item.department}</span>}
