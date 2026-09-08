@@ -100,6 +100,7 @@ export default function Dipendenti() {
   const { items: trainingRecords, reload: reloadCorsi } = useTable("training_records", company?.id);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [taxCode, setTaxCode] = useState("");
   const [jobRole, setJobRole] = useState("");
   const [department, setDepartment] = useState("");
   const [hireDate, setHireDate] = useState("");
@@ -111,6 +112,7 @@ export default function Dipendenti() {
   const [editId, setEditId] = useState(null);
   const [eNome, setENome] = useState("");
   const [eCognome, setECognome] = useState("");
+  const [eCf, setECf] = useState("");
   const [eMansione, setEMansione] = useState("");
   const [eReparto, setEReparto] = useState("");
   const [eBusy, setEBusy] = useState(false);
@@ -123,6 +125,7 @@ export default function Dipendenti() {
     await add({
       first_name: firstName,
       last_name: lastName,
+      tax_code: taxCode ? taxCode.toUpperCase() : null,
       job_role: jobRole || null,
       department: department || null,
       hire_date: hireDate || null,
@@ -166,7 +169,7 @@ export default function Dipendenti() {
       console.error("Notifica nuovo dipendente non inviata:", err);
     }
 
-    setFirstName(""); setLastName(""); setJobRole(""); setDepartment(""); setHireDate(""); setSecurityRole("Dipendente");
+    setFirstName(""); setLastName(""); setTaxCode(""); setJobRole(""); setDepartment(""); setHireDate(""); setSecurityRole("Dipendente");
     setNominaDate(new Date().toISOString().slice(0, 10));
     setBusy(false);
   };
@@ -175,6 +178,7 @@ export default function Dipendenti() {
     setEditId(emp.id);
     setENome(emp.first_name || "");
     setECognome(emp.last_name || "");
+    setECf(emp.tax_code || "");
     setEMansione(emp.job_role || "");
     setEReparto(emp.department || "");
     setEErr("");
@@ -204,7 +208,11 @@ export default function Dipendenti() {
       nomeVecchio: vecchio,
       nome: eNome,
       cognome: eCognome,
-      altriCampi: { job_role: pulisci(eMansione) || null, department: pulisci(eReparto) || null },
+      altriCampi: {
+        tax_code: pulisci(eCf).toUpperCase() || null,
+        job_role: pulisci(eMansione) || null,
+        department: pulisci(eReparto) || null,
+      },
     });
     setEBusy(false);
 
@@ -226,6 +234,9 @@ export default function Dipendenti() {
         <div className="row-form">
           <input type="text" placeholder="Nome" required value={firstName} onChange={(e) => setFirstName(e.target.value)} className="note-input" />
           <input type="text" placeholder="Cognome" required value={lastName} onChange={(e) => setLastName(e.target.value)} className="note-input" />
+          <input type="text" placeholder="Codice fiscale (opzionale)" value={taxCode}
+            onChange={(e) => setTaxCode(e.target.value.toUpperCase())} maxLength={16}
+            className="note-input" style={{ textTransform: "uppercase" }} />
         </div>
         <div className="row-form">
           <input type="text" placeholder="Mansione (opzionale)" value={jobRole} onChange={(e) => setJobRole(e.target.value)} className="note-input" />
@@ -280,6 +291,9 @@ export default function Dipendenti() {
                       className="note-input edit-input" placeholder="Nome" aria-label="Nome" />
                     <input type="text" value={eCognome} onChange={(e) => setECognome(e.target.value)}
                       className="note-input edit-input" placeholder="Cognome" aria-label="Cognome" />
+                    <input type="text" value={eCf} onChange={(e) => setECf(e.target.value.toUpperCase())}
+                      maxLength={16} className="note-input edit-input" placeholder="Codice fiscale"
+                      aria-label="Codice fiscale" style={{ textTransform: "uppercase" }} />
                     <input type="text" value={eMansione} onChange={(e) => setEMansione(e.target.value)}
                       className="note-input edit-input" placeholder="Mansione" aria-label="Mansione" />
                     <input type="text" value={eReparto} onChange={(e) => setEReparto(e.target.value)}
@@ -302,6 +316,9 @@ export default function Dipendenti() {
                 ) : (
                   <>
                     <span className="log-main"><strong>{item.first_name} {item.last_name}</strong></span>
+                    {item.tax_code
+                      ? <span className="log-cf">{item.tax_code}</span>
+                      : <span className="log-cf log-cf-manca">codice fiscale mancante</span>}
                     {item.job_role && <span className="log-unit">{item.job_role}</span>}
                     {item.department && <span className="log-note">{item.department}</span>}
                     <button className="icon-btn" onClick={() => apriModifica(item)}
