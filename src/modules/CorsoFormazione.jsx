@@ -299,23 +299,138 @@ async function scaricaRegistro(dati, nomeFile) {
 // documenti, che altrimenti si compilerebbero quattro volte a mano.
 
 const CLASSI = {
-  Basso: { ore: 8, generale: 4, specifica: 4 },
-  Medio: { ore: 12, generale: 4, specifica: 8 },
-  Alto: { ore: 16, generale: 4, specifica: 12 },
+  Basso: { ore: 8, specifica: 4 },
+  Medio: { ore: 12, specifica: 8 },
+  Alto: { ore: 16, specifica: 12 },
 };
 
-// I contenuti della formazione generale sono fissati dall'art. 37 c. 1 lett. a
-// e sono gli stessi per qualunque azienda: si possono precompilare. Quelli
-// della formazione specifica dipendono dai rischi della singola attivita' e
-// vanno scritti caso per caso: precompilarli sarebbe un falso.
-const ARGOMENTI_GENERALE = [
-  "Concetti di base in materia di salute e sicurezza sul lavoro: pericolo, rischio, prevenzione, protezione.",
-  "Organizzazione della prevenzione aziendale: datore di lavoro, dirigenti, preposti, RSPP, RLS, medico competente, lavoratori.",
-  "Diritti, doveri e responsabilita' dei soggetti aziendali.",
-  "Concetti di danno, infortunio, malattia professionale, near miss.",
-  "Misure generali di tutela previste dal D.Lgs. 81/08.",
-  "Organi di vigilanza, controllo e assistenza.",
-].join("\n");
+// PROGRAMMI DEI CORSI
+//
+// La formazione generale dura 4 ore per tutte le classi di rischio e i suoi
+// contenuti sono fissati dall'art. 37 c. 1 lett. a: sono gli stessi per
+// qualunque azienda, quindi si possono scrivere una volta per tutte.
+//
+// La formazione specifica e' un'altra cosa. L'Accordo 17/04/2025 ne fissa la
+// DURATA in base alla classe di rischio del codice ATECO — 4, 8, 12 ore — ma
+// NON detta un elenco nazionale tassativo di argomenti: i contenuti vanno
+// tarati sui rischi realmente rilevati nel DVR dell'azienda (art. 37 c. 1
+// lett. b). Quelli che seguono sono percio' programmi BASE, costruiti sui
+// macro-argomenti consolidati e dimensionati sulle ore: servono a non partire
+// da una casella vuota, non a sostituire la valutazione dei rischi. Vanno
+// letti e adattati, togliendo cio' che nell'azienda non c'e' e aggiungendo i
+// suoi rischi propri.
+
+const MODULO_GENERALE = {
+  modulo: "Formazione Generale",
+  ore: 4,
+  argomenti: [
+    "Concetti di base in materia di salute e sicurezza sul lavoro: pericolo, rischio, prevenzione, protezione.",
+    "Organizzazione della prevenzione aziendale: datore di lavoro, dirigenti, preposti, RSPP, RLS, medico competente, lavoratori.",
+    "Diritti, doveri e responsabilita' dei soggetti aziendali.",
+    "Concetti di danno, infortunio, malattia professionale, near miss.",
+    "Misure generali di tutela previste dal D.Lgs. 81/08.",
+    "Organi di vigilanza, controllo e assistenza.",
+  ].join("\n"),
+};
+
+const SPECIFICA = {
+  Basso: [
+    {
+      modulo: "Formazione Specifica",
+      ore: 4,
+      argomenti: [
+        "Rischi infortunistici dell'ambiente di lavoro: scivolamenti, cadute in piano, urti, tagli.",
+        "Rischio elettrico legato all'uso di apparecchiature e impianti.",
+        "Attrezzature di lavoro e videoterminali: postura, ergonomia, pause.",
+        "Movimentazione manuale dei carichi nelle attivita' d'ufficio e di servizio.",
+        "Microclima, illuminazione e qualita' dell'aria nei luoghi di lavoro.",
+        "Dispositivi di protezione individuale in dotazione: scelta, uso e conservazione.",
+        "Segnaletica di sicurezza, gestione delle emergenze, vie di esodo ed evacuazione.",
+        "Stress lavoro-correlato e organizzazione del lavoro.",
+        "Procedure di sicurezza aziendali, comunicazione dei pericoli, infortuni e near miss.",
+        "Verifica finale di apprendimento.",
+      ].join("\n"),
+    },
+  ],
+  Medio: [
+    {
+      modulo: "Formazione Specifica (1/2) — rischi infortunistici",
+      ore: 4,
+      argomenti: [
+        "Rischi meccanici generali: macchine, attrezzature e utensili di lavoro.",
+        "Protezioni e dispositivi di sicurezza; manutenzione e pulizia in condizioni di sicurezza.",
+        "Rischio elettrico e impianti.",
+        "Cadute dall'alto, lavori in quota, scale portatili.",
+        "Movimentazione manuale dei carichi.",
+        "Movimentazione delle merci: transpallet, carrelli, apparecchi di sollevamento.",
+        "Scivolamenti, cadute in piano, urti, tagli e proiezione di schegge.",
+        "Ambienti di lavoro, vie di circolazione e depositi.",
+        "Dispositivi di protezione individuale: scelta, uso e manutenzione.",
+      ].join("\n"),
+    },
+    {
+      modulo: "Formazione Specifica (2/2) — rischi igienico-ambientali e organizzativi",
+      ore: 4,
+      argomenti: [
+        "Rischio chimico: etichettatura CLP, schede dati di sicurezza, stoccaggio e uso dei prodotti.",
+        "Agenti fisici: rumore, vibrazioni, microclima e illuminazione.",
+        "Rischio biologico, ove presente.",
+        "Videoterminali, postura ed ergonomia.",
+        "Stress lavoro-correlato e organizzazione del lavoro.",
+        "Segnaletica di sicurezza e gestione delle emergenze: allarme, esodo, antincendio, primo soccorso.",
+        "Procedure di sicurezza aziendali, comunicazione dei pericoli, infortuni e near miss.",
+        "Verifica finale di apprendimento.",
+      ].join("\n"),
+    },
+  ],
+  Alto: [
+    {
+      modulo: "Formazione Specifica (1/3) — macchine, attrezzature e rischi infortunistici",
+      ore: 4,
+      argomenti: [
+        "Rischi meccanici generali: macchine, impianti e attrezzature di produzione.",
+        "Protezioni e dispositivi di sicurezza; manutenzione, pulizia e sblocco in condizioni di sicurezza.",
+        "Rischio elettrico e impianti.",
+        "Cadute dall'alto, lavori in quota, scale e trabattelli.",
+        "Movimentazione manuale dei carichi: tecniche, limiti, ausili.",
+        "Movimentazione delle merci: transpallet, carrelli elevatori, apparecchi di sollevamento.",
+        "Scivolamenti, cadute in piano, urti, tagli, ustioni.",
+        "Dispositivi di protezione individuale: scelta, uso e manutenzione.",
+      ].join("\n"),
+    },
+    {
+      modulo: "Formazione Specifica (2/3) — rischi igienico-ambientali",
+      ore: 4,
+      argomenti: [
+        "Rischio chimico: etichettatura CLP, schede dati di sicurezza, stoccaggio e uso dei prodotti.",
+        "Polveri, nebbie, oli, fumi e vapori prodotti dalle lavorazioni.",
+        "Agenti cancerogeni e agenti biologici, ove presenti.",
+        "Agenti fisici: rumore, vibrazioni, radiazioni.",
+        "Microclima, illuminazione e ventilazione degli ambienti di lavoro.",
+        "Rischio incendio ed esplosione; atmosfere esplosive ove presenti.",
+        "Dispositivi di protezione individuale per i rischi igienico-ambientali.",
+      ].join("\n"),
+    },
+    {
+      modulo: "Formazione Specifica (3/3) — organizzazione, emergenze e procedure",
+      ore: 4,
+      argomenti: [
+        "Ambienti di lavoro, vie di circolazione, depositi; spazi confinati ove presenti.",
+        "Segnaletica di sicurezza.",
+        "Gestione delle emergenze: allarme, vie di esodo, evacuazione, antincendio, primo soccorso.",
+        "Videoterminali, postura ed ergonomia.",
+        "Stress lavoro-correlato e organizzazione del lavoro.",
+        "Differenze di genere e di eta', lavoratrici madri, lavoro notturno, lavoratori provenienti da altri Paesi.",
+        "Procedure di sicurezza aziendali, comunicazione dei pericoli, infortuni e near miss.",
+        "Verifica finale di apprendimento.",
+      ].join("\n"),
+    },
+  ],
+};
+
+function programma(classe) {
+  return [MODULO_GENERALE, ...(SPECIFICA[classe] || [])];
+}
 
 function nuovaSessione(o = {}) {
   return {
@@ -328,6 +443,10 @@ function nuovaSessione(o = {}) {
     argomenti: o.argomenti || "",
     docente: o.docente || "",
   };
+}
+
+function sessioniDaProgramma(classe) {
+  return programma(classe).map((m) => nuovaSessione(m));
 }
 
 export default function CorsoFormazione({ righeFormazione, employees, onChiudi }) {
@@ -351,20 +470,32 @@ export default function CorsoFormazione({ righeFormazione, employees, onChiudi }
   const [organizzatore, setOrganizzatore] = useState(company?.name || "");
   const [responsabile, setResponsabile] = useState("");
   const [legale, setLegale] = useState("");
-  const [sessioni, setSessioni] = useState([nuovaSessione({ modulo: "Formazione Generale", argomenti: ARGOMENTI_GENERALE })]);
+  const [sessioni, setSessioni] = useState(() => sessioniDaProgramma("Alto"));
 
   const [nuovoDocente, setNuovoDocente] = useState("");
   const [nuovaQualifica, setNuovaQualifica] = useState("");
   const [docenteOpen, setDocenteOpen] = useState(false);
 
+  const [confermaProgramma, setConfermaProgramma] = useState(false);
   const [busy, setBusy] = useState(false);
   const [errore, setErrore] = useState("");
   const [esito, setEsito] = useState("");
+
+  // Il programma si ricarica da solo quando si cambia classe, ma solo se non
+  // e' ancora stato compilato niente: se ci sono gia' date o docenti, non si
+  // butta via il lavoro dell'utente senza che l'abbia chiesto.
+  const compilato = () => sessioni.some((s) => s.data || s.docente);
 
   const cambiaClasse = (c) => {
     setClasse(c);
     setOreTotali(CLASSI[c]?.ore || 16);
     setTitolo(`Corso di formazione dei lavoratori — settore di rischio ${c.toLowerCase()}`);
+    if (!compilato()) setSessioni(sessioniDaProgramma(c));
+  };
+
+  const ricaricaProgramma = () => {
+    setSessioni(sessioniDaProgramma(classe));
+    setConfermaProgramma(false);
   };
 
   const toggle = (nome) => {
@@ -573,10 +704,34 @@ export default function CorsoFormazione({ righeFormazione, employees, onChiudi }
 
       {/* --- 4. giornate --- */}
       <p className="corso-sezione">4 · Giornate e moduli</p>
-      <p className="sub" style={{ margin: "0 0 10px" }}>
-        Una riga per ogni foglio del registro. Ore programmate: <strong>{oreProgrammate}</strong> su {oreTotali}.
+      <p className="sub" style={{ margin: "0 0 6px" }}>
+        Il programma è già impostato per la classe <strong>{classe}</strong>: {sessioni.length} moduli,
+        ore programmate <strong>{oreProgrammate}</strong> su {oreTotali}.
         {oreProgrammate !== Number(oreTotali) && " I due numeri non coincidono."}
+        {" "}Restano da mettere data, orario e docente.
       </p>
+      <p className="corso-nota">
+        La <strong>formazione generale</strong> è uguale per tutte le aziende: i contenuti sono quelli
+        dell'art. 37 c. 1 lett. a. La <strong>formazione specifica</strong> no — l'Accordo 17/04/2025 ne
+        fissa le ore ma non detta un elenco nazionale di argomenti, perché vanno tarati sui rischi
+        rilevati nel DVR di questa azienda. Quello qui sotto è un programma base: togli ciò che qui
+        non c'è e aggiungi i rischi propri dell'attività.
+      </p>
+      <div className="row-form" style={{ margin: "0 0 10px" }}>
+        {confermaProgramma ? (
+          <>
+            <button type="button" className="btn-primary" onClick={ricaricaProgramma}>
+              Sì, ricarica: le date e i docenti inseriti andranno persi
+            </button>
+            <button type="button" className="link-btn" onClick={() => setConfermaProgramma(false)}>Annulla</button>
+          </>
+        ) : (
+          <button type="button" className="link-btn"
+            onClick={() => (compilato() ? setConfermaProgramma(true) : ricaricaProgramma())}>
+            Ricarica il programma standard per la classe {classe}
+          </button>
+        )}
+      </div>
       {sessioni.map((s, i) => (
         <div key={s.key} className="corso-sessione">
           <div className="row-form" style={{ margin: 0 }}>
