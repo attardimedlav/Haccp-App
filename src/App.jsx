@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Thermometer, SprayCan, Bug, ChevronRight, ChevronDown, LogOut, ShieldCheck, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen, Snowflake, HardHat, FileText, Paperclip, Award, Wrench, Stethoscope, Network } from "lucide-react";
+import { Thermometer, SprayCan, Bug, ChevronRight, ChevronDown, LogOut, ShieldCheck, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen, Snowflake, HardHat, FileText, Paperclip, Award, Wrench, Stethoscope, Network, UtensilsCrossed } from "lucide-react";
 import { AuthProvider, useAuth } from "./AuthContext";
 import { useTable } from "./hooks/useTable";
 import Login from "./Login";
@@ -110,6 +110,9 @@ function Shell() {
   const [tab, setTab] = useState("dashboard");
   const [workSafetySubTab, setWorkSafetySubTab] = useState("organigramma");
   const [workSafetyExpanded, setWorkSafetyExpanded] = useState(false);
+  // L'autocontrollo alimentare sta in un gruppo a fisarmonica come la sicurezza
+  // sul lavoro: la barra ha ormai troppe voci per tenerle tutte aperte insieme.
+  const [haccpExpanded, setHaccpExpanded] = useState(false);
 
   // Di default il modulo HACCP è attivo: lo consideriamo spento solo se è stato
   // esplicitamente disattivato in Configurazione (valore false), non se la
@@ -127,6 +130,7 @@ function Shell() {
   const haccpManager = (company?.haccp_manager || "").trim();
   const visibleMainTabs = MAIN_TABS.filter((t) => t.id !== "abbattimento" || company?.serves_raw_fish);
   const visibleWorkSafetyItems = WORK_SAFETY_SUB_ITEMS.filter((t) => !t.requires || company?.[t.requires]);
+  const haccpTabAttivo = tab === "dashboard" || HACCP_TAB_IDS.has(tab);
 
   React.useEffect(() => {
     if (tab === "abbattimento" && !company?.serves_raw_fish) {
@@ -180,17 +184,46 @@ function Shell() {
             <Users size={16} /> I miei clienti
           </button>
         )}
+        {/* Autocontrollo alimentare. La voce di testa porta alla Panoramica ed
+            apre il gruppo, esattamente come fa "Sicurezza sul lavoro": prima si
+            chiamava "Panoramica" ed era un nome rimasto da quando l'app faceva
+            solo HACCP.
+            Dove il modulo HACCP è spento il gruppo non esiste, e la Panoramica
+            resta una voce a sé: chiamarla "HACCP" in un'azienda che l'HACCP non
+            ce l'ha sarebbe falso. */}
         {showHaccp && (
-          <nav>
-            <button className={"nav-item" + (tab === "dashboard" ? " active" : "")} onClick={() => setTab("dashboard")}>
-              <ChevronRight size={16} /> Panoramica
+          <nav className="nav-haccp-group">
+            <button
+              className={"nav-item nav-item-accordion" + (haccpTabAttivo ? " active" : "")}
+              onClick={() => {
+                setTab("dashboard");
+                setHaccpExpanded((v) => !v);
+              }}
+            >
+              <UtensilsCrossed size={16} />
+              <span style={{ flex: 1 }}>HACCP</span>
+              {haccpExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
             </button>
-            {visibleMainTabs.map((t) => (
-              <button key={t.id} className={"nav-item" + (tab === t.id ? " active" : "")} onClick={() => setTab(t.id)}>
-                <t.icon size={16} />
-                {t.label}
-              </button>
-            ))}
+            {haccpExpanded && (
+              <div className="nav-subitems">
+                <button
+                  className={"nav-subitem" + (tab === "dashboard" ? " active" : "")}
+                  onClick={() => setTab("dashboard")}
+                >
+                  <ChevronRight size={14} /> Panoramica
+                </button>
+                {[...visibleMainTabs, ...STATIC_TABS].map((t) => (
+                  <button
+                    key={t.id}
+                    className={"nav-subitem" + (tab === t.id ? " active" : "")}
+                    onClick={() => setTab(t.id)}
+                  >
+                    <t.icon size={14} />
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            )}
           </nav>
         )}
         {!showHaccp && (
@@ -198,16 +231,6 @@ function Shell() {
             <button className={"nav-item" + (tab === "dashboard" ? " active" : "")} onClick={() => setTab("dashboard")}>
               <ChevronRight size={16} /> Panoramica
             </button>
-          </nav>
-        )}
-        {showHaccp && (
-          <nav className="nav-static-group">
-            {STATIC_TABS.map((t) => (
-              <button key={t.id} className={"nav-item" + (tab === t.id ? " active" : "")} onClick={() => setTab(t.id)}>
-                <t.icon size={16} />
-                {t.label}
-              </button>
-            ))}
           </nav>
         )}
         {company?.active_work_safety && (
