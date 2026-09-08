@@ -1,10 +1,10 @@
 import React from "react";
-import { Thermometer, SprayCan, Bug, AlertTriangle, CheckCircle2, Droplet, FolderOpen, HardHat, Award, Stethoscope, Wrench } from "lucide-react";
+import { Thermometer, SprayCan, Bug, AlertTriangle, CheckCircle2, Droplet, FolderOpen, HardHat, Award, Stethoscope, Wrench, GraduationCap } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { WATER_TANK_CONTROL_TYPE } from "./AcquePotabili";
 import { PLAN_TYPE } from "./Documenti";
-import { expiryInfo } from "./SicurezzaLavoro";
+import { expiryInfo, FORMAZIONE_ROLE, DATORE_ROLES } from "./SicurezzaLavoro";
 
 const CHECK_PERIODICITY = [
   { id: "temperature_logs", tab: "temperature", label: "Temperature", days: 1, icon: Thermometer },
@@ -159,7 +159,27 @@ export default function Dashboard({ goTo, openWorkSafety }) {
           ))
       : [];
 
-  const safetyAlertCount = safetyIssues.length + (senzaVisita.length > 0 ? 1 : 0);
+  // Lavoratori senza alcun attestato di formazione art. 37. E' il rovescio
+  // delle altre segnalazioni: qui non c'e' una scadenza da controllare, c'e'
+  // un documento che non esiste. Senza questo blocco un neoassunto senza
+  // formazione non comparirebbe da nessuna parte in Panoramica — e' la non
+  // conformita' piu' grave e sarebbe l'unica invisibile.
+  // Il datore di lavoro e' escluso: l'art. 37 riguarda i lavoratori, e la sua
+  // formazione e' un'altra.
+  const senzaFormazione = company?.active_work_safety
+    ? employees.items
+        .filter((e) => !DATORE_ROLES.includes(e.security_role))
+        .filter((e) => {
+          const nome = `${e.first_name} ${e.last_name}`.trim();
+          const sue = workSafety.items.filter(
+            (a) => a.role === FORMAZIONE_ROLE && (a.person_name || "").trim() === nome
+          );
+          return !sue.some((a) => trainings.items.some((t) => t.appointment_id === a.id));
+        })
+    : [];
+
+  const safetyAlertCount =
+    safetyIssues.length + (senzaVisita.length > 0 ? 1 : 0) + (senzaFormazione.length > 0 ? 1 : 0);
 
   const cards = showHaccp
     ? [
@@ -206,6 +226,21 @@ export default function Dashboard({ goTo, openWorkSafety }) {
                   ? `${senzaVisita[0].first_name} ${senzaVisita[0].last_name}`
                   : `${senzaVisita.length} lavoratori: ` +
                     senzaVisita.map((e) => `${e.first_name} ${e.last_name}`).join(", ")}
+              </span>
+            </button>
+          )}
+          {senzaFormazione.length > 0 && (
+            <button className="compliance-row" onClick={() => goToWorkSafety("corsi")}>
+              <AlertTriangle size={15} color="#B3432E" />
+              <GraduationCap size={15} />
+              <span className="compliance-text">
+                <strong>Formazione dei lavoratori mai svolta</strong>
+                {" — "}
+                {senzaFormazione.length === 1
+                  ? `${senzaFormazione[0].first_name} ${senzaFormazione[0].last_name}`
+                  : `${senzaFormazione.length} lavoratori: ` +
+                    senzaFormazione.map((e) => `${e.first_name} ${e.last_name}`).join(", ")}
+                {" — va erogata prima dell'inizio dell'attività (Accordo 17/04/2025)"}
               </span>
             </button>
           )}
