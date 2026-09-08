@@ -1,10 +1,11 @@
 import React, { useState } from "react";
-import { FileDown, Award, AlertTriangle, X, CheckCircle2 } from "lucide-react";
+import { FileDown, Award, AlertTriangle, X, CheckCircle2, Trash2 } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import {
   par, cella, tabella, riga, dataBreve,
   pacchettoDocx, scaricaDocx, fileRegistro,
+  BLOCCHI, blocco,
 } from "./CorsoFormazione";
 
 // Scheda di un corso gia' registrato: da qui escono i quattro documenti che
@@ -300,14 +301,100 @@ function corpoAttestati(d) {
 
 function SchedaCorso({ corso, sessioni, partecipanti, formazioneRole, onChiudi, onAggiornato }) {
   const { company } = useAuth();
-  const { items: nomine, add: addNomina, reload: reloadNomine } = useTable("work_safety_appointments", company?.id);
-  const { items: attestati, add: addAttestato } = useTable("work_safety_trainings", company?.id);
-  const { update: aggiornaCorso } = useTable("training_courses", company?.id);
+  const { items: nomine, add: addNomina, remove: rimuoviNomina, reload: reloadNomine } = useTable("work_safety_appointments", company?.id);
+  const { items: attestati, add: addAttestato, remove: rimuoviAttestato, reload: reloadAttestati } = useTable("work_safety_trainings", company?.id);
+  const { update: aggiornaCorso, remove: rimuoviCorso } = useTable("training_courses", company?.id);
   const { update: aggiornaPartecipante } = useTable("training_course_participants", company?.id);
+  const { update: aggiornaSessione, reload: reloadSessioni } = useTable("training_course_sessions", company?.id);
 
   const oreCorso = Number(corso.total_hours) || sessioni.reduce((n, s) => n + (Number(s.hours) || 0), 0);
   const date = sessioni.map((s) => s.session_date).filter(Boolean).sort();
   const dataFine = date[date.length - 1] || "";
+
+  // Il programma di un corso salvato si puo' correggere: un modulo senza
+  // argomenti produce un attestato con il retro in bianco, e finche' non c'era
+  // questa sezione l'unico rimedio era rifare il corso da capo.
+  const [programmaAperto, setProgrammaAperto] = useState(false);
+  const [bozza, setBozza] = useState([]);
+  const [salvataggio, setSalvataggio] = useState("");
+
+  const apriProgramma = () => {
+    setBozza(sessioni.map((s) => ({
+      id: s.id,
+      modulo: s.module_title || "",
+      ore: s.hours ?? "",
+      argomenti: s.topics || "",
+      blocco: "altro",
+    })));
+    setProgrammaAperto(true);
+    setSalvataggio("");
+  };
+
+  const cambiaBozza = (id, campo, valore) =>
+    setBozza(bozza.map((b) => (b.id === id ? { ...b, [campo]: valore } : b)));
+
+  const applicaBlocco = (id, key) => {
+    const b = blocco(key);
+    setBozza(bozza.map((x) => (x.id === id
+      ? { ...x, blocco: key, modulo: b.modulo || x.modulo, ore: b.ore ?? x.ore, argomenti: b.argomenti || x.argomenti }
+      : x)));
+  };
+
+  const salvaProgramma = async () => {
+    setSalvataggio("Salvataggio…");
+    for (const b of bozza) {
+      await aggiornaSessione(b.id, {
+        module_title: b.modulo,
+        hours: Number(b.ore) || null,
+        topics: b.argomenti,
+      });
+    }
+    await reloadSessioni();
+    setSalvataggio("Programma salvato. Riscarica i documenti per averli aggiornati.");
+    setProgrammaAperto(false);
+    if (onAggiornato) onAggiornato();
+  };
+
+  const senzaArgomenti = sessioni.filter((s) => !String(s.topics || "").trim());
+
+  // --- eliminazione del corso -------------------------------------------------
+  // Un corso concluso ha gia' scritto attestati in Cardine: quelli non spariscono
+  // da soli quando si cancella il corso. Prima di eliminare si dice esattamente
+  // che cosa viene toccato, e si lascia scegliere se togliere anche gli attestati.
+  const [eliminaAperto, setEliminaAperto] = useState(false);
+  const [togliAttestati, setTogliAttestati] = useState(true);
+  const [eliminando, setEliminando] = useState(false);
+
+  const nomiPartecipanti = new Set(partecipanti.map((x) => (x.person_name || "").trim()));
+  const attestatiDelCorso = attestati.filter((t) => {
+    const n = nomine.find((a) => a.id === t.appointment_id);
+    return n && n.role === formazioneRole && nomiPartecipanti.has((n.person_name || "").trim())
+      && t.issue_date === corso.final_test_date;
+  });
+
+  const eliminaCorso = async () => {
+    setEliminando(true);
+    if (togliAttestati) {
+      const nomineToccate = new Set();
+      for (const t of attestatiDelCorso) {
+        nomineToccate.add(t.appointment_id);
+        await rimuoviAttestato(t.id);
+      }
+      // Una nomina di formazione rimasta senza alcun attestato e' un guscio
+      // vuoto: la si toglie solo se non le resta piu' niente attaccato.
+      for (const id of nomineToccate) {
+        const restano = attestati.filter((t) => t.appointment_id === id && !attestatiDelCorso.includes(t));
+        if (restano.length === 0) await rimuoviNomina(id);
+      }
+    }
+    // Moduli e partecipanti se ne vanno da soli: hanno la chiave esterna sul
+    // corso con "on delete cascade".
+    await rimuoviCorso(corso.id);
+    await Promise.all([reloadNomine(), reloadAttestati()]);
+    setEliminando(false);
+    if (onAggiornato) onAggiornato();
+    onChiudi();
+  };
 
   const [dataVerifica, setDataVerifica] = useState(corso.final_test_date || dataFine || "");
   const [note, setNote] = useState(corso.final_test_note || "");
@@ -527,6 +614,63 @@ function SchedaCorso({ corso, sessioni, partecipanti, formazioneRole, onChiudi, 
         ))}
       </ul>
 
+      <p className="corso-sezione">Programma del corso</p>
+      {senzaArgomenti.length > 0 && !programmaAperto && (
+        <p className="corso-avviso">
+          <AlertTriangle size={14} />
+          {senzaArgomenti.length === 1
+            ? `Il modulo «${senzaArgomenti[0].module_title || "senza titolo"}» non ha argomenti: `
+            : `${senzaArgomenti.length} moduli non hanno argomenti: `}
+          sull'attestato il programma di quel modulo esce in bianco. Correggilo qui sotto e riscarica i documenti.
+        </p>
+      )}
+      {!programmaAperto ? (
+        <>
+          <ul className="corso-moduli-elenco">
+            {sessioni.map((s) => (
+              <li key={s.id}>
+                <strong>{s.module_title || "(senza titolo)"}</strong>
+                <span className="log-note"> · {s.hours || "—"} ore · </span>
+                {String(s.topics || "").trim()
+                  ? <span className="log-note">{String(s.topics).split("\n").filter((r) => r.trim()).length} argomenti</span>
+                  : <span className="corso-manca">nessun argomento</span>}
+              </li>
+            ))}
+          </ul>
+          <button type="button" className="link-btn" onClick={apriProgramma}>Modifica il programma</button>
+        </>
+      ) : (
+        <>
+          {bozza.map((b, i) => (
+            <div key={b.id} className="corso-sessione">
+              <div className="row-form" style={{ margin: 0 }}>
+                <select value={b.blocco} onChange={(e) => applicaBlocco(b.id, e.target.value)}
+                  style={{ flex: 2, minWidth: 260 }}>
+                  <option value="altro">Riprendi un programma standard…</option>
+                  {BLOCCHI.filter((x) => x.key !== "altro").map((x) =>
+                    <option key={x.key} value={x.key}>{x.etichetta}</option>)}
+                </select>
+                <label className="field-label">Ore
+                  <input type="number" min="1" step="0.5" className="num" value={b.ore}
+                    onChange={(e) => cambiaBozza(b.id, "ore", e.target.value)} />
+                </label>
+              </div>
+              <input type="text" className="full-input" placeholder={`Titolo del modulo ${i + 1}`}
+                value={b.modulo} onChange={(e) => cambiaBozza(b.id, "modulo", e.target.value)}
+                style={{ marginTop: 8 }} />
+              <textarea className="full-input nc-textarea" placeholder="Argomenti trattati, uno per riga"
+                value={b.argomenti} onChange={(e) => cambiaBozza(b.id, "argomenti", e.target.value)}
+                style={{ marginTop: 8 }} />
+            </div>
+          ))}
+          <div className="row-form" style={{ marginTop: 4 }}>
+            <button type="button" className="btn-primary" onClick={salvaProgramma}>Salva il programma</button>
+            <button type="button" className="link-btn" onClick={() => setProgrammaAperto(false)}>Annulla</button>
+          </div>
+        </>
+      )}
+      {salvataggio && <p className="corso-esito">{salvataggio}</p>}
+
       <p className="corso-sezione">Documenti</p>
       <div className="row-form" style={{ marginTop: 0 }}>
         <button type="button" className="link-btn" onClick={scaricaProgetto}><FileDown size={14} /> Progetto formativo</button>
@@ -559,6 +703,58 @@ function SchedaCorso({ corso, sessioni, partecipanti, formazioneRole, onChiudi, 
             </button>
           )}
         </>
+      )}
+
+      <p className="corso-sezione">Elimina il corso</p>
+      {!eliminaAperto ? (
+        <>
+          <p className="sub" style={{ margin: "0 0 8px" }}>
+            Toglie il corso dall'archivio con i suoi moduli e i suoi partecipanti. Serve per le prove
+            e per i corsi inseriti per sbaglio.
+          </p>
+          <button type="button" className="link-btn" onClick={() => setEliminaAperto(true)}>
+            <Trash2 size={14} /> Elimina questo corso
+          </button>
+        </>
+      ) : (
+        <div className="corso-elimina">
+          <p style={{ margin: "0 0 8px", fontWeight: 600 }}>Verrà eliminato:</p>
+          <ul className="corso-elimina-elenco">
+            <li>il corso «{corso.title}»</li>
+            <li>{sessioni.length} {sessioni.length === 1 ? "modulo" : "moduli"}</li>
+            <li>{partecipanti.length} {partecipanti.length === 1 ? "partecipante" : "partecipanti"}</li>
+          </ul>
+          {attestatiDelCorso.length > 0 ? (
+            <>
+              <p style={{ margin: "10px 0 6px" }}>
+                Questo corso ha già registrato <strong>{attestatiDelCorso.length}</strong>{" "}
+                {attestatiDelCorso.length === 1 ? "attestato" : "attestati"} in Nomine e Attestati.
+                Quelli non se ne vanno da soli.
+              </p>
+              <label className="corso-check" style={{ display: "inline-flex" }}>
+                <input type="checkbox" checked={togliAttestati}
+                  onChange={(e) => setTogliAttestati(e.target.checked)} />
+                <span>Elimina anche gli attestati registrati</span>
+              </label>
+              {!togliAttestati && (
+                <p className="sub" style={{ margin: "8px 0 0" }}>
+                  Gli attestati resteranno in Nomine e Attestati senza più un corso alle spalle:
+                  tienili solo se la formazione è stata fatta davvero.
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="sub" style={{ margin: "10px 0 0" }}>
+              Nessun attestato è stato registrato da questo corso: non resta niente in giro.
+            </p>
+          )}
+          <div className="row-form" style={{ marginTop: 12 }}>
+            <button type="button" className="btn-danger" onClick={eliminaCorso} disabled={eliminando}>
+              <Trash2 size={14} /> {eliminando ? "Eliminazione…" : "Elimina definitivamente"}
+            </button>
+            <button type="button" className="link-btn" onClick={() => setEliminaAperto(false)}>Annulla</button>
+          </div>
+        </div>
       )}
     </div>
   );

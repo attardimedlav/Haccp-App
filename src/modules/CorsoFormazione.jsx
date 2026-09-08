@@ -465,7 +465,7 @@ function programma(classe) {
 // divisa in piu' parti da 4. Scegliere da qui invece di scrivere a mano il
 // titolo e gli argomenti e' cio' che toglie la possibilita' di sbagliare
 // modulo: e' il motivo per cui questa tendina esiste.
-const BLOCCHI = [
+export const BLOCCHI = [
   { key: "generale", etichetta: "Formazione Generale — 4 h (uguale per tutte le classi)", ...MODULO_GENERALE },
   { key: "basso", etichetta: "Specifica rischio BASSO — 4 h", ...SPECIFICA.Basso[0] },
   { key: "medio-1", etichetta: "Specifica rischio MEDIO — parte 1 di 2, 4 h", ...SPECIFICA.Medio[0] },
@@ -480,7 +480,7 @@ const CHIAVI_PROGRAMMA = { Basso: ["generale", "basso"],
   Medio: ["generale", "medio-1", "medio-2"],
   Alto: ["generale", "alto-1", "alto-2", "alto-3"] };
 
-function blocco(key) {
+export function blocco(key) {
   return BLOCCHI.find((b) => b.key === key) || BLOCCHI[BLOCCHI.length - 1];
 }
 
@@ -835,6 +835,13 @@ export default function CorsoFormazione({ righeFormazione, employees, onChiudi }
         + Aggiungi una giornata o un modulo
       </button>
 
+      {sessioni.some((s) => !String(s.argomenti || "").trim()) && (
+        <p className="corso-avviso">
+          <AlertTriangle size={14} />
+          Ci sono moduli senza argomenti. Sull'attestato il programma di quel modulo esce in bianco:
+          scegli un programma dalla tendina oppure scrivi gli argomenti a mano.
+        </p>
+      )}
       {errore && <p className="corso-avviso"><AlertTriangle size={14} /> {errore}</p>}
       {esito && <p className="corso-esito">{esito}</p>}
 
