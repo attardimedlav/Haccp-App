@@ -346,6 +346,29 @@ nav { display: flex; flex-direction: column; gap: 2px; }
 .log-cf { font-size: 11.5px; letter-spacing: .3px; color: #6E7C73; border: 1px solid #E1E5DF; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
 .log-cf-manca { color: #B03A2E; border-color: #EFC9C1; background: #FBEEEC; letter-spacing: 0; }
 
+/* ---- Corso di formazione organizzato dall'azienda ---- */
+.quadro-azione { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 18px; }
+.quadro-azione .sub { margin: 0; }
+.corso-panel { margin-top: 18px; padding: 18px; border: 1px solid #C9D9CD; border-radius: 10px; background: #FBFCFA; }
+.corso-panel .panel-head { margin-bottom: 4px; }
+.corso-sezione { margin: 22px 0 8px; font-size: 12px; font-weight: 600; letter-spacing: .6px;
+  text-transform: uppercase; color: #2F6F4E; border-bottom: 1px solid #D8DED6; padding-bottom: 5px; }
+.corso-elenco { list-style: none; margin: 0; padding: 0; display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 4px; }
+.corso-check { display: flex; align-items: center; gap: 9px; padding: 6px 9px; border-radius: 7px;
+  background: #fff; border: 1px solid #EDF0EB; cursor: pointer; font-size: 13px; }
+.corso-check:hover { border-color: #C9D9CD; }
+.corso-check input { margin: 0; flex-shrink: 0; }
+.corso-nome { flex: 1; }
+.corso-docenti { list-style: none; margin: 0 0 6px; padding: 0; font-size: 13px; display: flex;
+  flex-direction: column; gap: 3px; }
+.corso-sessione { border-left: 3px solid #D8DED6; padding: 10px 0 10px 12px; margin-bottom: 12px; }
+.corso-avviso { display: flex; align-items: flex-start; gap: 7px; margin: 12px 0 0; padding: 9px 11px;
+  border-radius: 8px; background: #FBEEEC; border: 1px solid #EFC9C1; color: #B03A2E;
+  font-size: 12.5px; line-height: 1.45; }
+.corso-esito { margin: 12px 0 0; padding: 9px 11px; border-radius: 8px; background: #E6EFE8;
+  color: #2F6F4E; font-size: 12.5px; }
+
 /* ---- Non conformità: azione correttiva ---- */
 .nc-textarea { min-height: 60px; resize: vertical; font-family: inherit; }
 .nc-edit-block { margin-top: 8px; padding-top: 10px; border-top: 1px dashed #D8DED6; }
