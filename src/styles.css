@@ -346,6 +346,13 @@ nav { display: flex; flex-direction: column; gap: 2px; }
 .log-cf { font-size: 11.5px; letter-spacing: .3px; color: #6E7C73; border: 1px solid #E1E5DF; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
 .log-cf-manca { color: #B03A2E; border-color: #EFC9C1; background: #FBEEEC; letter-spacing: 0; }
 
+/* Esito del controllo sul codice fiscale, mentre lo si scrive. */
+.cf-esito { flex-basis: 100%; margin: 6px 0 0; font-size: 12.5px; line-height: 1.45; }
+.cf-ok { color: #2F6F4E; }
+.cf-avviso { color: #8A6D1F; }
+.cf-errore { color: #B03A2E; }
+.log-cf-dubbio { color: #8A6D1F; border-color: #E8D7A8; background: #FBF6E7; cursor: help; }
+
 /* ---- Corso di formazione organizzato dall'azienda ---- */
 .quadro-azione { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 18px; }
 .quadro-azione .sub { margin: 0; }
