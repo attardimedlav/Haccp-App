@@ -377,6 +377,15 @@ nav { display: flex; flex-direction: column; gap: 2px; }
   color: #2F6F4E; font-size: 12.5px; }
 .corso-nota { margin: 0 0 10px; padding: 9px 11px; border-radius: 8px; background: #F4F1E6;
   border: 1px solid #E4DCC2; color: #5C5230; font-size: 12.5px; line-height: 1.5; }
+/* Frequenza ed esiti alla chiusura del corso. Chi e' sotto la soglia del 90%
+   si deve vedere a colpo d'occhio: non e' ammesso alla verifica. */
+.corso-esiti { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.corso-esiti li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 7px 10px; border-radius: 8px; background: #fff; border: 1px solid #EDF0EB; font-size: 13px; }
+.corso-esiti li.fuori-soglia { background: #FBEEEC; border-color: #EFC9C1; }
+.corso-esiti .corso-nome { flex: 1; min-width: 160px; font-weight: 600; }
+.corso-esiti .num { width: 70px; }
+.corso-perc { min-width: 46px; text-align: right; color: #6E7C73; font-variant-numeric: tabular-nums; }
 
 /* ---- Non conformità: azione correttiva ---- */
 .nc-textarea { min-height: 60px; resize: vertical; font-family: inherit; }
