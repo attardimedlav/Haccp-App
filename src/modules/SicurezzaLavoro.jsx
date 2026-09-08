@@ -7,6 +7,7 @@ import { supabase } from "../supabaseClient";
 import Organigramma from "./Organigramma";
 import Conformita from "./Conformita";
 import CorsoFormazione from "./CorsoFormazione";
+import ArchivioCorsi from "./ChiusuraCorso";
 import { generateNominaAttachment, findRlsName, findDatoreName } from "../utils/nominaTemplates";
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
@@ -1112,6 +1113,8 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
                   onChiudi={() => setCorsoAperto(false)}
                 />
               )}
+
+              <ArchivioCorsi formazioneRole={FORMAZIONE_ROLE} />
             </div>
           )}
 

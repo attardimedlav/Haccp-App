@@ -18,13 +18,13 @@ import { useAuth } from "../AuthContext";
 
 const GIORNI = ["domenica", "lunedi'", "martedi'", "mercoledi'", "giovedi'", "venerdi'", "sabato"];
 
-function esc(v) {
+export function esc(v) {
   return String(v ?? "")
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 }
 
-function dataEstesa(iso) {
+export function dataEstesa(iso) {
   if (!iso) return "";
   const [y, m, d] = String(iso).split("-");
   if (!d) return String(iso);
@@ -32,7 +32,7 @@ function dataEstesa(iso) {
   return `${d}/${m}/${y} (${GIORNI[g.getDay()]})`;
 }
 
-function dataBreve(iso) {
+export function dataBreve(iso) {
   if (!iso) return "";
   const [y, m, d] = String(iso).split("-");
   return d ? `${d}/${m}/${y}` : String(iso);
@@ -44,7 +44,7 @@ function ora(t) {
 
 // --- mattoni WordprocessingML ------------------------------------------------
 
-function par(testo, o = {}) {
+export function par(testo, o = {}) {
   const rpr =
     `<w:rPr>` +
     (o.bold ? "<w:b/>" : "") +
@@ -66,7 +66,7 @@ function par(testo, o = {}) {
   return `<w:p>${ppr}${runs}</w:p>`;
 }
 
-function cella(contenuto, larghezza, o = {}) {
+export function cella(contenuto, larghezza, o = {}) {
   return (
     `<w:tc><w:tcPr><w:tcW w:w="${larghezza}" w:type="dxa"/>` +
     (o.sfondo ? `<w:shd w:val="clear" w:color="auto" w:fill="${o.sfondo}"/>` : "") +
@@ -74,7 +74,7 @@ function cella(contenuto, larghezza, o = {}) {
   );
 }
 
-function tabella(larghezze, righe) {
+export function tabella(larghezze, righe) {
   const grid = larghezze.map((w) => `<w:gridCol w:w="${w}"/>`).join("");
   return (
     `<w:tbl><w:tblPr><w:tblW w:w="${larghezze.reduce((a, b) => a + b, 0)}" w:type="dxa"/>` +
@@ -86,7 +86,7 @@ function tabella(larghezze, righe) {
   );
 }
 
-function riga(celle, o = {}) {
+export function riga(celle, o = {}) {
   // altezza minima: le righe da firmare devono avere lo spazio per la firma,
   // altrimenti il registro e' inutilizzabile a penna.
   const pr =
@@ -215,19 +215,24 @@ const FOOTER_XML =
 <w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> NUMPAGES </w:instrText></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r>
 </w:p></w:ftr>`;
 
-function fileRegistro(dati) {
+// Confeziona un corpo WordprocessingML nei file che compongono un .docx.
+// Riusata da tutti i documenti del modulo: registro, progetto formativo,
+// verbale di verifica finale e attestati.
+export function pacchettoDocx(corpo, opzioni = {}) {
+  const conPiePagina = opzioni.conPiePagina !== false;
+  const orizzontale = !!opzioni.orizzontale;
   const document =
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
  xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-<w:body>${corpoRegistro(dati)}
+<w:body>${corpo}
 <w:sectPr>
-<w:footerReference w:type="default" r:id="rId10"/>
-<w:pgSz w:w="11906" w:h="16838"/>
+${conPiePagina ? '<w:footerReference w:type="default" r:id="rId10"/>' : ""}
+<w:pgSz w:w="${orizzontale ? 16838 : 11906}" w:h="${orizzontale ? 11906 : 16838}"${orizzontale ? ' w:orient="landscape"' : ""}/>
 <w:pgMar w:top="1134" w:right="850" w:bottom="1134" w:left="850" w:header="708" w:footer="708" w:gutter="0"/>
 </w:sectPr></w:body></w:document>`;
 
-  return {
+  const files = {
     "[Content_Types].xml":
       `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -235,7 +240,7 @@ function fileRegistro(dati) {
 <Default Extension="xml" ContentType="application/xml"/>
 <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
 <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
-<Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>
+${conPiePagina ? '<Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>' : ""}
 </Types>`,
     "_rels/.rels":
       `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -246,7 +251,7 @@ function fileRegistro(dati) {
       `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
 <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
-<Relationship Id="rId10" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>
+${conPiePagina ? '<Relationship Id="rId10" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>' : ""}
 </Relationships>`,
     "word/styles.xml":
       `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -256,18 +261,19 @@ function fileRegistro(dati) {
 <w:sz w:val="20"/><w:szCs w:val="20"/><w:lang w:val="it-IT"/>
 </w:rPr></w:rPrDefault></w:docDefaults>
 </w:styles>`,
-    "word/footer1.xml": FOOTER_XML,
     "word/document.xml": document,
   };
+  if (conPiePagina) files["word/footer1.xml"] = FOOTER_XML;
+  return files;
 }
 
-// Confeziona i file in un .docx e lo fa scaricare. JSZip e' importato qui
-// dentro e in modo dinamico di proposito: cosi' fileRegistro resta una
-// funzione pura, provabile fuori dal browser.
-async function scaricaRegistro(dati, nomeFile) {
+export function fileRegistro(dati) {
+  return pacchettoDocx(corpoRegistro(dati));
+}
+
+export async function scaricaDocx(files, nomeFile) {
   const JSZip = (await import("jszip")).default;
   const zip = new JSZip();
-  const files = fileRegistro(dati);
   for (const [percorso, contenuto] of Object.entries(files)) {
     zip.file(percorso, contenuto);
   }
@@ -278,11 +284,15 @@ async function scaricaRegistro(dati, nomeFile) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = nomeFile || "Registro_presenze.docx";
+  a.download = nomeFile || "Documento.docx";
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+function scaricaRegistro(dati, nomeFile) {
+  return scaricaDocx(fileRegistro(dati), nomeFile);
 }
 
 
