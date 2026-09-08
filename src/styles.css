@@ -375,6 +375,8 @@ nav { display: flex; flex-direction: column; gap: 2px; }
   font-size: 12.5px; line-height: 1.45; }
 .corso-esito { margin: 12px 0 0; padding: 9px 11px; border-radius: 8px; background: #E6EFE8;
   color: #2F6F4E; font-size: 12.5px; }
+.corso-nota { margin: 0 0 10px; padding: 9px 11px; border-radius: 8px; background: #F4F1E6;
+  border: 1px solid #E4DCC2; color: #5C5230; font-size: 12.5px; line-height: 1.5; }
 
 /* ---- Non conformità: azione correttiva ---- */
 .nc-textarea { min-height: 60px; resize: vertical; font-family: inherit; }
