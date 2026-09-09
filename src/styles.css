@@ -478,3 +478,20 @@ nav { display: flex; flex-direction: column; gap: 2px; }
 .subscription-block-card h2 { margin: 6px 0 0; font-size: 18px; }
 .subscription-block-card p { margin: 0; font-size: 13.5px; color: #4C5A52; }
 .subscription-block-card .sub { font-size: 12.5px; color: #6E7C73; }
+
+/* Documenti accessori al DVR */
+.doc-campo { margin-bottom: 4px; }
+.doc-campo input, .doc-campo select, .doc-campo textarea { font: inherit; width: 100%;
+  padding: 10px 11px; border: 1px solid #D8DED6; border-radius: 8px; background: #fff; color: #1B2A22; }
+.doc-blocco { margin: 10px 0 14px; padding: 12px 14px; border: 1px solid #E2E7E0;
+  border-radius: 9px; background: #fff; }
+.doc-blocco > strong { display: block; margin-bottom: 8px; font-size: 13.5px; }
+.doc-scelta { display: grid; gap: 2px; margin-bottom: 8px; }
+.doc-presenti li { display: flex; align-items: center; gap: 8px; }
+.doc-presenti .corso-check { flex: 1; }
+.doc-nota { width: 120px; flex-shrink: 0; font: inherit; font-size: 12px; padding: 6px 8px;
+  border: 1px solid #E2E7E0; border-radius: 7px; background: #fff; color: #1B2A22; }
+.doc-data { display: flex; align-items: center; gap: 7px; font-size: 12px; color: #6E7C73; }
+.doc-data input { font: inherit; font-size: 13px; padding: 8px 10px; border: 1px solid #D8DED6;
+  border-radius: 8px; background: #fff; color: #1B2A22; }
+.doc-azione { display: inline-flex; align-items: center; gap: 8px; }
