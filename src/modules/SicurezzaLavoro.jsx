@@ -1322,6 +1322,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
           appointments={appointments}
           onCreaNomina={addAppointment}
           onAggiornaNomina={updateAppointment}
+          onCreaAllegato={addDvrDoc}
         />
       )}
 

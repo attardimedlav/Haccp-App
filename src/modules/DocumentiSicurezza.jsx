@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { FileDown, AlertTriangle } from "lucide-react";
 import { useAuth } from "../AuthContext";
 import { par, tabella, riga, cella, pacchettoDocx } from "./CorsoFormazione";
@@ -27,6 +27,77 @@ const RSPP_DL_ROLE = "RSPP Datore di Lavoro";
 const RSPP_EXT_ROLE = "RSPP Esterno";
 const MEDICO_ROLE = "Nomina Medico Competente";
 const MIME_DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+// Firma e timbro del medico competente. Il file sta fra le risorse statiche
+// (cartella "public" del repo), come i modelli delle nomine: si sostituisce
+// caricandone uno nuovo, senza toccare il codice. Se non c'e' o non si carica,
+// i documenti escono con la sola riga da firmare a penna: mai un errore.
+const FIRMA_MEDICO = "/firma-attardi.png";
+const LARGHEZZA_FIRMA_EMU = 1800000; // 5 cm — 1 cm = 360000 EMU
+
+// Legge larghezza e altezza dal blocco IHDR del PNG (byte 16-23) invece di
+// decodificare l'immagine: serve solo il rapporto per non deformarla.
+async function caricaFirma(url) {
+  try {
+    const risposta = await fetch(url);
+    if (!risposta.ok) return null;
+    const bytes = new Uint8Array(await risposta.arrayBuffer());
+    if (bytes.length < 24) return null;
+    const px = (i) => (bytes[i] << 24) | (bytes[i + 1] << 16) | (bytes[i + 2] << 8) | bytes[i + 3];
+    const larghezza = px(16);
+    const altezza = px(20);
+    if (!larghezza || !altezza) return null;
+    let binario = "";
+    for (let i = 0; i < bytes.length; i += 1) binario += String.fromCharCode(bytes[i]);
+    return {
+      base64: btoa(binario),
+      cx: LARGHEZZA_FIRMA_EMU,
+      cy: Math.round((LARGHEZZA_FIRMA_EMU * altezza) / larghezza),
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
+function runImmagine(firma) {
+  if (!firma) return "";
+  return (
+    `<w:p><w:pPr><w:spacing w:before="120" w:after="0"/><w:jc w:val="center"/></w:pPr>` +
+    `<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">` +
+    `<wp:extent cx="${firma.cx}" cy="${firma.cy}"/><wp:docPr id="7" name="Firma"/>` +
+    `<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">` +
+    `<a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">` +
+    `<pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">` +
+    `<pic:nvPicPr><pic:cNvPr id="7" name="firma.png"/><pic:cNvPicPr/></pic:nvPicPr>` +
+    `<pic:blipFill><a:blip r:embed="rId20"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +
+    `<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${firma.cx}" cy="${firma.cy}"/></a:xfrm>` +
+    `<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>` +
+    `</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`
+  );
+}
+
+// Aggiunge l'immagine al pacchetto .docx prodotto da pacchettoDocx: la parte
+// binaria, la relazione rId20 e il tipo di contenuto per le PNG, piu' il
+// namespace del disegno sull'elemento radice, che pacchettoDocx non dichiara.
+function impacchetta(corpo, firma) {
+  const files = pacchettoDocx(corpo);
+  if (!firma) return files;
+  files["word/document.xml"] = files["word/document.xml"].replace(
+    'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"',
+    'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"' +
+    ' xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"'
+  );
+  files["[Content_Types].xml"] = files["[Content_Types].xml"].replace(
+    '<Default Extension="xml" ContentType="application/xml"/>',
+    '<Default Extension="xml" ContentType="application/xml"/>\n<Default Extension="png" ContentType="image/png"/>'
+  );
+  files["word/_rels/document.xml.rels"] = files["word/_rels/document.xml.rels"].replace(
+    "</Relationships>",
+    '<Relationship Id="rId20" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/firma.png"/></Relationships>'
+  );
+  files["word/media/firma.png"] = { base64: firma.base64 };
+  return files;
+}
 
 const MESI = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno",
   "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"];
@@ -119,18 +190,26 @@ function sezione(t) {
   return par(t, { bold: true, size: 20, before: 200, after: 100 });
 }
 
-function firmeAffiancate(sinistra, destra) {
+function firmeAffiancate(sinistra, destra, o = {}) {
   const L = [4800, 4800];
-  return tabella(L, [
-    riga(
-      cella(par(sinistra, { align: "center", bold: true, size: 18, before: 300 }), L[0]) +
-      cella(par(destra, { align: "center", bold: true, size: 18, before: 300 }), L[1])
-    ),
-    riga(
-      cella(sinistra ? par("_______________________________", { align: "center", size: 18, before: 260 }) : par("", {}), L[0]) +
-      cella(destra ? par("_______________________________", { align: "center", size: 18, before: 260 }) : par("", {}), L[1])
-    ),
-  ], { senzaBordi: true });
+  // Etichetta e spazio della firma stanno nella stessa cella di una riga sola,
+  // marcata "non spezzare": altrimenti Word manda la firma alla pagina dopo e
+  // il documento esce con i nomi su un foglio e le firme su quello successivo.
+  const colonna = (etichetta, immagine) => {
+    if (!etichetta) return par("", {});
+    return (
+      par(etichetta, { align: "center", bold: true, size: 18, before: 300 }) +
+      (immagine
+        ? runImmagine(immagine)
+        : par("_______________________________", { align: "center", size: 18, before: 260 }))
+    );
+  };
+  const rigaUnica =
+    `<w:tr><w:trPr><w:cantSplit/></w:trPr>` +
+    cella(colonna(sinistra, o.firmaSinistra), L[0]) +
+    cella(colonna(destra, o.firmaDestra), L[1]) +
+    `</w:tr>`;
+  return tabella(L, [rigaUnica], { senzaBordi: true });
 }
 
 // Elenco dei lavoratori con lo spazio per la firma. La colonna delle note
@@ -483,7 +562,11 @@ export function corpoMedico(d) {
     testo(`Le cartelle sanitarie e di rischio sono custodite presso lo studio del Medico Competente, in ${d.medicoStudio}, con salvaguardia del segreto professionale.`) +
     testo("La presente è redatta in n. 2 copie di pari tenore; per la validità dell'atto entrambe devono essere sottoscritte dalle parti.") +
     testo(`${d.luogo ? d.luogo + ", " : ""}${dataItaliana(d.data)}`, { align: "left", before: 200, bold: true }) +
-    firmeAffiancate("Il Datore di Lavoro\n" + d.datore, "Per accettazione\nIl Medico Competente\n" + d.medicoNome)
+    firmeAffiancate(
+      "Il Datore di Lavoro\n" + d.datore,
+      "Per accettazione\nIl Medico Competente\n" + d.medicoNome,
+      { firmaDestra: d.firma }
+    )
   );
 }
 
@@ -493,7 +576,13 @@ export function corpoMedico(d) {
 async function costruisciDocx(files) {
   const JSZip = (await import("jszip")).default;
   const zip = new JSZip();
-  for (const [percorso, contenuto] of Object.entries(files)) zip.file(percorso, contenuto);
+  for (const [percorso, contenuto] of Object.entries(files)) {
+    if (contenuto && typeof contenuto === "object" && contenuto.base64) {
+      zip.file(percorso, contenuto.base64, { base64: true });
+    } else {
+      zip.file(percorso, contenuto);
+    }
+  }
   return zip.generateAsync({ type: "blob", mimeType: MIME_DOCX });
 }
 
@@ -508,10 +597,118 @@ function scaricaBlob(blob, nomeFile) {
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
+// --- 6. verbale di riunione periodica (art. 35) ------------------------------
+
+const ODG_RIUNIONE = [
+  "il documento di valutazione dei rischi (art. 35, comma 2, lett. a);",
+  "l'andamento degli infortuni e delle malattie professionali e della sorveglianza sanitaria (lett. b);",
+  "i criteri di scelta, le caratteristiche tecniche e l'efficacia dei dispositivi di protezione individuale (lett. c);",
+  "i programmi di informazione e formazione dei dirigenti, dei preposti e dei lavoratori (lett. d).",
+];
+
+const TITOLI_ODG = [
+  "1. Documento di valutazione dei rischi",
+  "2. Andamento degli infortuni, delle malattie professionali e della sorveglianza sanitaria",
+  "3. Dispositivi di protezione individuale",
+  "4. Informazione e formazione",
+];
+
+function partecipanti(righe) {
+  const L = [4200, 5400];
+  return tabella(L, righe.filter((r) => r[1]).map(([qualifica, nome]) => riga(
+    cella(par(qualifica, { size: 18, bold: true }), L[0]) +
+    cella(par(nome, { size: 18 }), L[1]),
+    { altezza: 320 }
+  )));
+}
+
+export function corpoRiunione(d) {
+  const obbligatoria = d.numeroLavoratori > 15;
+  return (
+    intestazione(d) +
+    titolo(
+      "VERBALE DI RIUNIONE PERIODICA",
+      "(ai sensi dell'art. 35 del D.Lgs. 9 aprile 2008, n. 81 e s.m.i.)"
+    ) +
+    testo(`${dataDistesa(d.data)}, presso la sede di ${d.azienda} in ${d.sede}, si è tenuta la riunione periodica di prevenzione e protezione dai rischi, indetta dal datore di lavoro ai sensi dell'art. 35 del D.Lgs. 81/08.`) +
+    (obbligatoria
+      ? testo(`L'azienda occupa n. ${d.numeroLavoratori} lavoratori: la riunione è indetta con periodicità almeno annuale, come prescritto dall'art. 35, comma 1.`)
+      : testo(`L'azienda occupa n. ${d.numeroLavoratori} lavoratori: la riunione non è obbligatoria ai sensi dell'art. 35, comma 1, ed è stata comunque indetta dal datore di lavoro.`)) +
+    sezione("PARTECIPANTI") +
+    partecipanti([
+      ["Datore di lavoro", d.datore],
+      ["Responsabile del Servizio di Prevenzione e Protezione", d.rsppRiunione],
+      ["Medico competente", d.medicoNome],
+      ["Rappresentante dei lavoratori per la sicurezza", d.rlsNome],
+    ]) +
+    sezione("ORDINE DEL GIORNO") +
+    testo("Il datore di lavoro sottopone all'esame dei partecipanti:", { after: 60 }) +
+    punti(ODG_RIUNIONE) +
+    sezione("SVOLGIMENTO DELLA RIUNIONE") +
+    d.punti.map((contenuto, i) =>
+      par(TITOLI_ODG[i], { bold: true, size: 19, before: 160, after: 60 }) +
+      testo(contenuto && contenuto.trim() ? contenuto : "________________________________________________________________")
+    ).join("") +
+    sezione("OBIETTIVI DI MIGLIORAMENTO E BUONE PRASSI") +
+    testo("Ai sensi dell'art. 35, comma 3, del D.Lgs. 81/08 i partecipanti individuano:", { after: 60 }) +
+    testo(d.obiettivi && d.obiettivi.trim() ? d.obiettivi : "________________________________________________________________") +
+    testo("Null'altro essendovi da trattare, la riunione si chiude. Il presente processo verbale è redatto ai sensi dell'art. 35, comma 5, del D.Lgs. 81/08 ed è tenuto a disposizione dei partecipanti per la consultazione.", { before: 160 }) +
+    testo(`${d.luogo ? d.luogo + ", " : ""}${dataItaliana(d.data)}`, { align: "left", before: 200, bold: true }) +
+    firmeAffiancate("Il Datore di Lavoro\n" + d.datore, "Il R.S.P.P.\n" + (d.rsppRiunione || "")) +
+    firmeAffiancate(
+      "Il Medico Competente\n" + (d.medicoNome || ""),
+      "Il R.L.S.\n" + (d.rlsNome || ""),
+      { firmaSinistra: d.firma }
+    )
+  );
+}
+
+// --- 7. sopralluogo del medico competente negli ambienti di lavoro -----------
+
+export function corpoSopralluogo(d) {
+  const righeAmbienti = String(d.ambienti || "").split("\n").map((r) => r.trim()).filter(Boolean);
+  return (
+    intestazione(d) +
+    titolo(
+      "VERBALE DI SOPRALLUOGO NEGLI AMBIENTI DI LAVORO",
+      "(ai sensi dell'art. 25, comma 1, lett. l), del D.Lgs. 9 aprile 2008, n. 81 e s.m.i.)"
+    ) +
+    testo(`${dataDistesa(d.data)} la sottoscritta ${d.medicoNome}, ${d.medicoQualifica}, medico competente di ${d.azienda}, ha effettuato il sopralluogo negli ambienti di lavoro dell'azienda, con sede in ${d.sede}.`) +
+    sezione("PRESENTI AL SOPRALLUOGO") +
+    partecipanti([
+      ["Medico competente", d.medicoNome],
+      ["Datore di lavoro", d.datore],
+      ["Responsabile del Servizio di Prevenzione e Protezione", d.rsppRiunione],
+      ["Rappresentante dei lavoratori per la sicurezza", d.rlsNome],
+    ]) +
+    sezione("AMBIENTI E REPARTI VISITATI") +
+    (righeAmbienti.length
+      ? punti(righeAmbienti)
+      : testo("________________________________________________________________")) +
+    sezione("OSSERVAZIONI") +
+    testo(d.osservazioni && d.osservazioni.trim() ? d.osservazioni : "________________________________________________________________") +
+    sezione("PROTOCOLLO SANITARIO") +
+    testo(d.protocollo && d.protocollo.trim() ? d.protocollo : "________________________________________________________________") +
+    sezione("INDICAZIONI E PROPOSTE AL DATORE DI LAVORO") +
+    testo(d.indicazioni && d.indicazioni.trim() ? d.indicazioni : "________________________________________________________________") +
+    sezione("PERIODICITÀ DEL SOPRALLUOGO") +
+    testo(d.periodicita === "annuale"
+      ? "Il sopralluogo negli ambienti di lavoro è effettuato con cadenza annuale, ai sensi dell'art. 25, comma 1, lett. l), del D.Lgs. 81/08."
+      : `Il sopralluogo negli ambienti di lavoro è effettuato con cadenza ${d.periodicitaAltra || "___________"}, stabilita in base alla valutazione dei rischi. La diversa periodicità viene comunicata al datore di lavoro affinché ne sia data annotazione nel documento di valutazione dei rischi, come previsto dall'art. 25, comma 1, lett. l), del D.Lgs. 81/08.`) +
+    testo("Copia del presente verbale è consegnata al datore di lavoro ed è conservata agli atti aziendali insieme al documento di valutazione dei rischi.", { before: 140 }) +
+    testo(`${d.luogo ? d.luogo + ", " : ""}${dataItaliana(d.data)}`, { align: "left", before: 200, bold: true }) +
+    firmeAffiancate(
+      "Il Medico Competente\n" + (d.medicoNome || ""),
+      "Il Datore di Lavoro\n" + d.datore,
+      { firmaSinistra: d.firma }
+    )
+  );
+}
+
 // --- pannello ----------------------------------------------------------------
 
 export default function DocumentiSicurezza({
-  employees = [], appointments = [], onCreaNomina, onAggiornaNomina,
+  employees = [], appointments = [], onCreaNomina, onAggiornaNomina, onCreaAllegato,
 }) {
   const { company } = useAuth();
   const [f, setF] = useState(null);
@@ -521,6 +718,12 @@ export default function DocumentiSicurezza({
   // firmato che non risulta da nessuna parte e' esattamente il problema che
   // questa scheda serve a togliere. Resta disattivabile per le ristampe.
   const [registra, setRegistra] = useState(true);
+  // La firma si scarica una volta sola per sessione: e' un file statico.
+  const firmaRef = useRef(undefined);
+  const firmaMedico = async () => {
+    if (firmaRef.current === undefined) firmaRef.current = await caricaFirma(FIRMA_MEDICO);
+    return firmaRef.current;
+  };
 
   const set = (patch) => setF((p) => ({ ...p, ...patch }));
   const setData = (chiave, valore) => setF((p) => ({ ...p, date: { ...p.date, [chiave]: valore } }));
@@ -556,6 +759,7 @@ export default function DocumentiSicurezza({
         rsppDl: oggi(), rsppExt: oggi(),
         designazione: oggi(), svolgAnt: oggi(), svolgPs: oggi(),
         rls: oggi(), art36: oggi(), medico: oggi(),
+        riunione: oggi(), sopralluogo: oggi(),
       },
       rsppDatore: rsppInterno || !rsppExt,
       rsppEsterno: !!rsppExt,
@@ -590,6 +794,18 @@ export default function DocumentiSicurezza({
       medicoStudio: "Via Carabiniere 1, Gravina di Catania",
       medicoIscrizione: "",
       medicoDurata: "12",
+      // riunione periodica (art. 35) e sopralluogo del medico competente
+      riuRspp: "",
+      riuPunti: ["", "", "", ""],
+      riuObiettivi: "",
+      sopAmbienti: Array.from(new Set(
+        employees.map((e) => (e.department || "").trim()).filter(Boolean)
+      )).join("\n"),
+      sopOsservazioni: "",
+      sopProtocollo: "",
+      sopIndicazioni: "",
+      sopPeriodicita: "annuale",
+      sopPeriodicitaAltra: "",
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [company, employees.length, appointments.length]);
@@ -614,17 +830,31 @@ export default function DocumentiSicurezza({
   // nomina esiste gia' per quella persona e quel ruolo viene aggiornata con la
   // data del documento e con il documento stesso in allegato, invece di
   // crearne una seconda: nomine doppie sullo stesso nome sono gia' costate care.
-  const scarica = async (corpo, nome, nomine = []) => {
+  const scarica = async (corpo, nome, nomine = [], opzioni = {}) => {
     setErrore("");
     setFatto("");
     if (!f.datore.trim()) { setErrore("Manca il nominativo del datore di lavoro."); return; }
     try {
       const nomeFile = `${nome}_${pulisciNomeFile(company?.name)}.docx`;
-      const blob = await costruisciDocx(pacchettoDocx(corpo));
+      const firma = opzioni.conFirma ? await firmaMedico() : null;
+      const blob = await costruisciDocx(impacchetta(typeof corpo === "function" ? corpo(firma) : corpo, firma));
       scaricaBlob(blob, nomeFile);
 
-      if (!registra || !nomine.length || !onCreaNomina) return;
+      const allegato = opzioni.allegato;
+      if (!registra || (!nomine.length && !allegato)) return;
       const path = await uploadAttachment(company.id, new File([blob], nomeFile, { type: MIME_DOCX }));
+
+      if (allegato && onCreaAllegato) {
+        await onCreaAllegato({
+          kind: "allegato",
+          title: allegato.titolo,
+          doc_date: allegato.data || null,
+          attachment_path: path,
+          note: allegato.nota || "",
+        });
+        setFatto(`Registrato in Cardine — "${allegato.titolo}" è ora fra gli allegati al DVR.`);
+      }
+      if (!nomine.length || !onCreaNomina) return;
       const creati = [];
       const aggiornati = [];
       for (const n of nomine) {
@@ -1036,9 +1266,137 @@ export default function DocumentiSicurezza({
           <input type="date" value={f.date.medico} onChange={(e) => setData("medico", e.target.value)} />
         </label>
         <button type="button" className="btn-primary"
-          onClick={() => scarica(corpoMedico({ ...base, ...f, data: f.date.medico }), "Nomina_Medico_Competente",
-            [{ persona: f.medicoNome, ruolo: MEDICO_ROLE, data: f.date.medico }])}>
+          onClick={() => scarica(
+            (firma) => corpoMedico({ ...base, ...f, data: f.date.medico, firma }),
+            "Nomina_Medico_Competente",
+            [{ persona: f.medicoNome, ruolo: MEDICO_ROLE, data: f.date.medico }],
+            { conFirma: true }
+          )}>
           <FileDown size={15} /> Nomina medico competente
+        </button>
+      </div>
+
+      {/* ---- riunione periodica ---- */}
+      <div className="corso-sezione">Riunione periodica (art. 35)</div>
+      <p className="sub" style={{ marginTop: 0 }}>
+        {f.presenti.length > 15
+          ? `Con ${f.presenti.length} lavoratori la riunione è obbligatoria almeno una volta l'anno.`
+          : `Con ${f.presenti.length} lavoratori la riunione non è obbligatoria: il verbale lo dice, così non sembra un adempimento mancato quando non c'è.`}
+      </p>
+      <div className="doc-blocco">
+        <label className="field-label doc-campo">
+          <span>R.S.P.P. presente alla riunione</span>
+          <input type="text" value={f.riuRspp} onChange={(e) => set({ riuRspp: e.target.value })}
+            placeholder={f.rsppDatore ? f.datore : f.rsppNome} />
+        </label>
+        {TITOLI_ODG.map((t, i) => (
+          <label key={i} className="field-label doc-campo">
+            <span>{t}</span>
+            <textarea rows={2} value={f.riuPunti[i]}
+              onChange={(e) => set({ riuPunti: f.riuPunti.map((v, k) => (k === i ? e.target.value : v)) })} />
+          </label>
+        ))}
+        <label className="field-label doc-campo">
+          <span>Obiettivi di miglioramento e buone prassi</span>
+          <textarea rows={2} value={f.riuObiettivi}
+            onChange={(e) => set({ riuObiettivi: e.target.value })} />
+        </label>
+        <p className="sub" style={{ margin: "6px 0 0" }}>
+          I punti lasciati vuoti escono con una riga da completare a penna, non con una frase
+          inventata.
+        </p>
+      </div>
+      <div className="quadro-azione">
+        <label className="doc-data"><span>data</span>
+          <input type="date" value={f.date.riunione} onChange={(e) => setData("riunione", e.target.value)} />
+        </label>
+        <button type="button" className="btn-primary"
+          onClick={() => scarica(
+            (firma) => corpoRiunione({
+              ...base,
+              data: f.date.riunione,
+              medicoNome: f.medicoNome,
+              rsppRiunione: f.riuRspp.trim() || (f.rsppDatore ? f.datore : f.rsppNome),
+              punti: f.riuPunti,
+              obiettivi: f.riuObiettivi,
+              firma,
+            }),
+            "Verbale_Riunione_Periodica",
+            [],
+            { conFirma: true, allegato: { titolo: "Verbale riunione periodica", data: f.date.riunione } }
+          )}>
+          <FileDown size={15} /> Verbale riunione periodica
+        </button>
+      </div>
+
+      {/* ---- sopralluogo del medico competente ---- */}
+      <div className="corso-sezione">Sopralluogo del medico competente (art. 25)</div>
+      <div className="doc-blocco">
+        <label className="field-label doc-campo">
+          <span>Ambienti e reparti visitati (uno per riga)</span>
+          <textarea rows={3} value={f.sopAmbienti}
+            onChange={(e) => set({ sopAmbienti: e.target.value })} />
+        </label>
+        <label className="field-label doc-campo">
+          <span>Osservazioni</span>
+          <textarea rows={3} value={f.sopOsservazioni}
+            onChange={(e) => set({ sopOsservazioni: e.target.value })} />
+        </label>
+        <label className="field-label doc-campo">
+          <span>Protocollo sanitario</span>
+          <textarea rows={2} value={f.sopProtocollo}
+            onChange={(e) => set({ sopProtocollo: e.target.value })} />
+        </label>
+        <label className="field-label doc-campo">
+          <span>Indicazioni e proposte al datore di lavoro</span>
+          <textarea rows={2} value={f.sopIndicazioni}
+            onChange={(e) => set({ sopIndicazioni: e.target.value })} />
+        </label>
+        <div className="doc-scelta">
+          <label className="corso-check">
+            <input type="radio" name="periodicita" checked={f.sopPeriodicita === "annuale"}
+              onChange={() => set({ sopPeriodicita: "annuale" })} />
+            <span className="corso-nome">Cadenza annuale</span>
+          </label>
+          <label className="corso-check">
+            <input type="radio" name="periodicita" checked={f.sopPeriodicita !== "annuale"}
+              onChange={() => set({ sopPeriodicita: "altra" })} />
+            <span className="corso-nome">Cadenza diversa, stabilita in base alla valutazione dei rischi</span>
+          </label>
+        </div>
+        {f.sopPeriodicita !== "annuale" && (
+          <label className="field-label doc-campo">
+            <span>Quale cadenza (es. "biennale")</span>
+            <input type="text" value={f.sopPeriodicitaAltra}
+              onChange={(e) => set({ sopPeriodicitaAltra: e.target.value })} />
+          </label>
+        )}
+      </div>
+      <div className="quadro-azione">
+        <label className="doc-data"><span>data</span>
+          <input type="date" value={f.date.sopralluogo} onChange={(e) => setData("sopralluogo", e.target.value)} />
+        </label>
+        <button type="button" className="btn-primary"
+          onClick={() => scarica(
+            (firma) => corpoSopralluogo({
+              ...base,
+              data: f.date.sopralluogo,
+              medicoNome: f.medicoNome,
+              medicoQualifica: f.medicoQualifica,
+              rsppRiunione: f.riuRspp.trim() || (f.rsppDatore ? f.datore : f.rsppNome),
+              ambienti: f.sopAmbienti,
+              osservazioni: f.sopOsservazioni,
+              protocollo: f.sopProtocollo,
+              indicazioni: f.sopIndicazioni,
+              periodicita: f.sopPeriodicita,
+              periodicitaAltra: f.sopPeriodicitaAltra,
+              firma,
+            }),
+            "Verbale_Sopralluogo_Medico_Competente",
+            [],
+            { conFirma: true, allegato: { titolo: "Verbale di sopralluogo del medico competente", data: f.date.sopralluogo } }
+          )}>
+          <FileDown size={15} /> Verbale di sopralluogo
         </button>
       </div>
 
