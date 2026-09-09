@@ -261,7 +261,9 @@ export function corpoRsppDatore(d) {
     punti([
       "che la designazione del responsabile del servizio di prevenzione e protezione è attribuzione non delegabile del datore di lavoro, ai sensi dell'art. 17, comma 1, lett. b), del D.Lgs. 81/08;",
       "che l'azienda non rientra fra quelle di cui all'art. 31, comma 6, del medesimo decreto, per le quali il servizio di prevenzione e protezione deve essere interno;",
-      `che l'azienda, quale ${classe.label}, occupa n. ${d.numeroLavoratori} lavoratori e rientra pertanto entro il limite di ${classe.limite} addetti fissato dall'ALLEGATO 2 del D.Lgs. 81/08, che consente al datore di lavoro lo svolgimento diretto dei compiti del servizio di prevenzione e protezione;`,
+      d.numeroLavoratori > 0
+        ? `che l'azienda, quale ${classe.label}, occupa n. ${d.numeroLavoratori} lavoratori e rientra pertanto entro il limite di ${classe.limite} addetti fissato dall'ALLEGATO 2 del D.Lgs. 81/08, che consente al datore di lavoro lo svolgimento diretto dei compiti del servizio di prevenzione e protezione;`
+        : `che l'azienda, quale ${classe.label}, rientra entro il limite di ${classe.limite} addetti fissato dall'ALLEGATO 2 del D.Lgs. 81/08, che consente al datore di lavoro lo svolgimento diretto dei compiti del servizio di prevenzione e protezione;`,
     ]) +
     par("DICHIARA DI ASSUMERE", { bold: true, align: "center", size: 20, before: 220, after: 100 }) +
     testo("i compiti del servizio di prevenzione e protezione dai rischi della propria azienda, obbligandosi a:", { after: 60 }) +
@@ -401,7 +403,9 @@ export function corpoSvolgimento(d, tipo) {
     par("PREMESSO", { bold: true, align: "center", size: 20, before: 200, after: 100 }) +
     punti([
       "che l'azienda non rientra fra quelle di cui all'art. 31, comma 6, del D.Lgs. 81/08, per le quali lo svolgimento diretto è precluso;",
-      `che l'azienda, quale ${classe.label}, occupa n. ${d.numeroLavoratori} lavoratori e rientra pertanto entro il limite di ${classe.limite} addetti fissato dall'ALLEGATO 2 del D.Lgs. 81/08, che consente al datore di lavoro lo svolgimento diretto dei compiti di ${compito};`,
+      d.numeroLavoratori > 0
+        ? `che l'azienda, quale ${classe.label}, occupa n. ${d.numeroLavoratori} lavoratori e rientra pertanto entro il limite di ${classe.limite} addetti fissato dall'ALLEGATO 2 del D.Lgs. 81/08, che consente al datore di lavoro lo svolgimento diretto dei compiti di ${compito};`
+        : `che l'azienda, quale ${classe.label}, rientra entro il limite di ${classe.limite} addetti fissato dall'ALLEGATO 2 del D.Lgs. 81/08, che consente al datore di lavoro lo svolgimento diretto dei compiti di ${compito};`,
       antincendio
         ? "di aver frequentato il corso di formazione previsto dall'art. 46 del D.Lgs. 81/08 e dal D.M. 2 settembre 2021, come da attestato allegato;"
         : "di aver frequentato il corso di formazione previsto dall'art. 45 del D.Lgs. 81/08 e dal D.M. 388/2003, come da attestato allegato;",
@@ -990,6 +994,26 @@ export default function DocumentiSicurezza({
           <input type="text" value={f.luogo} onChange={(e) => set({ luogo: e.target.value })} />
         </label>
       </div>
+
+      {/* La sede finisce stampata in testa a ogni documento: se in Configurazione
+          e' stato scritto lì un indirizzo di posta, il documento esce con
+          "con sede in azienda@pec.it". E' successo davvero. */}
+      {f.sede.includes("@") && (
+        <p className="corso-avviso">
+          <AlertTriangle size={15} />
+          La sede contiene una email ("{f.sede}"): è quasi certamente la PEC finita nel campo
+          sbagliato in Configurazione. Correggila lì — la sede compare in testa a tutti i documenti
+          — oppure scrivi qui l'indirizzo giusto solo per questa generazione.
+        </p>
+      )}
+      {f.presenti.length === 0 && (
+        <p className="corso-avviso">
+          <AlertTriangle size={15} />
+          In anagrafica non risulta nessun lavoratore oltre al datore di lavoro. I verbali del RLS e
+          dell'art. 36 uscirebbero con l'elenco dei presenti vuoto: inserisci prima le persone
+          nell'organigramma.
+        </p>
+      )}
 
       {/* ---- servizio di prevenzione e protezione ---- */}
       <div className="corso-sezione">Servizio di prevenzione e protezione</div>
