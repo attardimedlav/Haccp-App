@@ -606,6 +606,29 @@ const ODG_RIUNIONE = [
   "i programmi di informazione e formazione dei dirigenti, dei preposti e dei lavoratori (lett. d).",
 ];
 
+// Testi standard dei due verbali. Servono a chiudere il documento quando non
+// c'e' niente di particolare da segnalare, che e' il caso normale: si aprono
+// gia' scritti e si correggono solo dove serve. Sono formulati al minimo
+// impegnativo possibile, ma restano affermazioni: il punto 2 della riunione
+// (infortuni e malattie professionali) e' l'unico che dichiara un fatto, ed e'
+// segnalato nel pannello come quello da controllare sempre.
+const TESTI_RIUNIONE = [
+  "Il documento di valutazione dei rischi è stato esaminato dai presenti e risulta coerente con le lavorazioni svolte. Non sono emerse variazioni significative delle condizioni di esposizione al rischio tali da richiederne l'aggiornamento.",
+  "Nel periodo di riferimento non si sono verificati infortuni sul lavoro e non sono pervenute segnalazioni di malattie professionali. La sorveglianza sanitaria si è svolta regolarmente secondo il protocollo sanitario adottato; il medico competente ha comunicato i risultati anonimi collettivi, dai quali non emergono criticità.",
+  "I dispositivi di protezione individuale in uso risultano adeguati ai rischi valutati e conformi alle norme tecniche applicabili. Ne sono state verificate la disponibilità, lo stato di conservazione e la corretta utilizzazione da parte dei lavoratori.",
+  "I programmi di informazione e formazione risultano attuati: i lavoratori, i preposti e i dirigenti hanno frequentato i corsi previsti dall'art. 37 del D.Lgs. 81/08 e dall'Accordo Stato-Regioni del 17 aprile 2025. Gli aggiornamenti in scadenza sono programmati entro i termini di validità.",
+];
+
+const TESTO_OBIETTIVI =
+  "I partecipanti confermano gli obiettivi di miglioramento già adottati: rispetto delle scadenze della formazione e della sorveglianza sanitaria, verifica periodica delle attrezzature e mantenimento in efficienza delle misure di prevenzione e protezione in atto. Non si rende necessaria l'adozione di codici di comportamento e buone prassi ulteriori rispetto a quelli già in uso.";
+
+const TESTI_SOPRALLUOGO = {
+  ambienti: "Ambienti di lavoro\nDepositi e magazzini\nSpogliatoi e servizi igienici",
+  osservazioni: "Gli ambienti di lavoro si presentano in buono stato di ordine e manutenzione. Illuminazione, aerazione e microclima risultano adeguati alle lavorazioni svolte. Le vie di circolazione e le uscite di emergenza sono libere da ostacoli e la segnaletica di sicurezza è presente e leggibile. I dispositivi di protezione individuale risultano disponibili e correttamente utilizzati. La cassetta di primo soccorso è presente, completa e con presidi in corso di validità.",
+  protocollo: "Il protocollo sanitario è stato riesaminato alla luce dei rischi rilevati nel documento di valutazione dei rischi e risulta adeguato alle mansioni presenti in azienda. Non si rende necessaria alcuna modifica degli accertamenti sanitari previsti né della loro periodicità.",
+  indicazioni: "Non emergono criticità che richiedano interventi immediati. Si raccomanda di mantenere le misure di prevenzione e protezione in atto, di conservare l'ordine e la pulizia degli ambienti e di rispettare le scadenze della sorveglianza sanitaria e della formazione.",
+};
+
 const TITOLI_ODG = [
   "1. Documento di valutazione dei rischi",
   "2. Andamento degli infortuni, delle malattie professionali e della sorveglianza sanitaria",
@@ -796,14 +819,14 @@ export default function DocumentiSicurezza({
       medicoDurata: "12",
       // riunione periodica (art. 35) e sopralluogo del medico competente
       riuRspp: "",
-      riuPunti: ["", "", "", ""],
-      riuObiettivi: "",
+      riuPunti: [...TESTI_RIUNIONE],
+      riuObiettivi: TESTO_OBIETTIVI,
       sopAmbienti: Array.from(new Set(
         employees.map((e) => (e.department || "").trim()).filter(Boolean)
-      )).join("\n"),
-      sopOsservazioni: "",
-      sopProtocollo: "",
-      sopIndicazioni: "",
+      )).join("\n") || TESTI_SOPRALLUOGO.ambienti,
+      sopOsservazioni: TESTI_SOPRALLUOGO.osservazioni,
+      sopProtocollo: TESTI_SOPRALLUOGO.protocollo,
+      sopIndicazioni: TESTI_SOPRALLUOGO.indicazioni,
       sopPeriodicita: "annuale",
       sopPeriodicitaAltra: "",
     });
@@ -1301,9 +1324,12 @@ export default function DocumentiSicurezza({
           <textarea rows={2} value={f.riuObiettivi}
             onChange={(e) => set({ riuObiettivi: e.target.value })} />
         </label>
-        <p className="sub" style={{ margin: "6px 0 0" }}>
-          I punti lasciati vuoti escono con una riga da completare a penna, non con una frase
-          inventata.
+        <p className="corso-avviso">
+          <AlertTriangle size={15} />
+          I punti sono già scritti con il testo standard del caso in cui non ci sia niente da
+          segnalare. Il punto 2 è l'unico che afferma un fatto — infortuni, malattie professionali
+          e sorveglianza sanitaria: controllalo sempre prima di generare. Se svuoti un campo, al
+          suo posto esce una riga da completare a penna.
         </p>
       </div>
       <div className="quadro-azione">
@@ -1371,6 +1397,10 @@ export default function DocumentiSicurezza({
               onChange={(e) => set({ sopPeriodicitaAltra: e.target.value })} />
           </label>
         )}
+        <p className="sub" style={{ margin: "8px 0 0" }}>
+          I campi arrivano già compilati con il testo del sopralluogo senza criticità: correggi
+          solo dove serve. Gli ambienti sono presi dai reparti dell'anagrafica, se ci sono.
+        </p>
       </div>
       <div className="quadro-azione">
         <label className="doc-data"><span>data</span>
