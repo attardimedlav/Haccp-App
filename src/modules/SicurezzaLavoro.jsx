@@ -1317,7 +1317,12 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
       )}
 
       {subTab === "documenti" && (
-        <DocumentiSicurezza employees={employees} appointments={appointments} />
+        <DocumentiSicurezza
+          employees={employees}
+          appointments={appointments}
+          onCreaNomina={addAppointment}
+          onAggiornaNomina={updateAppointment}
+        />
       )}
 
       {subTab === "corsi" && (

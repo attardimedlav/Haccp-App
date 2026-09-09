@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { FileDown, AlertTriangle } from "lucide-react";
 import { useAuth } from "../AuthContext";
-import { par, tabella, riga, cella, pacchettoDocx, scaricaDocx } from "./CorsoFormazione";
+import { par, tabella, riga, cella, pacchettoDocx } from "./CorsoFormazione";
+import { uploadAttachment } from "../hooks/useAttachment";
 
 // Documenti accessori al DVR.
 //
@@ -22,6 +23,10 @@ const DATORE_ROLES = ["Datore di Lavoro", "RSPP Datore di Lavoro"];
 const ANTINCENDIO_ROLE = "Addetto Antincendio";
 const PRIMO_ROLE = "Addetto al Primo Soccorso";
 const RLS_ROLE = "RLS";
+const RSPP_DL_ROLE = "RSPP Datore di Lavoro";
+const RSPP_EXT_ROLE = "RSPP Esterno";
+const MEDICO_ROLE = "Nomina Medico Competente";
+const MIME_DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 const MESI = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno",
   "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"];
@@ -148,6 +153,73 @@ function tabellaPresenti(persone) {
     { altezza: 420 }
   ));
   return tabella(L, [testa, ...corpo]);
+}
+
+// --- 0. servizio di prevenzione e protezione --------------------------------
+
+// Compiti del RSPP, art. 33 comma 1. Sono gli stessi nei due documenti: li
+// assume il datore di lavoro quando svolge direttamente l'incarico, li riceve
+// il professionista esterno quando viene designato.
+const COMPITI_RSPP = [
+  "individuare i fattori di rischio, valutare i rischi e individuare le misure per la sicurezza e la salubrità degli ambienti di lavoro (art. 33, comma 1, lett. a);",
+  "elaborare le misure preventive e protettive e i sistemi di controllo di tali misure (lett. b);",
+  "elaborare le procedure di sicurezza per le varie attività aziendali (lett. c);",
+  "proporre i programmi di informazione e formazione dei lavoratori (lett. d);",
+  "partecipare alle consultazioni in materia di tutela della salute e sicurezza sul lavoro e alla riunione periodica di cui all'art. 35 (lett. e);",
+  "fornire ai lavoratori le informazioni di cui all'art. 36 (lett. f).",
+];
+
+export function corpoRsppDatore(d) {
+  const classe = ALLEGATO2.find((c) => c.id === d.tipologia) || ALLEGATO2[3];
+  return (
+    intestazione(d) +
+    titolo(
+      "DICHIARAZIONE DI SVOLGIMENTO DIRETTO DA PARTE DEL DATORE DI LAVORO DEI COMPITI DEL SERVIZIO DI PREVENZIONE E PROTEZIONE",
+      "(ai sensi degli artt. 17, comma 1, lett. b), 31, 34 e dell'ALLEGATO 2 del D.Lgs. 9 aprile 2008, n. 81 e s.m.i.)"
+    ) +
+    testo(`Il sottoscritto ${d.datore}, legale rappresentante e datore di lavoro di ${d.azienda}, con sede in ${d.sede},`) +
+    par("PREMESSO", { bold: true, align: "center", size: 20, before: 200, after: 100 }) +
+    punti([
+      "che la designazione del responsabile del servizio di prevenzione e protezione è attribuzione non delegabile del datore di lavoro, ai sensi dell'art. 17, comma 1, lett. b), del D.Lgs. 81/08;",
+      "che l'azienda non rientra fra quelle di cui all'art. 31, comma 6, del medesimo decreto, per le quali il servizio di prevenzione e protezione deve essere interno;",
+      `che l'azienda, quale ${classe.label}, occupa n. ${d.numeroLavoratori} lavoratori e rientra pertanto entro il limite di ${classe.limite} addetti fissato dall'ALLEGATO 2 del D.Lgs. 81/08, che consente al datore di lavoro lo svolgimento diretto dei compiti del servizio di prevenzione e protezione;`,
+    ]) +
+    par("DICHIARA DI ASSUMERE", { bold: true, align: "center", size: 20, before: 220, after: 100 }) +
+    testo("i compiti del servizio di prevenzione e protezione dai rischi della propria azienda, obbligandosi a:", { after: 60 }) +
+    punti(COMPITI_RSPP) +
+    testo("Il sottoscritto dichiara di aver frequentato il corso di formazione previsto dall'art. 34, comma 2, del D.Lgs. 81/08, come da attestato allegato, e si impegna all'aggiornamento periodico previsto dal comma 3 del medesimo articolo e dall'Accordo Stato-Regioni del 17 aprile 2025.", { before: 140 }) +
+    testo("L'incarico è assunto a tempo indeterminato e viene meno al venir meno dei presupposti sopra richiamati, in particolare al superamento dei limiti dell'ALLEGATO 2, nel qual caso il datore di lavoro provvederà a designare un responsabile del servizio di prevenzione e protezione in possesso dei requisiti dell'art. 32.") +
+    testo(`${d.luogo ? d.luogo + ", " : ""}${dataItaliana(d.data)}`, { align: "left", before: 220, bold: true }) +
+    firmeAffiancate(
+      "Il Datore di Lavoro\n" + d.datore,
+      d.rlsNome
+        ? "Per presa visione\nil Rappresentante dei Lavoratori\n" + d.rlsNome
+        : "Per presa visione\nil Rappresentante dei Lavoratori per la Sicurezza"
+    ) +
+    testo("Si allega: attestato di frequenza al corso per datore di lavoro che svolge direttamente i compiti di RSPP (art. 34, comma 2).", { before: 400, size: 18, italic: true })
+  );
+}
+
+export function corpoRsppEsterno(d) {
+  return (
+    intestazione(d) +
+    testo("Spett.le", { after: 20, align: "left" }) +
+    testo(d.rsppNome, { bold: true, after: 20, align: "left" }) +
+    (d.rsppQualifica ? testo(d.rsppQualifica, { after: 20, align: "left" }) : "") +
+    (d.rsppIndirizzo ? testo(d.rsppIndirizzo, { after: 200, align: "left" }) : par("", { after: 200 })) +
+    titolo(
+      "DESIGNAZIONE DEL RESPONSABILE DEL SERVIZIO DI PREVENZIONE E PROTEZIONE",
+      "(ai sensi degli artt. 17, comma 1, lett. b), 31, 32 e 33 del D.Lgs. 9 aprile 2008, n. 81 e s.m.i.)"
+    ) +
+    testo(`Il sottoscritto ${d.datore}, in qualità di datore di lavoro e legale rappresentante di ${d.azienda}, con sede in ${d.sede}, con la presente La designa Responsabile del Servizio di Prevenzione e Protezione dell'azienda.`) +
+    testo("La designazione avviene avendo verificato il possesso delle capacità e dei requisiti professionali richiesti dall'art. 32 del D.Lgs. 81/08: titolo di studio non inferiore al diploma di istruzione secondaria superiore e attestati di frequenza, con verifica dell'apprendimento, ai corsi di formazione dei moduli A, B e C, con i relativi aggiornamenti periodici.") +
+    testo("In qualità di Responsabile del Servizio di Prevenzione e Protezione Le competono i compiti previsti dall'art. 33 del D.Lgs. 81/08, e in particolare:", { after: 60 }) +
+    punti(COMPITI_RSPP) +
+    testo("Il datore di lavoro si impegna a fornirLe le informazioni di cui all'art. 18, comma 1, lett. o) e p), nonché i mezzi e il tempo adeguati allo svolgimento dei compiti affidati, ai sensi dell'art. 31, comma 2. Ella è tenuto al segreto in ordine ai processi lavorativi di cui viene a conoscenza nell'esercizio delle funzioni, ai sensi dell'art. 33, comma 2.", { before: 120 }) +
+    testo("Si ricorda infine che il Responsabile del Servizio di Prevenzione e Protezione partecipa alla riunione periodica di cui all'art. 35 del D.Lgs. 81/08, nei casi in cui essa è prevista.") +
+    testo(`${d.luogo ? d.luogo + ", " : ""}${dataItaliana(d.data)}`, { align: "left", before: 200, bold: true }) +
+    firmeAffiancate("Il Datore di Lavoro\n" + d.datore, "Per accettazione\nIl Responsabile del S.P.P.\n" + d.rsppNome)
+  );
 }
 
 // --- 1. designazione degli incaricati all'emergenza --------------------------
@@ -415,12 +487,40 @@ export function corpoMedico(d) {
   );
 }
 
+// Il documento viene impacchettato una volta sola: lo stesso file che l'utente
+// scarica e' quello che viene allegato alla nomina in Cardine. Se si generasse
+// due volte, prima o poi le due copie divergerebbero.
+async function costruisciDocx(files) {
+  const JSZip = (await import("jszip")).default;
+  const zip = new JSZip();
+  for (const [percorso, contenuto] of Object.entries(files)) zip.file(percorso, contenuto);
+  return zip.generateAsync({ type: "blob", mimeType: MIME_DOCX });
+}
+
+function scaricaBlob(blob, nomeFile) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = nomeFile;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
 // --- pannello ----------------------------------------------------------------
 
-export default function DocumentiSicurezza({ employees = [], appointments = [] }) {
+export default function DocumentiSicurezza({
+  employees = [], appointments = [], onCreaNomina, onAggiornaNomina,
+}) {
   const { company } = useAuth();
   const [f, setF] = useState(null);
   const [errore, setErrore] = useState("");
+  const [fatto, setFatto] = useState("");
+  // Registrare la nomina in Cardine e' il comportamento normale: un documento
+  // firmato che non risulta da nessuna parte e' esattamente il problema che
+  // questa scheda serve a togliere. Resta disattivabile per le ristampe.
+  const [registra, setRegistra] = useState(true);
 
   const set = (patch) => setF((p) => ({ ...p, ...patch }));
   const setData = (chiave, valore) => setF((p) => ({ ...p, date: { ...p.date, [chiave]: valore } }));
@@ -445,14 +545,23 @@ export default function DocumentiSicurezza({ employees = [], appointments = [] }
     const conRuolo = (ruolo) => lavoratori.filter((e) => haRuolo(e, ruolo)).map(nomeCompleto);
     const ant = conRuolo(ANTINCENDIO_ROLE);
     const ps = conRuolo(PRIMO_ROLE);
+    const rsppInterno = employees.some((e) => e.security_role === RSPP_DL_ROLE) ||
+      appointments.some((a) => a.role === RSPP_DL_ROLE);
+    const rsppExt = appointments.find((a) => a.role === RSPP_EXT_ROLE);
     setF({
       // Una data per documento, non una sola: nella pratica il verbale di
       // elezione del RLS, il verbale dell'art. 36 e la nomina del medico
       // competente portano date diverse. Tutte partono da oggi.
       date: {
+        rsppDl: oggi(), rsppExt: oggi(),
         designazione: oggi(), svolgAnt: oggi(), svolgPs: oggi(),
         rls: oggi(), art36: oggi(), medico: oggi(),
       },
+      rsppDatore: rsppInterno || !rsppExt,
+      rsppEsterno: !!rsppExt,
+      rsppNome: rsppExt?.person_name || "",
+      rsppQualifica: "",
+      rsppIndirizzo: "",
       luogo: comuneDa(sede),
       sede,
       datore,
@@ -501,11 +610,49 @@ export default function DocumentiSicurezza({ employees = [], appointments = [] }
     numeroLavoratori: f.presenti.length,
   };
 
-  const scarica = async (corpo, nome, opzioni) => {
+  // nomine: elenco di { persona, ruolo } che il documento formalizza. Se la
+  // nomina esiste gia' per quella persona e quel ruolo viene aggiornata con la
+  // data del documento e con il documento stesso in allegato, invece di
+  // crearne una seconda: nomine doppie sullo stesso nome sono gia' costate care.
+  const scarica = async (corpo, nome, nomine = []) => {
     setErrore("");
+    setFatto("");
     if (!f.datore.trim()) { setErrore("Manca il nominativo del datore di lavoro."); return; }
     try {
-      await scaricaDocx(pacchettoDocx(corpo, opzioni), `${nome}_${pulisciNomeFile(company?.name)}.docx`);
+      const nomeFile = `${nome}_${pulisciNomeFile(company?.name)}.docx`;
+      const blob = await costruisciDocx(pacchettoDocx(corpo));
+      scaricaBlob(blob, nomeFile);
+
+      if (!registra || !nomine.length || !onCreaNomina) return;
+      const path = await uploadAttachment(company.id, new File([blob], nomeFile, { type: MIME_DOCX }));
+      const creati = [];
+      const aggiornati = [];
+      for (const n of nomine) {
+        const persona = (n.persona || "").trim();
+        if (!persona) continue;
+        const esistente = appointments.find(
+          (a) => a.role === n.ruolo && (a.person_name || "").trim() === persona
+        );
+        if (esistente) {
+          await onAggiornaNomina(esistente.id, {
+            nomina_issue_date: n.data || null,
+            nomina_attachment_path: path,
+          });
+          aggiornati.push(`${persona} — ${n.ruolo}`);
+        } else {
+          await onCreaNomina({
+            person_name: persona,
+            role: n.ruolo,
+            nomina_issue_date: n.data || null,
+            nomina_attachment_path: path,
+          });
+          creati.push(`${persona} — ${n.ruolo}`);
+        }
+      }
+      const parti = [];
+      if (creati.length) parti.push(`nuove nomine: ${creati.join(", ")}`);
+      if (aggiornati.length) parti.push(`nomine aggiornate con il documento: ${aggiornati.join(", ")}`);
+      if (parti.length) setFatto(`Registrato in Cardine — ${parti.join("; ")}. Lo trovi in Nomine e Attestati e nell'organigramma.`);
     } catch (e) {
       setErrore("Non è stato possibile generare il documento: " + (e?.message || e));
     }
@@ -565,6 +712,15 @@ export default function DocumentiSicurezza({ employees = [], appointments = [] }
       {errore && (
         <p className="corso-avviso"><AlertTriangle size={15} /> {errore}</p>
       )}
+      {fatto && <p className="corso-esito">{fatto}</p>}
+
+      <label className="corso-check doc-registra">
+        <input type="checkbox" checked={registra} onChange={() => setRegistra(!registra)} />
+        <span className="corso-nome">
+          Registra le nomine in Cardine quando genero il documento — la persona compare
+          nell'organigramma e in "Nomine e Attestati", con il documento allegato
+        </span>
+      </label>
 
       <div className="corso-sezione">Dati comuni a tutti i documenti</div>
       <div className="moduli-scelta">
@@ -580,6 +736,93 @@ export default function DocumentiSicurezza({ employees = [], appointments = [] }
           <span>Luogo di sottoscrizione</span>
           <input type="text" value={f.luogo} onChange={(e) => set({ luogo: e.target.value })} />
         </label>
+      </div>
+
+      {/* ---- servizio di prevenzione e protezione ---- */}
+      <div className="corso-sezione">Servizio di prevenzione e protezione</div>
+      <div className="doc-blocco">
+        <div className="doc-scelta">
+          <label className="corso-check">
+            <input type="checkbox" checked={f.rsppDatore}
+              onChange={() => set({ rsppDatore: !f.rsppDatore })} />
+            <span className="corso-nome">Svolto direttamente dal datore di lavoro (art. 34)</span>
+          </label>
+          <label className="corso-check">
+            <input type="checkbox" checked={f.rsppEsterno}
+              onChange={() => set({ rsppEsterno: !f.rsppEsterno })} />
+            <span className="corso-nome">Affidato a un RSPP esterno (artt. 31 e 32)</span>
+          </label>
+        </div>
+        {f.rsppEsterno && (
+          <div className="moduli-scelta">
+            <label className="field-label doc-campo">
+              <span>Nominativo del RSPP</span>
+              <input type="text" value={f.rsppNome} onChange={(e) => set({ rsppNome: e.target.value })} />
+            </label>
+            <label className="field-label doc-campo">
+              <span>Qualifica</span>
+              <input type="text" value={f.rsppQualifica}
+                onChange={(e) => set({ rsppQualifica: e.target.value })} />
+            </label>
+            <label className="field-label doc-campo">
+              <span>Indirizzo / studio</span>
+              <input type="text" value={f.rsppIndirizzo}
+                onChange={(e) => set({ rsppIndirizzo: e.target.value })} />
+            </label>
+          </div>
+        )}
+      </div>
+
+      {(f.rsppDatore || f.antDatore || f.psDatore) && (
+        <div className="doc-blocco">
+          <label className="field-label doc-campo">
+            <span>Tipologia dell'azienda ai fini dell'Allegato 2 (limite per lo svolgimento diretto)</span>
+            <select value={f.tipologia} onChange={(e) => set({ tipologia: e.target.value })}>
+              {ALLEGATO2.map((c) => (
+                <option key={c.id} value={c.id}>{c.label} — fino a {c.limite} lavoratori</option>
+              ))}
+            </select>
+          </label>
+          <p className="sub" style={{ margin: "6px 0 0" }}>
+            Vale per tutti e tre gli incarichi che il datore di lavoro può tenere su di sé: RSPP,
+            antincendio e primo soccorso.
+          </p>
+          {fuoriSoglia && (
+            <p className="corso-avviso">
+              <AlertTriangle size={15} />
+              L'azienda ha {f.presenti.length} lavoratori, oltre il limite di {classe.limite} previsto
+              dall'Allegato 2 per questa tipologia: il datore di lavoro non può svolgere direttamente
+              questi compiti. Va designato un RSPP esterno e vanno designati dei lavoratori incaricati.
+            </p>
+          )}
+        </div>
+      )}
+
+      <div className="quadro-azione">
+        {f.rsppDatore && !fuoriSoglia && (
+          <span className="doc-azione">
+            <label className="doc-data"><span>data</span>
+              <input type="date" value={f.date.rsppDl} onChange={(e) => setData("rsppDl", e.target.value)} />
+            </label>
+            <button type="button" className="btn-primary"
+              onClick={() => scarica(corpoRsppDatore({ ...base, data: f.date.rsppDl }), "RSPP_Datore_di_Lavoro",
+                [{ persona: f.datore, ruolo: RSPP_DL_ROLE, data: f.date.rsppDl }])}>
+              <FileDown size={15} /> RSPP datore di lavoro
+            </button>
+          </span>
+        )}
+        {f.rsppEsterno && (
+          <span className="doc-azione">
+            <label className="doc-data"><span>data</span>
+              <input type="date" value={f.date.rsppExt} onChange={(e) => setData("rsppExt", e.target.value)} />
+            </label>
+            <button type="button" className="btn-primary" disabled={!f.rsppNome.trim()}
+              onClick={() => scarica(corpoRsppEsterno({ ...base, ...f, data: f.date.rsppExt }), "Designazione_RSPP_Esterno",
+                [{ persona: f.rsppNome, ruolo: RSPP_EXT_ROLE, data: f.date.rsppExt }])}>
+              <FileDown size={15} /> Designazione RSPP esterno
+            </button>
+          </span>
+        )}
       </div>
 
       {/* ---- emergenze ---- */}
@@ -623,27 +866,6 @@ export default function DocumentiSicurezza({ employees = [], appointments = [] }
         {f.psIncaricati && listaNomi("incPrimo")}
       </div>
 
-      {(f.antDatore || f.psDatore) && (
-        <div className="doc-blocco">
-          <label className="field-label doc-campo">
-            <span>Tipologia dell'azienda ai fini dell'Allegato 2 (limite per lo svolgimento diretto)</span>
-            <select value={f.tipologia} onChange={(e) => set({ tipologia: e.target.value })}>
-              {ALLEGATO2.map((c) => (
-                <option key={c.id} value={c.id}>{c.label} — fino a {c.limite} lavoratori</option>
-              ))}
-            </select>
-          </label>
-          {fuoriSoglia && (
-            <p className="corso-avviso">
-              <AlertTriangle size={15} />
-              L'azienda ha {f.presenti.length} lavoratori, oltre il limite di {classe.limite} previsto
-              dall'Allegato 2 per questa tipologia: il datore di lavoro non può svolgere direttamente
-              questi compiti. Vanno designati dei lavoratori incaricati.
-            </p>
-          )}
-        </div>
-      )}
-
       <div className="quadro-azione">
         {designati().length > 0 && (
           <span className="doc-azione">
@@ -652,7 +874,11 @@ export default function DocumentiSicurezza({ employees = [], appointments = [] }
                 onChange={(e) => setData("designazione", e.target.value)} />
             </label>
             <button type="button" className="btn-primary"
-              onClick={() => scarica(corpoDesignazione({ ...base, data: f.date.designazione, designati: designati() }), "Designazione_Incaricati_Emergenza")}>
+              onClick={() => scarica(corpoDesignazione({ ...base, data: f.date.designazione, designati: designati() }), "Designazione_Incaricati_Emergenza",
+                designati().flatMap((p) => [
+                  ...(p.antincendio ? [{ persona: p.nome, ruolo: ANTINCENDIO_ROLE, data: f.date.designazione }] : []),
+                  ...(p.primo ? [{ persona: p.nome, ruolo: PRIMO_ROLE, data: f.date.designazione }] : []),
+                ]))}>
               <FileDown size={15} /> Designazione incaricati
             </button>
           </span>
@@ -664,7 +890,8 @@ export default function DocumentiSicurezza({ employees = [], appointments = [] }
                 onChange={(e) => setData("svolgAnt", e.target.value)} />
             </label>
             <button type="button" className="btn-secondary"
-              onClick={() => scarica(corpoSvolgimento({ ...base, data: f.date.svolgAnt }, "antincendio"), "Svolgimento_Diretto_Antincendio")}>
+              onClick={() => scarica(corpoSvolgimento({ ...base, data: f.date.svolgAnt }, "antincendio"), "Svolgimento_Diretto_Antincendio",
+                [{ persona: f.datore, ruolo: ANTINCENDIO_ROLE, data: f.date.svolgAnt }])}>
               <FileDown size={15} /> Svolgimento diretto — antincendio
             </button>
           </span>
@@ -676,7 +903,8 @@ export default function DocumentiSicurezza({ employees = [], appointments = [] }
                 onChange={(e) => setData("svolgPs", e.target.value)} />
             </label>
             <button type="button" className="btn-secondary"
-              onClick={() => scarica(corpoSvolgimento({ ...base, data: f.date.svolgPs }, "primosoccorso"), "Svolgimento_Diretto_Primo_Soccorso")}>
+              onClick={() => scarica(corpoSvolgimento({ ...base, data: f.date.svolgPs }, "primosoccorso"), "Svolgimento_Diretto_Primo_Soccorso",
+                [{ persona: f.datore, ruolo: PRIMO_ROLE, data: f.date.svolgPs }])}>
               <FileDown size={15} /> Svolgimento diretto — primo soccorso
             </button>
           </span>
@@ -738,7 +966,8 @@ export default function DocumentiSicurezza({ employees = [], appointments = [] }
         </label>
         <button type="button" className="btn-primary"
           disabled={f.modoRls !== "rlst" && !f.rlsNome}
-          onClick={() => scarica(corpoRls({ ...base, data: f.date.rls, modo: f.modoRls, presenti: presentiScelti }), "Verbale_RLS")}>
+          onClick={() => scarica(corpoRls({ ...base, data: f.date.rls, modo: f.modoRls, presenti: presentiScelti }), "Verbale_RLS",
+            f.modoRls === "rlst" ? [] : [{ persona: f.rlsNome, ruolo: RLS_ROLE, data: f.date.rls }])}>
           <FileDown size={15} /> Verbale RLS
         </button>
       </div>
@@ -807,7 +1036,8 @@ export default function DocumentiSicurezza({ employees = [], appointments = [] }
           <input type="date" value={f.date.medico} onChange={(e) => setData("medico", e.target.value)} />
         </label>
         <button type="button" className="btn-primary"
-          onClick={() => scarica(corpoMedico({ ...base, ...f, data: f.date.medico }), "Nomina_Medico_Competente")}>
+          onClick={() => scarica(corpoMedico({ ...base, ...f, data: f.date.medico }), "Nomina_Medico_Competente",
+            [{ persona: f.medicoNome, ruolo: MEDICO_ROLE, data: f.date.medico }])}>
           <FileDown size={15} /> Nomina medico competente
         </button>
       </div>
