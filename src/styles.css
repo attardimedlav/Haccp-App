@@ -394,6 +394,12 @@ nav { display: flex; flex-direction: column; gap: 2px; }
   font-size: 13px; cursor: pointer; }
 .btn-danger:hover { background: #953124; }
 .btn-danger:disabled { opacity: .6; cursor: default; }
+
+/* ---- Nuovo cliente ---- */
+.moduli-scelta { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 6px; }
+.cliente-creato { display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  flex-wrap: wrap; margin: 0 0 16px; padding: 12px 14px; border-radius: 8px;
+  background: #E6EFE8; border: 1px solid #C9D9CD; color: #2F6F4E; font-size: 13.5px; }
 /* Frequenza ed esiti alla chiusura del corso. Chi e' sotto la soglia del 90%
    si deve vedere a colpo d'occhio: non e' ammesso alla verifica. */
 .corso-esiti { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }

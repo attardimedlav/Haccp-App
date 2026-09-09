@@ -112,10 +112,14 @@ export function AuthProvider({ children }) {
   }, []);
 
   const loadedUserIdRef = useRef(null);
+  // La sessione serve anche fuori dal render (in reloadClienti): tenerla in un
+  // ref evita di ricreare la funzione a ogni cambio di stato.
+  const sessionRef = useRef(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
+      sessionRef.current = data.session;
       if (data.session?.user) {
         loadedUserIdRef.current = data.session.user.id;
         loadCompany(data.session.user.id);
@@ -123,6 +127,7 @@ export function AuthProvider({ children }) {
     });
     const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
       setSession(newSession);
+      sessionRef.current = newSession;
       if (event === "PASSWORD_RECOVERY") setRecoveryMode(true);
       if (newSession?.user) {
         // Il token viene rinnovato automaticamente ogni volta che il browser
@@ -210,6 +215,13 @@ export function AuthProvider({ children }) {
     <AuthContext.Provider value={{
       session, company, homeCompanyId, homeCompanyName, consultantCompanies, loadingCompany, error,
       signIn, signOut, updateCompany, recoveryMode, requestPasswordReset, setNewPassword, switchCompany,
+      // Ricarica l'elenco dei clienti senza smontare la pagina: serve dopo aver
+      // aggiunto un'azienda, per vederla comparire subito nell'elenco.
+      reloadClienti: () => {
+        const uid = sessionRef.current?.user?.id;
+        if (uid) return loadCompany(uid, { silent: true });
+        return Promise.resolve();
+      },
     }}>
       {children}
     </AuthContext.Provider>
