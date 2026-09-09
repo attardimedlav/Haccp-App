@@ -74,11 +74,6 @@ const DVR_SUB_TABS = [
 // I corsi organizzati dall'azienda stanno prima delle nomine di proposito:
 // nell'ordine di lavoro si eroga la formazione e poi si registra l'attestato,
 // non il contrario.
-// I documenti accessori al DVR stanno subito dopo gli allegati: nomine,
-// designazioni e verbali nascono dal DVR e dall'organigramma, e si
-// preparano prima di erogare la formazione.
-const DOCUMENTI_SUB_TAB = { id: "documenti", label: "Documenti", icon: FileSignature };
-
 const CORSI_SUB_TAB = { id: "corsi", label: "Corsi", icon: GraduationCap };
 const NOMINE_SUB_TAB = { id: "nomine", label: "Nomine e Attestati", icon: Award };
 
@@ -134,7 +129,6 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
   const visibleSubTabs = [
     ORGANIGRAMMA_SUB_TAB,
     ...DVR_SUB_TABS,
-    DOCUMENTI_SUB_TAB,
     CORSI_SUB_TAB,
     NOMINE_SUB_TAB,
     ...(showEquipmentTab ? [EQUIPMENT_SUB_TAB] : []),
@@ -729,6 +723,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
   // servizio per chi non compare in elenco (il datore di lavoro, o una persona
   // non ancora in organigramma).
   const [corsoAperto, setCorsoAperto] = useState(false);
+  const [documentiAperti, setDocumentiAperti] = useState(false);
   const [visitFor, setVisitFor] = useState(null);
   const [otherVisitOpen, setOtherVisitOpen] = useState(false);
 
@@ -982,6 +977,32 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
 
       {(subTab === "dvr" || subTab === "allegati") && (
         <>
+          {/* I documenti accessori si preparano qui, dove poi finiscono: nomine,
+              designazioni e verbali generati dall'app si registrano da soli fra
+              gli allegati al DVR e fra le nomine. Tenerli in una scheda a parte
+              costringeva a cercarli altrove rispetto a dove atterrano. */}
+          {subTab === "allegati" && (
+            <>
+              <div className="quadro-azione" style={{ marginTop: 4 }}>
+                <button type="button" className="btn-primary" onClick={() => setDocumentiAperti(!documentiAperti)}>
+                  <FileSignature size={15} /> {documentiAperti ? "Chiudi" : "Prepara un documento"}
+                </button>
+                <span className="sub">
+                  Nomine, designazioni e verbali compilati con i dati di questa azienda.
+                </span>
+              </div>
+              {documentiAperti && (
+                <DocumentiSicurezza
+                  employees={employees}
+                  appointments={appointments}
+                  onCreaNomina={addAppointment}
+                  onAggiornaNomina={updateAppointment}
+                  onCreaAllegato={addDvrDoc}
+                />
+              )}
+            </>
+          )}
+
           <form onSubmit={submitDoc(subTab === "dvr" ? "dvr" : "allegato")} className="traccia-form">
             {subTab === "allegati" && (
               <select
@@ -1314,16 +1335,6 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
           </>
           )}
         </>
-      )}
-
-      {subTab === "documenti" && (
-        <DocumentiSicurezza
-          employees={employees}
-          appointments={appointments}
-          onCreaNomina={addAppointment}
-          onAggiornaNomina={updateAppointment}
-          onCreaAllegato={addDvrDoc}
-        />
       )}
 
       {subTab === "corsi" && (
