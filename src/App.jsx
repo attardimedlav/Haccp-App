@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Thermometer, SprayCan, Bug, ChevronRight, ChevronDown, LogOut, ShieldCheck, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen, Snowflake, HardHat, FileText, Paperclip, Award, Wrench, Stethoscope, Network, UtensilsCrossed } from "lucide-react";
 import { AuthProvider, useAuth } from "./AuthContext";
-import { useTable } from "./hooks/useTable";
+import { useTable, EVENTO_SCRITTURA } from "./hooks/useTable";
 import Login from "./Login";
 import ResetPassword from "./ResetPassword";
 import Dashboard from "./modules/Dashboard";
@@ -121,8 +121,21 @@ function Shell() {
 
   // Lette qui e non dentro ResponsabileLine perché lo stesso nominativo serve
   // in due posti: la riga a schermo e l'intestazione di stampa.
-  const { items: employees } = useTable("employees", company?.id);
-  const { items: appointments } = useTable("work_safety_appointments", company?.id);
+  const { items: employees, reload: reloadEmployees } = useTable("employees", company?.id);
+  const { items: appointments, reload: reloadAppointments } = useTable("work_safety_appointments", company?.id);
+
+  // Queste due copie servono alla riga del RSPP e all'intestazione di stampa, e
+  // vivono per tutta la sessione: senza riascoltare le scritture resterebbero
+  // ferme a com'erano quando si e' aperta l'azienda.
+  React.useEffect(() => {
+    const suScrittura = (e) => {
+      const tabella = e?.detail?.tableName;
+      if (tabella === "employees") reloadEmployees();
+      if (tabella === "work_safety_appointments") reloadAppointments();
+    };
+    window.addEventListener(EVENTO_SCRITTURA, suScrittura);
+    return () => window.removeEventListener(EVENTO_SCRITTURA, suScrittura);
+  }, [reloadEmployees, reloadAppointments]);
   const rsppNames = [...new Set([
     ...appointments.filter((a) => RSPP_ROLES.includes(a.role)).map((a) => (a.person_name || "").trim()),
     ...employees.filter((e) => RSPP_ROLES.includes(e.security_role)).map((e) => `${e.first_name} ${e.last_name}`.trim()),
