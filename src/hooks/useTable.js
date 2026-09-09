@@ -35,6 +35,23 @@ function trimStrings(row) {
   return out;
 }
 
+// Avviso di scrittura.
+//
+// Alcune informazioni sono lette in due punti diversi dell'app con due copie
+// separate delle stesse righe: la piu' visibile e' il nominativo del RSPP, che
+// sta nella riga in cima alla pagina (App.jsx) e dentro l'organigramma. Ogni
+// copia si aggiorna solo quando il suo componente si monta, quindi dopo aver
+// aggiunto una persona nell'organigramma la riga in alto continuava a dire
+// "RSPP non ancora nominato" fino al ricaricamento della pagina: sembrava un
+// dato mancante e non lo era. Chi scrive lo annuncia, chi tiene una copia
+// altrove si rilegge.
+export const EVENTO_SCRITTURA = "cardine:tabella-scritta";
+
+function annunciaScrittura(tableName) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(EVENTO_SCRITTURA, { detail: { tableName } }));
+}
+
 export function useTable(tableName, companyId) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -66,6 +83,7 @@ export function useTable(tableName, companyId) {
       .single();
     if (insertError) { setError(insertError.message); return false; }
     await reload();
+    annunciaScrittura(tableName);
     return data;
   }, [tableName, companyId, reload]);
 
@@ -80,6 +98,7 @@ export function useTable(tableName, companyId) {
       .eq("company_id", companyId);
     if (deleteError) { setError(deleteError.message); return false; }
     await reload();
+    annunciaScrittura(tableName);
     return true;
   }, [tableName, companyId, reload]);
 
@@ -91,6 +110,7 @@ export function useTable(tableName, companyId) {
       .eq("company_id", companyId);
     if (updateError) { setError(updateError.message); return false; }
     await reload();
+    annunciaScrittura(tableName);
     return true;
   }, [tableName, companyId, reload]);
 
