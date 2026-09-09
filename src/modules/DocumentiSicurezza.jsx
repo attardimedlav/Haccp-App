@@ -457,8 +457,13 @@ export default function DocumentiSicurezza({ employees = [], appointments = [] }
       sede,
       datore,
       tipologia: "altre",
-      modoAntincendio: ant.length ? "incaricati" : "datore",
-      modoPrimo: ps.length ? "incaricati" : "datore",
+      // Due spunte indipendenti e non una scelta a tre: il datore di lavoro
+      // puo' tenere l'incarico E avere anche dei lavoratori incaricati, ed e'
+      // il caso normale quando lavora in reparto.
+      antDatore: !ant.length,
+      antIncaricati: ant.length > 0,
+      psDatore: !ps.length,
+      psIncaricati: ps.length > 0,
       incAntincendio: ant,
       incPrimo: ps,
       modoRls: rls ? "eletto" : "rlst",
@@ -513,8 +518,8 @@ export default function DocumentiSicurezza({ employees = [], appointments = [] }
       if (!mappa.has(nome)) mappa.set(nome, { nome, mansione: p?.mansione || "", antincendio: false, primo: false });
       mappa.get(nome)[chiave] = true;
     };
-    if (f.modoAntincendio !== "datore") f.incAntincendio.forEach((n) => aggiungi(n, "antincendio"));
-    if (f.modoPrimo !== "datore") f.incPrimo.forEach((n) => aggiungi(n, "primo"));
+    if (f.antIncaricati) f.incAntincendio.forEach((n) => aggiungi(n, "antincendio"));
+    if (f.psIncaricati) f.incPrimo.forEach((n) => aggiungi(n, "primo"));
     return Array.from(mappa.values());
   };
 
@@ -587,36 +592,38 @@ export default function DocumentiSicurezza({ employees = [], appointments = [] }
       <div className="doc-blocco">
         <strong>Prevenzione incendi, lotta antincendio ed evacuazione</strong>
         <div className="doc-scelta">
-          {[["datore", "Svolto direttamente dal datore di lavoro"],
-            ["incaricati", "Affidato a lavoratori incaricati"],
-            ["entrambi", "Datore di lavoro e lavoratori incaricati"]].map(([id, label]) => (
-            <label key={id} className="corso-check">
-              <input type="radio" name="modoAnt" checked={f.modoAntincendio === id}
-                onChange={() => set({ modoAntincendio: id })} />
-              <span className="corso-nome">{label}</span>
-            </label>
-          ))}
+          <label className="corso-check">
+            <input type="checkbox" checked={f.antDatore}
+              onChange={() => set({ antDatore: !f.antDatore })} />
+            <span className="corso-nome">Svolto direttamente dal datore di lavoro</span>
+          </label>
+          <label className="corso-check">
+            <input type="checkbox" checked={f.antIncaricati}
+              onChange={() => set({ antIncaricati: !f.antIncaricati })} />
+            <span className="corso-nome">Affidato a lavoratori incaricati</span>
+          </label>
         </div>
-        {f.modoAntincendio !== "datore" && listaNomi("incAntincendio")}
+        {f.antIncaricati && listaNomi("incAntincendio")}
       </div>
 
       <div className="doc-blocco">
         <strong>Primo soccorso</strong>
         <div className="doc-scelta">
-          {[["datore", "Svolto direttamente dal datore di lavoro"],
-            ["incaricati", "Affidato a lavoratori incaricati"],
-            ["entrambi", "Datore di lavoro e lavoratori incaricati"]].map(([id, label]) => (
-            <label key={id} className="corso-check">
-              <input type="radio" name="modoPs" checked={f.modoPrimo === id}
-                onChange={() => set({ modoPrimo: id })} />
-              <span className="corso-nome">{label}</span>
-            </label>
-          ))}
+          <label className="corso-check">
+            <input type="checkbox" checked={f.psDatore}
+              onChange={() => set({ psDatore: !f.psDatore })} />
+            <span className="corso-nome">Svolto direttamente dal datore di lavoro</span>
+          </label>
+          <label className="corso-check">
+            <input type="checkbox" checked={f.psIncaricati}
+              onChange={() => set({ psIncaricati: !f.psIncaricati })} />
+            <span className="corso-nome">Affidato a lavoratori incaricati</span>
+          </label>
         </div>
-        {f.modoPrimo !== "datore" && listaNomi("incPrimo")}
+        {f.psIncaricati && listaNomi("incPrimo")}
       </div>
 
-      {(f.modoAntincendio !== "incaricati" || f.modoPrimo !== "incaricati") && (
+      {(f.antDatore || f.psDatore) && (
         <div className="doc-blocco">
           <label className="field-label doc-campo">
             <span>Tipologia dell'azienda ai fini dell'Allegato 2 (limite per lo svolgimento diretto)</span>
@@ -650,7 +657,7 @@ export default function DocumentiSicurezza({ employees = [], appointments = [] }
             </button>
           </span>
         )}
-        {f.modoAntincendio !== "incaricati" && !fuoriSoglia && (
+        {f.antDatore && !fuoriSoglia && (
           <span className="doc-azione">
             <label className="doc-data"><span>data</span>
               <input type="date" value={f.date.svolgAnt}
@@ -662,7 +669,7 @@ export default function DocumentiSicurezza({ employees = [], appointments = [] }
             </button>
           </span>
         )}
-        {f.modoPrimo !== "incaricati" && !fuoriSoglia && (
+        {f.psDatore && !fuoriSoglia && (
           <span className="doc-azione">
             <label className="doc-data"><span>data</span>
               <input type="date" value={f.date.svolgPs}
