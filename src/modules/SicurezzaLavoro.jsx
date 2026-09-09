@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Award, HardHat, Wrench, Stethoscope, Network, Pencil, X, Check, ShieldAlert, GraduationCap } from "lucide-react";
+import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Award, HardHat, Wrench, Stethoscope, Network, Pencil, X, Check, ShieldAlert, GraduationCap, FileSignature } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
@@ -8,6 +8,7 @@ import Organigramma from "./Organigramma";
 import Conformita from "./Conformita";
 import CorsoFormazione from "./CorsoFormazione";
 import ArchivioCorsi from "./ChiusuraCorso";
+import DocumentiSicurezza from "./DocumentiSicurezza";
 import { generateNominaAttachment, findRlsName, findDatoreName } from "../utils/nominaTemplates";
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
@@ -73,6 +74,11 @@ const DVR_SUB_TABS = [
 // I corsi organizzati dall'azienda stanno prima delle nomine di proposito:
 // nell'ordine di lavoro si eroga la formazione e poi si registra l'attestato,
 // non il contrario.
+// I documenti accessori al DVR stanno subito dopo gli allegati: nomine,
+// designazioni e verbali nascono dal DVR e dall'organigramma, e si
+// preparano prima di erogare la formazione.
+const DOCUMENTI_SUB_TAB = { id: "documenti", label: "Documenti", icon: FileSignature };
+
 const CORSI_SUB_TAB = { id: "corsi", label: "Corsi", icon: GraduationCap };
 const NOMINE_SUB_TAB = { id: "nomine", label: "Nomine e Attestati", icon: Award };
 
@@ -128,6 +134,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
   const visibleSubTabs = [
     ORGANIGRAMMA_SUB_TAB,
     ...DVR_SUB_TABS,
+    DOCUMENTI_SUB_TAB,
     CORSI_SUB_TAB,
     NOMINE_SUB_TAB,
     ...(showEquipmentTab ? [EQUIPMENT_SUB_TAB] : []),
@@ -1307,6 +1314,10 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
           </>
           )}
         </>
+      )}
+
+      {subTab === "documenti" && (
+        <DocumentiSicurezza employees={employees} appointments={appointments} />
       )}
 
       {subTab === "corsi" && (
