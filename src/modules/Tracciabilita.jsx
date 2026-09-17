@@ -196,8 +196,25 @@ export default function Tracciabilita() {
           created_by: session?.user?.id || null,
         });
       }
+      // Se un prodotto già valutato arriva da un fornitore mai visto prima, gli
+      // allergeni tornano "da valutare": l'etichetta di un altro produttore può
+      // dichiarare allergeni o tracce diverse. Gli allergeni scelti restano,
+      // l'OSA deve solo confermarli guardando la nuova confezione.
+      const fornitoreNuovo = normalizza(fornitore);
+      const daRicontrollare = [...new Set(daInserire
+        .filter((riga) => {
+          const p = prodotti.find((x) => x.id === riga.product_id);
+          if (!p || !p.allergens_checked_at) return false;
+          const visti = fornitoriDi(p.id);
+          return visti.size > 0 && !visti.has(fornitoreNuovo);
+        })
+        .map((riga) => riga.product_id))];
+
       const { error } = await supabase.from("traceability_records").insert(daInserire);
       if (error) throw error;
+      if (daRicontrollare.length) {
+        await supabase.from("products").update({ allergens_checked_at: null }).in("id", daRicontrollare).eq("company_id", company.id);
+      }
       await reload();
       await reloadProdotti();
       ricomincia();
@@ -209,6 +226,28 @@ export default function Tracciabilita() {
   };
 
   const nomeProdotto = (id) => prodotti.find((p) => p.id === id)?.name || "Prodotto";
+  const prodottoDiNome = (nome) => prodotti.find((p) => normalizza(p.name) === normalizza(nome));
+  const fornitoriDi = (productId) => new Set(items.filter((a) => a.product_id === productId).map((a) => normalizza(a.supplier_name)));
+
+  // Riquadro sotto il nome del prodotto, sia in verifica sia nell'elenco:
+  // dice se il prodotto è già in catalogo e con quali allergeni. Serve perché
+  // gli allergeni si vedevano solo dentro il catalogo.
+  const StatoAllergeni = ({ prodotto, fornitoreRiga }) => {
+    if (!prodotto) return <span className="lot-tag" style={{ marginLeft: 0, color: "#8A5A00", background: "#FFF1D6" }}>Nuovo prodotto — allergeni da valutare</span>;
+    const nuovoFornitore = fornitoreRiga && fornitoriDi(prodotto.id).size > 0 && !fornitoriDi(prodotto.id).has(normalizza(fornitoreRiga));
+    return (
+      <span style={{ display: "inline-flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+        {!prodotto.allergens_checked_at
+          ? <span className="lot-tag" style={{ marginLeft: 0, color: "#8A5A00", background: "#FFF1D6" }}>Allergeni da valutare</span>
+          : (prodotto.allergens || []).length === 0
+            ? <span className="none-label">Nessun allergene</span>
+            : (prodotto.allergens || []).map((a) => <span key={a} className="chip chip-static" style={{ fontSize: 11.5, padding: "2px 8px" }}>{a}</span>)}
+        {nuovoFornitore && (
+          <span className="lot-tag" style={{ marginLeft: 0, color: "#8A5A00", background: "#FFF1D6" }}>Fornitore nuovo: ricontrolla l'etichetta</span>
+        )}
+      </span>
+    );
+  };
 
   // L'elenco si legge per documento: fornitore, numero e data una volta sola,
   // sotto i prodotti. Le righe salvate insieme condividono l'allegato; quelle
@@ -360,6 +399,11 @@ export default function Tracciabilita() {
                   <tr key={i}>
                     <td style={{ paddingRight: 6 }}>
                       <input style={r.prodotto ? cella : cellaMancante} list="catalogo-prodotti" placeholder="Nome prodotto" value={r.prodotto} onChange={(e) => cambiaRiga(i, "prodotto", e.target.value)} />
+                      {r.prodotto.trim() !== "" && (
+                        <div style={{ marginTop: 4, fontSize: 12 }}>
+                          <StatoAllergeni prodotto={prodottoDiNome(r.prodotto)} fornitoreRiga={fornitore} />
+                        </div>
+                      )}
                     </td>
                     <td style={{ paddingRight: 6 }}>
                       <input style={cella} inputMode="decimal" value={r.quantita} onChange={(e) => cambiaRiga(i, "quantita", e.target.value)} />
@@ -468,6 +512,9 @@ export default function Tracciabilita() {
                 ) : (
                   <li key={item.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "9px 0", borderBottom: "1px dashed #E1E5DF", flexWrap: "wrap", fontSize: 13.5 }}>
                     <span style={{ flex: "1 1 100%", minWidth: 0, fontWeight: 500 }}>{nomeProdotto(item.product_id)}</span>
+                    <span style={{ flex: "1 1 100%", minWidth: 0, marginTop: -2, marginBottom: 2 }}>
+                      <StatoAllergeni prodotto={prodotti.find((p) => p.id === item.product_id)} />
+                    </span>
                     {item.quantity != null && <span className="doc-type-tag">{String(item.quantity).replace(".", ",")} {item.unit || ""}</span>}
                     {item.lot_number
                       ? <span className="lot-tag" style={{ marginLeft: 0 }}>Lotto {item.lot_number}</span>
@@ -509,6 +556,7 @@ function CatalogoProdotti({ company, prodotti, arrivi, reloadProdotti, reloadArr
   const [errore, setErrore] = useState("");
 
   const usi = (id) => arrivi.filter((a) => a.product_id === id).length;
+  const fornitoriUsati = (id) => new Set(arrivi.filter((a) => a.product_id === id).map((a) => normalizza(a.supplier_name))).size;
   const elenco = [...prodotti]
     .filter((p) => normalizza(p.name).includes(normalizza(filtro)))
     .sort((a, b) => {
@@ -609,7 +657,12 @@ function CatalogoProdotti({ company, prodotti, arrivi, reloadProdotti, reloadArr
                     </span>
                   </div>
                   {!p.allergens_checked_at ? (
-                    <span className="lot-tag" style={{ marginLeft: 0, color: "#8A5A00", background: "#FFF1D6" }}>Allergeni da valutare</span>
+                    <span style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                      <span className="lot-tag" style={{ marginLeft: 0, color: "#8A5A00", background: "#FFF1D6" }}>
+                        {fornitoriUsati(p.id) > 1 ? "Allergeni da ricontrollare (fornitore cambiato)" : "Allergeni da valutare"}
+                      </span>
+                      {(p.allergens || []).map((a) => <span key={a} className="chip chip-static" style={{ fontSize: 11.5, padding: "2px 8px" }}>{a}</span>)}
+                    </span>
                   ) : (p.allergens || []).length === 0 ? (
                     <span className="none-label">Nessun allergene</span>
                   ) : (
