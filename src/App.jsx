@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Thermometer, SprayCan, Bug, ChevronRight, ChevronDown, LogOut, ShieldCheck, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen, Snowflake, HardHat, FileText, Paperclip, Award, Wrench, Stethoscope, Network, UtensilsCrossed, GlassWater } from "lucide-react";
+import { Thermometer, SprayCan, Bug, ChevronRight, ChevronDown, LogOut, ShieldCheck, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen, Snowflake, HardHat, FileText, Paperclip, Award, Wrench, Stethoscope, Network, UtensilsCrossed, GlassWater, Menu, X } from "lucide-react";
 import { AuthProvider, useAuth } from "./AuthContext";
 import { useTable, EVENTO_SCRITTURA } from "./hooks/useTable";
 import Login from "./Login";
@@ -115,6 +115,8 @@ function Shell() {
   // L'autocontrollo alimentare sta in un gruppo a fisarmonica come la sicurezza
   // sul lavoro: la barra ha ormai troppe voci per tenerle tutte aperte insieme.
   const [haccpExpanded, setHaccpExpanded] = useState(false);
+  // Solo sul telefono: menu laterale aperto o chiuso.
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // Di default il modulo HACCP è attivo: lo consideriamo spento solo se è stato
   // esplicitamente disattivato in Configurazione (valore false), non se la
@@ -196,7 +198,25 @@ function Shell() {
 
   return (
     <div className="app">
-      <aside className="sidebar">
+      <div className="mobile-topbar">
+        <button type="button" className="menu-btn" onClick={() => setMenuOpen(true)} aria-label="Apri il menu">
+          <Menu size={18} /> Menu
+        </button>
+        <span className="mobile-title">{company?.name || "Cardine"}</span>
+      </div>
+      <div className={"menu-overlay" + (menuOpen ? " open" : "")} onClick={() => setMenuOpen(false)} />
+      <aside
+        className={"sidebar" + (menuOpen ? " open" : "")}
+        onClick={(e) => {
+          // Scelta una voce il menu si richiude. Le intestazioni dei gruppi
+          // (HACCP, Sicurezza sul lavoro) aprono solo il gruppo: il menu resta.
+          const voce = e.target.closest("button");
+          if (voce && !voce.classList.contains("nav-item-accordion") && !voce.classList.contains("menu-close")) setMenuOpen(false);
+        }}
+      >
+        <button type="button" className="icon-btn menu-close mobile-only" onClick={() => setMenuOpen(false)} aria-label="Chiudi il menu" style={{ alignSelf: "flex-end", color: "#B9C6BC", marginBottom: -12 }}>
+          <X size={20} />
+        </button>
         <div className="brand">
           <span className="brand-mark"><ShieldCheck size={16} /></span>
           <span className="brand-name">{company?.name || "Cardine"}</span>

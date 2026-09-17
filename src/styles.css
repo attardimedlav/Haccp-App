@@ -180,12 +180,21 @@ nav { display: flex; flex-direction: column; gap: 2px; }
 .stat-label { font-size: 12.5px; color: #6E7C73; }
 .stat-flag { font-size: 11.5px; color: #B3432E; display: flex; align-items: center; gap: 4px; margin-top: 2px; }
 
+/* Telefono: il menu resta verticale come sul computer, ma sta nascosto a
+   sinistra e si apre col pulsante in alto. Tenerlo sempre aperto si
+   mangerebbe mezzo schermo; metterlo in orizzontale (com'era prima)
+   costringeva a scorrere di lato per trovare le voci. */
+.mobile-topbar, .menu-overlay { display: none; }
 @media (max-width: 640px) {
   .app { flex-direction: column; }
-  .sidebar { width: 100%; flex-direction: row; align-items: center; overflow-x: auto; }
-  nav { flex-direction: row; }
-  .content { padding: 20px; }
-  .nav-item-settings-top { border-bottom: none; border-right: 1px solid #2C3D33; padding-bottom: 9px; padding-right: 12px; margin-bottom: 0; margin-right: 4px; }
+  .mobile-topbar { display: flex; align-items: center; gap: 10px; position: sticky; top: 0; z-index: 30; background: #1B2A22; color: #EAF0EA; padding: 10px 14px; padding-top: calc(10px + env(safe-area-inset-top, 0px)); }
+  .mobile-topbar .menu-btn { display: flex; align-items: center; gap: 8px; background: #2F6F4E; color: #fff; border: none; border-radius: 8px; padding: 8px 12px; font: inherit; font-size: 14px; cursor: pointer; }
+  .mobile-topbar .mobile-title { font-size: 13.5px; opacity: 0.9; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sidebar { position: fixed; top: 0; left: 0; bottom: 0; width: 270px; max-width: 84vw; z-index: 50; overflow-y: auto; gap: 18px; transform: translateX(-105%); transition: transform 0.22s ease; padding-top: calc(20px + env(safe-area-inset-top, 0px)); }
+  .sidebar.open { transform: none; box-shadow: 6px 0 28px rgba(0, 0, 0, 0.35); }
+  .menu-overlay.open { display: block; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.4); z-index: 40; }
+  .nav-item, .nav-subitem { padding-top: 11px; padding-bottom: 11px; }
+  .content { padding: 16px; }
 }
 
 /* ---- Chips, campi calcolati, validità ---- */
@@ -277,7 +286,7 @@ nav { display: flex; flex-direction: column; gap: 2px; }
 /* ---- Stampa / Esporta PDF ---- */
 @media print {
   * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-  .sidebar, .content-toolbar, form, .icon-btn { display: none !important; }
+  .sidebar, .content-toolbar, form, .icon-btn, .mobile-topbar, .menu-overlay { display: none !important; }
   /* Il responsabile compare nell'intestazione di stampa, non due volte. */
   .rspp-line, .ricerca { display: none !important; }
   .subscription-banner, .subscription-banner-warning, .subscription-banner-urgent, .subscription-banner-critical, .viewing-client-banner { display: none !important; }
@@ -497,3 +506,5 @@ nav { display: flex; flex-direction: column; gap: 2px; }
 .doc-azione { display: inline-flex; align-items: center; gap: 8px; }
 .doc-registra { margin: 10px 0 4px; align-items: flex-start; }
 .doc-registra input { margin-top: 3px; }
+.mobile-only { display: none !important; }
+@media (max-width: 640px) { .mobile-only { display: flex !important; } }
