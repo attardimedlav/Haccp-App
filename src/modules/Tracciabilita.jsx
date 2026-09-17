@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Info, ScanLine, PenLine, Check, X, Pencil, Package, BookOpen, Merge, Search, Printer } from "lucide-react";
+import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Info, ScanLine, PenLine, Check, X, Pencil, Package, BookOpen, Merge, Search, Printer, Camera } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { supabase } from "../supabaseClient";
@@ -736,7 +736,8 @@ const ALLERGENI = ["Glutine", "Latte", "Uova", "Soia", "Frutta a guscio", "Pesce
 
 function CatalogoProdotti({ company, prodotti, arrivi, reloadProdotti, reloadArrivi }) {
   const [filtro, setFiltro] = useState("");
-  const [mod, setMod] = useState(null); // { id, nome, allergeni: [] }
+  const [mod, setMod] = useState(null); // { id, nome, allergeni: [], ingredienti, foto }
+  const [letturaEtichetta, setLetturaEtichetta] = useState(false);
   const [unisci, setUnisci] = useState(null); // { id, verso: "" }
   const [busy, setBusy] = useState(false);
   const [errore, setErrore] = useState("");
@@ -750,15 +751,61 @@ function CatalogoProdotti({ company, prodotti, arrivi, reloadProdotti, reloadArr
       return va - vb || a.name.localeCompare(b.name, "it");
     });
 
+  // Foto dell'etichetta della confezione: è da lì che si leggono gli allergeni
+  // degli ingredienti composti (la Nutella dentro una brioche, la maionese in un
+  // tramezzino), che sulla bolla non compaiono mai. La foto resta allegata al
+  // prodotto: è la prova di dove viene la dichiarazione, e serve quando cambia
+  // il fornitore.
+  const leggiEtichetta = async (e) => {
+    const f = e.target.files?.[0] || null;
+    e.target.value = "";
+    if (!f) return;
+    if (f.size > MAX_FILE_BYTES) { setErrore("File troppo grande (limite 8 MB)."); return; }
+    setLetturaEtichetta(true); setErrore("");
+    try {
+      const { data: b64, media_type } = await fileInBase64(f);
+      const { data, error } = await supabase.functions.invoke(FUNZIONE_LETTURA, {
+        body: { file_base64: b64, media_type, tipo: "etichetta" },
+      });
+      if (error) throw new Error(error.message || "Lettura non riuscita");
+      if (data?.errore) throw new Error(data.errore);
+      const letti = (data?.allergeni || []).filter((x) => ALLERGENI.includes(x));
+      setMod((m) => ({
+        ...m,
+        foto: f,
+        ingredienti: data?.ingredienti || m.ingredienti || "",
+        allergeni: [...new Set([...(m.allergeni || []), ...letti])],
+      }));
+      if (!letti.length && !(data?.ingredienti)) setErrore("Dall'etichetta non sono stati letti ingredienti: controlla la foto o scrivi a mano.");
+    } catch (err) {
+      setErrore("Non sono riuscito a leggere l'etichetta (" + err.message + "). Puoi spuntare gli allergeni a mano.");
+    } finally {
+      setLetturaEtichetta(false);
+    }
+  };
+
   const salva = async () => {
     const nome = mod.nome.trim().replace(/\s+/g, " ");
     if (!nome) { setErrore("Il nome non può restare vuoto."); return; }
     const doppio = prodotti.find((p) => p.id !== mod.id && normalizza(p.name) === normalizza(nome));
     if (doppio) { setErrore(`Esiste già "${doppio.name}" nel catalogo: usa "Unisci" per accorparli.`); return; }
     setBusy(true); setErrore("");
+    let label_attachment_path;
+    try {
+      if (mod.foto) label_attachment_path = await uploadAttachment(company.id, mod.foto);
+    } catch (err) {
+      setBusy(false); setErrore("Errore nel caricamento della foto: " + err.message); return;
+    }
+    const campi = {
+      name: nome,
+      allergens: mod.allergeni,
+      ingredients_text: (mod.ingredienti || "").trim() || null,
+      allergens_checked_at: new Date().toISOString(),
+    };
+    if (label_attachment_path) campi.label_attachment_path = label_attachment_path;
     const { error } = await supabase
       .from("products")
-      .update({ name: nome, allergens: mod.allergeni, allergens_checked_at: new Date().toISOString() })
+      .update(campi)
       .eq("id", mod.id)
       .eq("company_id", company.id);
     setBusy(false);
@@ -814,6 +861,18 @@ function CatalogoProdotti({ company, prodotti, arrivi, reloadProdotti, reloadArr
               {mod?.id === p.id ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   <input style={cella} value={mod.nome} onChange={(e) => setMod({ ...mod, nome: e.target.value })} />
+
+                  <label className="file-drop" htmlFor={"etichetta-" + p.id} style={{ width: "100%", boxSizing: "border-box" }}>
+                    <Camera size={15} />
+                    <span>{letturaEtichetta ? "Lettura dell'etichetta…" : mod.foto ? mod.foto.name : "Fotografa l'etichetta della confezione"}</span>
+                    <input id={"etichetta-" + p.id} type="file" accept="image/*,.pdf" onChange={leggiEtichetta} hidden disabled={letturaEtichetta} />
+                  </label>
+                  <span className="sub">Serve per gli ingredienti composti (es. Nutella, maionese): dall'etichetta si leggono ingredienti e allergeni, anche quelli nascosti dentro un altro prodotto.</span>
+
+                  <label className="sub">Ingredienti riportati sulla confezione
+                    <textarea style={{ ...cella, minHeight: 70 }} value={mod.ingredienti || ""} onChange={(e) => setMod({ ...mod, ingredienti: e.target.value })} />
+                  </label>
+
                   <div className="sub">Allergeni presenti:</div>
                   <div className="chip-grid">
                     {ALLERGENI.map((a) => (
@@ -837,7 +896,7 @@ function CatalogoProdotti({ company, prodotti, arrivi, reloadProdotti, reloadArr
                       <span className="sub" style={{ marginLeft: 8 }}>{usi(p.id)} {usi(p.id) === 1 ? "arrivo" : "arrivi"}</span>
                     </div>
                     <span style={{ display: "flex", gap: 2, flexShrink: 0 }}>
-                      <button className="icon-btn icon-btn-ok" title="Modifica nome e allergeni" onClick={() => { setUnisci(null); setErrore(""); setMod({ id: p.id, nome: p.name, allergeni: p.allergens || [] }); }}><Pencil size={14} /></button>
+                      <button className="icon-btn icon-btn-ok" title="Modifica nome, etichetta e allergeni" onClick={() => { setUnisci(null); setErrore(""); setMod({ id: p.id, nome: p.name, allergeni: p.allergens || [], ingredienti: p.ingredients_text || "", foto: null }); }}><Pencil size={14} /></button>
                       {prodotti.length > 1 && <button className="icon-btn icon-btn-ok" title="Unisci a un altro prodotto" onClick={() => { setMod(null); setUnisci({ id: p.id, verso: "" }); }}><Merge size={14} /></button>}
                       {usi(p.id) === 0 && <button className="icon-btn" title="Elimina" onClick={() => elimina(p)}><Trash2 size={14} /></button>}
                     </span>
@@ -855,6 +914,12 @@ function CatalogoProdotti({ company, prodotti, arrivi, reloadProdotti, reloadArr
                     <div className="chip-grid">
                       {p.allergens.map((a) => <span key={a} className="chip chip-static">{a}</span>)}
                     </div>
+                  )}
+                  {p.ingredients_text && (
+                    <div className="sub" style={{ marginTop: 6 }}>Ingredienti: {p.ingredients_text}</div>
+                  )}
+                  {p.label_attachment_path && (
+                    <div style={{ marginTop: 6 }}><AttachmentLink path={p.label_attachment_path} /></div>
                   )}
                   {unisci?.id === p.id && (
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10, alignItems: "center" }}>

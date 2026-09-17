@@ -157,6 +157,21 @@ export default function Preparazioni() {
     }
   };
 
+  // Gli ingredienti composti (Nutella, maionese, preparati) vanno dichiarati con
+  // i loro ingredienti fra parentesi: se sul prodotto è stata letta l'etichetta,
+  // la dicitura si compone da sola e poi si corregge a mano.
+  const componibili = lottiScelti
+    .map((id) => arrivi.find((a) => a.id === id))
+    .filter(Boolean)
+    .map((a) => prodotti.find((p) => p.id === a.product_id))
+    .filter(Boolean)
+    .filter((p, i, arr) => arr.findIndex((x) => x.id === p.id) === i);
+
+  const componiIngredienti = () => {
+    const pezzi = componibili.map((p) => p.ingredients_text ? `${p.name} (${p.ingredients_text})` : p.name);
+    setIngredienti(pezzi.join(", "));
+  };
+
   const daValutare = lottiScelti
     .map((id) => arrivi.find((a) => a.id === id))
     .filter(Boolean)
@@ -265,6 +280,16 @@ export default function Preparazioni() {
           <label className="field-label">Ingredienti (in ordine di peso, come vanno in etichetta)
             <textarea style={{ ...cella, minHeight: 70 }} placeholder="Es. Latte, uova, mascarpone, zucchero, caffè…" value={ingredienti} onChange={(e) => setIngredienti(e.target.value)} />
           </label>
+          {componibili.length > 0 && (
+            <div>
+              <button type="button" className="icon-btn" style={{ color: "#2F6F4E", fontSize: 13, gap: 4 }} onClick={componiIngredienti}>
+                <Plus size={14} /> Componi dai prodotti collegati ({componibili.length})
+              </button>
+              <div className="sub">
+                Scrive i prodotti collegati e, per quelli composti, i loro ingredienti fra parentesi — come chiede il Reg. UE 1169/2011. Poi riordina e correggi a mano.
+              </div>
+            </div>
+          )}
 
           <div>
             <div className="sub" style={{ marginBottom: 6 }}>Formati e pezzi (facoltativo)</div>
