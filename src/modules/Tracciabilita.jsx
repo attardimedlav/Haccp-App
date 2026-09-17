@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Info, ScanLine, PenLine, Check, X, Pencil } from "lucide-react";
+import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Info, ScanLine, PenLine, Check, X, Pencil, Package, BookOpen, Merge } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { supabase } from "../supabaseClient";
@@ -83,6 +83,9 @@ export default function Tracciabilita() {
   const { company, session } = useAuth();
   const { items, remove, update, reload, loading } = useTable("traceability_records", company?.id);
   const { items: prodotti, reload: reloadProdotti } = useTable("products", company?.id);
+
+  const [vista, setVista] = useState("arrivi");
+  const daValutare = prodotti.filter((p) => !p.allergens_checked_at).length;
 
   // fase: "carica" | "verifica"
   const [fase, setFase] = useState("carica");
@@ -289,6 +292,21 @@ export default function Tracciabilita() {
         </div>
       </div>
 
+      <div className="config-subtabs">
+        <button type="button" className={"config-subtab" + (vista === "arrivi" ? " active" : "")} onClick={() => setVista("arrivi")}>
+          <Package size={15} /> Arrivi
+        </button>
+        <button type="button" className={"config-subtab" + (vista === "catalogo" ? " active" : "")} onClick={() => setVista("catalogo")}>
+          <BookOpen size={15} /> Catalogo prodotti
+          {daValutare > 0 && <span className="lot-tag" style={{ color: "#8A5A00", background: "#FFF1D6" }}>{daValutare}</span>}
+        </button>
+      </div>
+
+      {vista === "catalogo" && (
+        <CatalogoProdotti company={company} prodotti={prodotti} arrivi={items} reloadProdotti={reloadProdotti} reloadArrivi={reload} />
+      )}
+
+      {vista === "arrivi" && (<>
       <p className="login-info" style={{ margin: "16px 0" }}>
         <Info size={14} style={{ flexShrink: 0, marginTop: 1 }} />
         Controlla sempre i dati letti prima di salvare. Se sul documento il lotto non c'è, scrivilo a mano copiandolo dalla confezione.
@@ -462,6 +480,155 @@ export default function Tracciabilita() {
                   </li>
                 ))}
               </ul>
+            </li>
+          ))}
+        </ul>
+      )}
+      </>)}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Catalogo prodotti: ogni alimento che entra in azienda, con i suoi allergeni
+// assegnati una volta sola. Le voci nascono da sole salvando gli arrivi.
+//
+// "Nessun allergene" e "non ancora valutato" sono due cose diverse: la prima e'
+// una dichiarazione dell'OSA, la seconda un buco. Per questo esiste
+// allergens_checked_at, che si scrive quando l'OSA conferma la scheda.
+//
+// Le etichette degli allergeni sono le stesse di Allergeni.jsx, parola per
+// parola: i due registri devono potersi confrontare.
+const ALLERGENI = ["Glutine", "Latte", "Uova", "Soia", "Frutta a guscio", "Pesce", "Crostacei", "Sedano", "Senape", "Solfiti", "Arachidi", "Sesamo", "Lupini", "Molluschi"];
+
+function CatalogoProdotti({ company, prodotti, arrivi, reloadProdotti, reloadArrivi }) {
+  const [filtro, setFiltro] = useState("");
+  const [mod, setMod] = useState(null); // { id, nome, allergeni: [] }
+  const [unisci, setUnisci] = useState(null); // { id, verso: "" }
+  const [busy, setBusy] = useState(false);
+  const [errore, setErrore] = useState("");
+
+  const usi = (id) => arrivi.filter((a) => a.product_id === id).length;
+  const elenco = [...prodotti]
+    .filter((p) => normalizza(p.name).includes(normalizza(filtro)))
+    .sort((a, b) => {
+      const va = a.allergens_checked_at ? 1 : 0, vb = b.allergens_checked_at ? 1 : 0;
+      return va - vb || a.name.localeCompare(b.name, "it");
+    });
+
+  const salva = async () => {
+    const nome = mod.nome.trim().replace(/\s+/g, " ");
+    if (!nome) { setErrore("Il nome non può restare vuoto."); return; }
+    const doppio = prodotti.find((p) => p.id !== mod.id && normalizza(p.name) === normalizza(nome));
+    if (doppio) { setErrore(`Esiste già "${doppio.name}" nel catalogo: usa "Unisci" per accorparli.`); return; }
+    setBusy(true); setErrore("");
+    const { error } = await supabase
+      .from("products")
+      .update({ name: nome, allergens: mod.allergeni, allergens_checked_at: new Date().toISOString() })
+      .eq("id", mod.id)
+      .eq("company_id", company.id);
+    setBusy(false);
+    if (error) { setErrore("Errore nel salvataggio: " + error.message); return; }
+    await reloadProdotti();
+    setMod(null);
+  };
+
+  // Due voci per lo stesso alimento (es. "FARINA ... SACCO 25 KG" e "Farina tipo 00"):
+  // gli arrivi passano sulla voce scelta e la voce doppia sparisce.
+  const eseguiUnione = async (prodotto) => {
+    const verso = prodotti.find((p) => p.id === unisci.verso);
+    if (!verso) return;
+    if (!window.confirm(`Spostare ${usi(prodotto.id)} arrivi da "${prodotto.name}" a "${verso.name}" ed eliminare "${prodotto.name}"?`)) return;
+    setBusy(true); setErrore("");
+    const { error: e1 } = await supabase
+      .from("traceability_records")
+      .update({ product_id: verso.id })
+      .eq("product_id", prodotto.id)
+      .eq("company_id", company.id);
+    if (e1) { setBusy(false); setErrore("Errore nello spostamento: " + e1.message); return; }
+    const allergeniUniti = [...new Set([...(verso.allergens || []), ...(prodotto.allergens || [])])];
+    await supabase.from("products").update({ allergens: allergeniUniti }).eq("id", verso.id).eq("company_id", company.id);
+    const { error: e2 } = await supabase.from("products").delete().eq("id", prodotto.id).eq("company_id", company.id);
+    setBusy(false);
+    if (e2) { setErrore("Arrivi spostati, ma la voce doppia non è stata eliminata: " + e2.message); }
+    await reloadProdotti(); await reloadArrivi();
+    setUnisci(null);
+  };
+
+  const elimina = async (prodotto) => {
+    if (!window.confirm(`Eliminare "${prodotto.name}" dal catalogo?`)) return;
+    const { error } = await supabase.from("products").delete().eq("id", prodotto.id).eq("company_id", company.id);
+    if (error) { setErrore("Errore nell'eliminazione: " + error.message); return; }
+    await reloadProdotti();
+  };
+
+  return (
+    <div style={{ marginTop: 16 }}>
+      <p className="login-info" style={{ marginBottom: 12 }}>
+        <Info size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+        Per ogni prodotto indica una volta sola gli allergeni presenti (Reg. UE 1169/2011, All. II), leggendoli dall'etichetta della confezione. In cima trovi quelli ancora da valutare.
+      </p>
+      <input className="full-input" placeholder="Cerca un prodotto…" value={filtro} onChange={(e) => setFiltro(e.target.value)} style={{ width: "100%", boxSizing: "border-box", marginBottom: 10 }} />
+      {errore && <span className="file-error" style={{ marginBottom: 8 }}><AlertTriangle size={13} /> {errore}</span>}
+
+      {elenco.length === 0 ? (
+        <div className="empty"><p>{prodotti.length === 0 ? "Il catalogo si riempie da solo quando salvi il primo arrivo merci." : "Nessun prodotto con questo nome."}</p></div>
+      ) : (
+        <ul className="dish-list">
+          {elenco.map((p) => (
+            <li key={p.id} className="dish-row">
+              {mod?.id === p.id ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  <input style={cella} value={mod.nome} onChange={(e) => setMod({ ...mod, nome: e.target.value })} />
+                  <div className="sub">Allergeni presenti:</div>
+                  <div className="chip-grid">
+                    {ALLERGENI.map((a) => (
+                      <button type="button" key={a} className={"chip" + (mod.allergeni.includes(a) ? " chip-on" : "")}
+                        onClick={() => setMod({ ...mod, allergeni: mod.allergeni.includes(a) ? mod.allergeni.filter((x) => x !== a) : [...mod.allergeni, a] })}>
+                        {a}
+                      </button>
+                    ))}
+                  </div>
+                  {mod.allergeni.length === 0 && <span className="sub">Nessun allergene selezionato: salvando dichiari che il prodotto non ne contiene.</span>}
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button type="button" className="btn-primary" disabled={busy} onClick={salva}><Check size={15} /> Salva</button>
+                    <button type="button" className="btn-primary" style={{ background: "#fff", color: "#6E7C73", border: "1px solid #D8DED6" }} onClick={() => { setMod(null); setErrore(""); }}>Annulla</button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="dish-top" style={{ marginBottom: 6 }}>
+                    <div style={{ minWidth: 0 }}>
+                      <strong>{p.name}</strong>
+                      <span className="sub" style={{ marginLeft: 8 }}>{usi(p.id)} {usi(p.id) === 1 ? "arrivo" : "arrivi"}</span>
+                    </div>
+                    <span style={{ display: "flex", gap: 2, flexShrink: 0 }}>
+                      <button className="icon-btn icon-btn-ok" title="Modifica nome e allergeni" onClick={() => { setUnisci(null); setErrore(""); setMod({ id: p.id, nome: p.name, allergeni: p.allergens || [] }); }}><Pencil size={14} /></button>
+                      {prodotti.length > 1 && <button className="icon-btn icon-btn-ok" title="Unisci a un altro prodotto" onClick={() => { setMod(null); setUnisci({ id: p.id, verso: "" }); }}><Merge size={14} /></button>}
+                      {usi(p.id) === 0 && <button className="icon-btn" title="Elimina" onClick={() => elimina(p)}><Trash2 size={14} /></button>}
+                    </span>
+                  </div>
+                  {!p.allergens_checked_at ? (
+                    <span className="lot-tag" style={{ marginLeft: 0, color: "#8A5A00", background: "#FFF1D6" }}>Allergeni da valutare</span>
+                  ) : (p.allergens || []).length === 0 ? (
+                    <span className="none-label">Nessun allergene</span>
+                  ) : (
+                    <div className="chip-grid">
+                      {p.allergens.map((a) => <span key={a} className="chip chip-static">{a}</span>)}
+                    </div>
+                  )}
+                  {unisci?.id === p.id && (
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10, alignItems: "center" }}>
+                      <select style={{ ...cella, flex: "1 1 200px", width: "auto" }} value={unisci.verso} onChange={(e) => setUnisci({ ...unisci, verso: e.target.value })}>
+                        <option value="">Unisci a…</option>
+                        {prodotti.filter((x) => x.id !== p.id).sort((a, b) => a.name.localeCompare(b.name, "it")).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+                      </select>
+                      <button type="button" className="btn-primary" disabled={!unisci.verso || busy} onClick={() => eseguiUnione(p)}><Merge size={15} /> Unisci</button>
+                      <button type="button" className="btn-primary" style={{ background: "#fff", color: "#6E7C73", border: "1px solid #D8DED6" }} onClick={() => setUnisci(null)}>Annulla</button>
+                    </div>
+                  )}
+                </>
+              )}
             </li>
           ))}
         </ul>
