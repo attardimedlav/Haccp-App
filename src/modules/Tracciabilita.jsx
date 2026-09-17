@@ -207,6 +207,33 @@ export default function Tracciabilita() {
 
   const nomeProdotto = (id) => prodotti.find((p) => p.id === id)?.name || "Prodotto";
 
+  // L'elenco si legge per documento: fornitore, numero e data una volta sola,
+  // sotto i prodotti. Le righe salvate insieme condividono l'allegato; quelle
+  // inserite a mano senza allegato si raggruppano per fornitore, data e numero.
+  const documenti = [];
+  const perChiave = {};
+  for (const item of items) {
+    const numero = (item.notes || "").replace(/^Documento n\.\s*/, "");
+    const chiave = item.attachment_path || `${item.supplier_name}|${item.received_date}|${numero}`;
+    if (!perChiave[chiave]) {
+      perChiave[chiave] = { chiave, fornitore: item.supplier_name, numero: numero ? `N. ${numero}` : "", data: item.received_date, allegato: item.attachment_path, righe: [] };
+      documenti.push(perChiave[chiave]);
+    }
+    perChiave[chiave].righe.push(item);
+  }
+  documenti.forEach((d) => d.righe.sort((x, y) => (x.created_at < y.created_at ? -1 : 1)));
+
+  const eliminaDocumento = async (doc) => {
+    if (!window.confirm(`Eliminare tutto il documento di ${doc.fornitore} (${doc.righe.length} prodotti)?`)) return;
+    const { error } = await supabase
+      .from("traceability_records")
+      .delete()
+      .in("id", doc.righe.map((r) => r.id))
+      .eq("company_id", company.id);
+    if (error) { setErrore("Errore durante l'eliminazione: " + error.message); return; }
+    await reload();
+  };
+
   return (
     <div className="panel">
       <div className="panel-head">
@@ -320,25 +347,33 @@ export default function Tracciabilita() {
         <div className="empty"><p>Nessun ricevimento registrato.</p></div>
       ) : (
         <ul className="dish-list">
-          {items.map((item) => (
-            <li key={item.id} className="dish-row">
-              <div className="dish-top">
-                <div>
-                  <strong>{nomeProdotto(item.product_id)}</strong>
-                  {item.lot_number
-                    ? <span className="lot-tag">Lotto {item.lot_number}</span>
-                    : <span className="lot-tag" style={{ color: "#8A5A00", background: "#FFF1D6" }}>Lotto non indicato</span>}
+          {documenti.map((doc) => (
+            <li key={doc.chiave} className="dish-row" style={{ padding: 0, overflow: "hidden" }}>
+              <div style={{ padding: "12px 12px 10px", borderBottom: "1px solid #E1E5DF", background: "#F1F4F0" }}>
+                <div className="dish-top" style={{ marginBottom: 4 }}>
+                  <strong style={{ fontSize: 15 }}>{doc.fornitore}</strong>
+                  <button className="icon-btn" onClick={() => eliminaDocumento(doc)} aria-label="Elimina documento" title="Elimina tutto il documento"><Trash2 size={14} /></button>
                 </div>
-                <button className="icon-btn" onClick={() => { if (window.confirm("Eliminare questo ricevimento?")) remove(item.id); }} aria-label="Elimina"><Trash2 size={14} /></button>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 14px", fontSize: 13, alignItems: "center" }}>
+                  {doc.numero && <span><strong>{doc.numero}</strong></span>}
+                  <span><strong>{fmtData(doc.data)}</strong></span>
+                  <span className="sub">{doc.righe.length} {doc.righe.length === 1 ? "prodotto" : "prodotti"}</span>
+                  {doc.allegato && <AttachmentLink path={doc.allegato} />}
+                </div>
               </div>
-              <div className="traccia-meta">
-                <span className="doc-type-tag">{item.supplier_name}</span>
-                {item.quantity != null && <span className="doc-type-tag">{String(item.quantity).replace(".", ",")} {item.unit || ""}</span>}
-                <span className="doc-type-tag">Ricevuto il {fmtData(item.received_date)}</span>
-                {item.expiry_date && <span className="doc-type-tag">Scade il {fmtData(item.expiry_date)}</span>}
-                {item.notes && <span className="log-time">{item.notes}</span>}
-              </div>
-              <AttachmentLink path={item.attachment_path} />
+              <ul style={{ listStyle: "none", margin: 0, padding: "4px 12px 8px" }}>
+                {doc.righe.map((item) => (
+                  <li key={item.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "9px 0", borderBottom: "1px dashed #E1E5DF", flexWrap: "wrap", fontSize: 13.5 }}>
+                    <span style={{ flex: "1 1 100%", minWidth: 0, fontWeight: 500 }}>{nomeProdotto(item.product_id)}</span>
+                    {item.quantity != null && <span className="doc-type-tag">{String(item.quantity).replace(".", ",")} {item.unit || ""}</span>}
+                    {item.lot_number
+                      ? <span className="lot-tag" style={{ marginLeft: 0 }}>Lotto {item.lot_number}</span>
+                      : <span className="lot-tag" style={{ marginLeft: 0, color: "#8A5A00", background: "#FFF1D6" }}>Lotto non indicato</span>}
+                    {item.expiry_date && <span className="doc-type-tag">Scade il {fmtData(item.expiry_date)}</span>}
+                    <button className="icon-btn" style={{ marginLeft: "auto" }} onClick={() => { if (window.confirm("Eliminare solo questo prodotto dal documento?")) remove(item.id); }} aria-label="Elimina prodotto"><Trash2 size={13} /></button>
+                  </li>
+                ))}
+              </ul>
             </li>
           ))}
         </ul>
