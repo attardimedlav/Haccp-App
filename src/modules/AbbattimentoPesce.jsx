@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Trash2, AlertTriangle, CheckCircle2, Snowflake, Timer } from "lucide-react";
+import { Plus, Trash2, AlertTriangle, CheckCircle2, Snowflake, Timer, ThermometerSnowflake, XCircle } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 
@@ -10,9 +10,153 @@ const TREATMENT_OPTIONS = [
 ];
 
 const SUB_TABS = [
-  { id: "abbattimento", label: "Abbattimento", icon: Snowflake },
-  { id: "scongelamento", label: "Scongelamento", icon: Timer },
+  { id: "cotti", label: "Prodotti cotti", icon: ThermometerSnowflake, requires: "has_blast_chiller" },
+  { id: "abbattimento", label: "Pesce crudo", icon: Snowflake, requires: "serves_raw_fish" },
+  { id: "scongelamento", label: "Scongelamento pesce", icon: Timer, requires: "serves_raw_fish" },
 ];
+
+// Abbattimento rapido dei prodotti cotti: valori di buona prassi riportati nei
+// manuali di autocontrollo, confermati dall'utente il 17/09/2026.
+const CICLI = {
+  positivo: { label: "Positivo — da +70°C a +3°C al cuore entro 90 minuti", target: 3, minuti: 90 },
+  negativo: { label: "Negativo — da +70°C a -18°C al cuore entro 240 minuti", target: -18, minuti: 240 },
+};
+
+function minutiTrascorsi(da, a = Date.now()) {
+  return Math.round((new Date(a).getTime() - new Date(da).getTime()) / 60000);
+}
+
+function AbbattimentoCotti({ company }) {
+  const { items, add, update, remove, loading } = useTable("blast_chill_cycles", company?.id);
+  const [prodotto, setProdotto] = useState("");
+  const [tipo, setTipo] = useState("positivo");
+  const [inizio, setInizio] = useState(nowLocalInput());
+  const [tempInizio, setTempInizio] = useState("");
+  const [operatore, setOperatore] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [, tick] = useState(0);
+  React.useEffect(() => { const t = setInterval(() => tick((n) => n + 1), 30000); return () => clearInterval(t); }, []);
+
+  // chiusura di un ciclo: temperatura finale e ora di fine, per riga
+  const [chiusura, setChiusura] = useState({});
+
+  const avvia = async (e) => {
+    e.preventDefault();
+    if (!prodotto.trim() || !operatore.trim()) return;
+    const c = CICLI[tipo];
+    setBusy(true);
+    await add({
+      product_name: prodotto,
+      cycle_type: tipo,
+      target_temp: c.target,
+      max_minutes: c.minuti,
+      start_time: new Date(inizio).toISOString(),
+      start_core_temp: tempInizio === "" ? null : Number(String(tempInizio).replace(",", ".")),
+      operator: operatore,
+    });
+    setProdotto(""); setTempInizio(""); setOperatore(""); setInizio(nowLocalInput());
+    setBusy(false);
+  };
+
+  const chiudi = async (ciclo) => {
+    const dati = chiusura[ciclo.id] || {};
+    if (dati.temp === undefined || dati.temp === "") return;
+    const fine = dati.fine ? new Date(dati.fine) : new Date();
+    const temp = Number(String(dati.temp).replace(",", "."));
+    const minuti = minutiTrascorsi(ciclo.start_time, fine);
+    const conforme = temp <= Number(ciclo.target_temp) && minuti <= ciclo.max_minutes;
+    await update(ciclo.id, {
+      end_time: fine.toISOString(),
+      end_core_temp: temp,
+      outcome: conforme ? "conforme" : "non_conforme",
+    });
+    setChiusura((c) => { const n = { ...c }; delete n[ciclo.id]; return n; });
+  };
+
+  return (
+    <>
+      <p className="range-hint">
+        Il prodotto cotto va portato velocemente a bassa temperatura al cuore, misurata con la sonda: entro 90 minuti a +3°C (abbattimento positivo) o entro 240 minuti a -18°C (negativo). Se il limite non viene rispettato il ciclo risulta non conforme: valuta il prodotto e registra l'azione in Non conformità.
+      </p>
+      <form onSubmit={avvia} className="traccia-form">
+        <div className="row-form">
+          <input type="text" placeholder="Prodotto (es. Ragù, Crema pasticcera)" required value={prodotto} onChange={(e) => setProdotto(e.target.value)} className="note-input" />
+          <select value={tipo} onChange={(e) => setTipo(e.target.value)}>
+            {Object.entries(CICLI).map(([id, c]) => <option key={id} value={id}>{c.label}</option>)}
+          </select>
+        </div>
+        <div className="row-form">
+          <label className="field-label">Inizio abbattimento
+            <input type="datetime-local" value={inizio} onChange={(e) => setInizio(e.target.value)} />
+          </label>
+          <input type="text" inputMode="decimal" placeholder="°C al cuore a inizio" value={tempInizio} onChange={(e) => setTempInizio(e.target.value)} style={{ width: 150 }} />
+          <input type="text" placeholder="Operatore" required value={operatore} onChange={(e) => setOperatore(e.target.value)} className="note-input" />
+          {company?.haccp_manager && (
+            <button type="button" className="link-btn" onClick={() => setOperatore(company.haccp_manager)}>Usa responsabile HACCP</button>
+          )}
+        </div>
+        <button type="submit" className="btn-primary" disabled={busy} style={{ alignSelf: "flex-start" }}>
+          <Plus size={16} /> Avvia abbattimento
+        </button>
+      </form>
+
+      {loading ? (
+        <p className="sub">Caricamento…</p>
+      ) : items.length === 0 ? (
+        <div className="empty"><p>Nessun abbattimento registrato.</p></div>
+      ) : (
+        <ul className="dish-list">
+          {items.map((c) => {
+            const chiuso = !!c.outcome;
+            const trascorsi = minutiTrascorsi(c.start_time);
+            const scaduto = !chiuso && trascorsi > c.max_minutes;
+            const nc = c.outcome === "non_conforme";
+            return (
+              <li key={c.id} className={"dish-row" + (nc || scaduto ? " row-warn" : "")}>
+                <div className="dish-top">
+                  <div>
+                    <strong>{c.product_name}</strong>
+                    <span className="lot-tag">{c.cycle_type === "positivo" ? "+3°C / 90 min" : "-18°C / 240 min"}</span>
+                  </div>
+                  <button className="icon-btn" onClick={() => { if (window.confirm("Eliminare questo ciclo?")) remove(c.id); }} aria-label="Elimina"><Trash2 size={14} /></button>
+                </div>
+                <div className="traccia-meta">
+                  <span className="doc-type-tag">{c.operator}</span>
+                  <span className="log-time">Inizio: {fmtDateTime(c.start_time)}{c.start_core_temp != null ? ` · ${c.start_core_temp}°C` : ""}</span>
+                </div>
+                {chiuso ? (
+                  <div className="nc-resolved" style={nc ? { color: "#B3432E" } : undefined}>
+                    {nc ? <XCircle size={13} color="#B3432E" /> : <CheckCircle2 size={13} color="#2F6F4E" />}
+                    <span>
+                      {nc ? "NON CONFORME" : "Conforme"}: {c.end_core_temp}°C al cuore dopo {minutiTrascorsi(c.start_time, c.end_time)} minuti (fine {fmtDateTime(c.end_time)})
+                    </span>
+                  </div>
+                ) : (
+                  <>
+                    <p className={scaduto ? "pest-note" : "range-hint"} style={{ marginBottom: 8, ...(scaduto ? { color: "#B3432E", fontWeight: 500 } : {}) }}>
+                      {scaduto
+                        ? `Superati i ${c.max_minutes} minuti (${trascorsi} trascorsi): misura la temperatura e chiudi il ciclo.`
+                        : `In corso da ${trascorsi} minuti — limite ${c.max_minutes}.`}
+                    </p>
+                    <div className="row-form" style={{ margin: "0 0 4px" }}>
+                      <input type="text" inputMode="decimal" placeholder="°C al cuore a fine" value={chiusura[c.id]?.temp ?? ""} onChange={(e) => setChiusura((s) => ({ ...s, [c.id]: { ...s[c.id], temp: e.target.value } }))} style={{ width: 150 }} />
+                      <label className="field-label">Fine (vuoto = adesso)
+                        <input type="datetime-local" value={chiusura[c.id]?.fine ?? ""} onChange={(e) => setChiusura((s) => ({ ...s, [c.id]: { ...s[c.id], fine: e.target.value } }))} />
+                      </label>
+                      <button type="button" className="btn-primary" onClick={() => chiudi(c)}>
+                        <CheckCircle2 size={14} /> Chiudi ciclo
+                      </button>
+                    </div>
+                  </>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </>
+  );
+}
 
 function fmtDateTime(ts) {
   const d = new Date(ts);
@@ -32,7 +176,8 @@ function hoursElapsed(startTime) {
 
 export default function AbbattimentoPesce() {
   const { company } = useAuth();
-  const [subTab, setSubTab] = useState("abbattimento");
+  const visibleSubTabs = SUB_TABS.filter((t) => company?.[t.requires]);
+  const [subTab, setSubTab] = useState(visibleSubTabs[0]?.id || "abbattimento");
   const { items: batches, add: addBatch, remove: removeBatch, update: updateBatch, loading: batchesLoading } = useTable("blast_chill_logs", company?.id);
   const { items: thaws, add: addThaw, remove: removeThaw, update: updateThaw, loading: thawsLoading } = useTable("thaw_logs", company?.id);
   const { items: lots } = useTable("traceability_logs", company?.id);
@@ -118,13 +263,13 @@ export default function AbbattimentoPesce() {
     <div className="panel">
       <div className="panel-head">
         <div>
-          <h2>Abbattimento pesce crudo</h2>
-          <p className="sub">Bonifica sanitaria dei prodotti ittici destinati al consumo crudo (Reg. CE 853/2004) e gestione dello scongelamento.</p>
+          <h2>Abbattimento</h2>
+          <p className="sub">Abbattimento rapido dei prodotti cotti e bonifica sanitaria dei prodotti ittici destinati al consumo crudo (Reg. CE 853/2004).</p>
         </div>
       </div>
 
       <div className="config-subtabs">
-        {SUB_TABS.map((t) => (
+        {visibleSubTabs.map((t) => (
           <button
             key={t.id}
             type="button"
@@ -135,6 +280,8 @@ export default function AbbattimentoPesce() {
           </button>
         ))}
       </div>
+
+      {subTab === "cotti" && <AbbattimentoCotti company={company} />}
 
       {subTab === "abbattimento" && (
         <>
