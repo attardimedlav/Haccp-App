@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Thermometer, SprayCan, Bug, ChevronRight, ChevronDown, LogOut, ShieldCheck, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen, Snowflake, HardHat, FileText, Paperclip, Award, Wrench, Stethoscope, Network, UtensilsCrossed, GlassWater, Menu, X } from "lucide-react";
+import { Thermometer, SprayCan, Bug, ChevronRight, ChevronDown, LogOut, ShieldCheck, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen, Snowflake, HardHat, FileText, Paperclip, Award, Wrench, Stethoscope, Network, UtensilsCrossed, GlassWater, Menu, X, ChefHat } from "lucide-react";
 import { AuthProvider, useAuth } from "./AuthContext";
 import { useTable, EVENTO_SCRITTURA } from "./hooks/useTable";
 import Login from "./Login";
@@ -8,6 +8,7 @@ import Dashboard from "./modules/Dashboard";
 import Temperature from "./modules/Temperature";
 import AbbattimentoPesce from "./modules/AbbattimentoPesce";
 import MacchinaGhiaccio from "./modules/MacchinaGhiaccio";
+import Preparazioni from "./modules/Preparazioni";
 import SicurezzaLavoro from "./modules/SicurezzaLavoro";
 import Sanificazione from "./modules/Sanificazione";
 import Infestanti from "./modules/Infestanti";
@@ -30,6 +31,7 @@ const MAIN_TABS = [
   { id: "infestanti", label: "Monitoraggio infestanti", icon: Bug },
   { id: "acquepotabili", label: "Acque potabili", icon: Droplet },
   { id: "tracciabilita", label: "Arrivo merci e tracciabilità", icon: Package },
+  { id: "preparazioni", label: "Preparazioni ed etichette", icon: ChefHat },
   { id: "nonconformita", label: "Non conformità", icon: ClipboardX },
   { id: "abbattimento", label: "Abbattimento", icon: Snowflake },
   { id: "ghiaccio", label: "Macchina del ghiaccio", icon: GlassWater },
@@ -153,14 +155,14 @@ function Shell() {
   const showGhiaccio = !!company?.has_ice_machine;
   const visibleMainTabs = MAIN_TABS.filter((t) =>
     (t.id !== "abbattimento" || showAbbattimento) &&
-    (t.id !== "tracciabilita" || showTracciabilita) &&
+    ((t.id !== "tracciabilita" && t.id !== "preparazioni") || showTracciabilita) &&
     (t.id !== "ghiaccio" || showGhiaccio)
   );
   const visibleWorkSafetyItems = WORK_SAFETY_SUB_ITEMS.filter((t) => !t.requires || company?.[t.requires]);
   const haccpTabAttivo = tab === "dashboard" || HACCP_TAB_IDS.has(tab);
 
   React.useEffect(() => {
-    if ((tab === "abbattimento" && !showAbbattimento) || (tab === "tracciabilita" && !showTracciabilita) || (tab === "ghiaccio" && !showGhiaccio)) {
+    if ((tab === "abbattimento" && !showAbbattimento) || ((tab === "tracciabilita" || tab === "preparazioni") && !showTracciabilita) || (tab === "ghiaccio" && !showGhiaccio)) {
       setTab("dashboard");
     }
     if (tab === "sicurezzalavoro" && !company?.active_work_safety) {
@@ -359,6 +361,7 @@ function Shell() {
         {tab === "allergeni" && <Allergeni />}
         {tab === "formazione" && <Formazione />}
         {tab === "tracciabilita" && <Tracciabilita />}
+        {tab === "preparazioni" && <Preparazioni />}
         {tab === "ghiaccio" && <MacchinaGhiaccio />}
         {tab === "registrazione" && <RegistrazioneSanitaria />}
         {tab === "nonconformita" && <NonConformita />}
