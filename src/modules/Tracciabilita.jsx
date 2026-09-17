@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Info, ScanLine, PenLine, Check, X, Pencil, Package, BookOpen, Merge } from "lucide-react";
+import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Info, ScanLine, PenLine, Check, X, Pencil, Package, BookOpen, Merge, Search, Printer } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { supabase } from "../supabaseClient";
@@ -339,7 +339,14 @@ export default function Tracciabilita() {
           <BookOpen size={15} /> Catalogo prodotti
           {daValutare > 0 && <span className="lot-tag" style={{ color: "#8A5A00", background: "#FFF1D6" }}>{daValutare}</span>}
         </button>
+        <button type="button" className={"config-subtab" + (vista === "ricerca" ? " active" : "")} onClick={() => setVista("ricerca")}>
+          <Search size={15} /> Ricerca lotto
+        </button>
       </div>
+
+      {vista === "ricerca" && (
+        <RicercaLotto company={company} arrivi={items} prodotti={prodotti} />
+      )}
 
       {vista === "catalogo" && (
         <CatalogoProdotti company={company} prodotti={prodotti} arrivi={items} reloadProdotti={reloadProdotti} reloadArrivi={reload} />
@@ -532,6 +539,185 @@ export default function Tracciabilita() {
         </ul>
       )}
       </>)}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Ricerca per lotto: la funzione che serve il giorno dell'allerta.
+//
+// Cerca nei due sensi: da un lotto in entrata alle preparazioni che lo hanno
+// usato ("cosa ne abbiamo fatto"), e dal lotto stampato su un cartellino alle
+// materie prime che lo compongono ("da cosa è fatto"). Non serve il numero di
+// lotto esatto: un'allerta arriva spesso col solo nome del prodotto o del
+// fornitore.
+function RicercaLotto({ company, arrivi, prodotti }) {
+  const { items: preparazioni } = useTable("preparations", company?.id);
+  const { items: collegamenti } = useTable("preparation_ingredients", company?.id);
+  const [testo, setTesto] = useState("");
+  const [da, setDa] = useState("");
+  const [a, setA] = useState("");
+
+  const nomeProdotto = (id) => prodotti.find((p) => p.id === id)?.name || "Prodotto";
+  const t = normalizza(testo);
+  const cercando = t.length > 0 || da || a;
+
+  const dentroPeriodo = (iso) => (!da || iso >= da) && (!a || iso <= a);
+
+  const arriviTrovati = !cercando ? [] : arrivi.filter((x) =>
+    dentroPeriodo(x.received_date) &&
+    (!t || normalizza(`${nomeProdotto(x.product_id)} ${x.lot_number || ""} ${x.supplier_name} ${x.notes || ""}`).includes(t))
+  );
+
+  const preparazioniTrovate = !cercando ? [] : preparazioni.filter((p) =>
+    dentroPeriodo(p.production_date) &&
+    (!t || normalizza(`${p.product_name} ${p.lot_number}`).includes(t))
+  );
+
+  const preparazioniCon = (idArrivo) => collegamenti
+    .filter((c) => c.traceability_record_id === idArrivo)
+    .map((c) => preparazioni.find((p) => p.id === c.preparation_id))
+    .filter(Boolean);
+
+  const materiePrimeDi = (idPreparazione) => collegamenti
+    .filter((c) => c.preparation_id === idPreparazione)
+    .map((c) => arrivi.find((x) => x.id === c.traceability_record_id))
+    .filter(Boolean);
+
+  const rigaArrivo = (x) => `${nomeProdotto(x.product_id)} — ${x.lot_number ? "lotto " + x.lot_number : "senza lotto"} — ${x.supplier_name} — ricevuto il ${fmtData(x.received_date)}`;
+  const rigaPrep = (p) => `${p.product_name} — lotto ${p.lot_number} — prodotto il ${fmtData(p.production_date)}${p.expiry_date ? ", scade il " + fmtData(p.expiry_date) : ""}`;
+
+  // Il risultato si stampa: in caso di ritiro è l'allegato da mandare all'ASL.
+  const stampa = () => {
+    const blocchi = [];
+    for (const x of arriviTrovati) {
+      const usi = preparazioniCon(x.id);
+      blocchi.push(`<h3>${rigaArrivo(x)}</h3>${usi.length
+        ? `<p>Usato in ${usi.length} preparazioni:</p><ul>${usi.map((p) => `<li>${rigaPrep(p)}</li>`).join("")}</ul>`
+        : "<p>Nessuna preparazione collegata a questo lotto.</p>"}`);
+    }
+    for (const p of preparazioniTrovate) {
+      const mp = materiePrimeDi(p.id);
+      blocchi.push(`<h3>${rigaPrep(p)}</h3>${mp.length
+        ? `<p>Materie prime usate:</p><ul>${mp.map((x) => `<li>${rigaArrivo(x)}</li>`).join("")}</ul>`
+        : "<p>Nessuna materia prima collegata.</p>"}`);
+    }
+    const html = `<!doctype html><html lang="it"><head><meta charset="utf-8"><title>Ricerca tracciabilità</title><style>
+      body { font-family: Arial, Helvetica, sans-serif; margin: 18mm 14mm; color: #000; font-size: 13px; }
+      h1 { font-size: 18px; margin: 0 0 2px; } h3 { font-size: 14px; margin: 16px 0 4px; }
+      .sotto { color: #444; font-size: 12px; margin: 0 0 10px; } ul { margin: 4px 0 0 18px; } p { margin: 4px 0; }
+    </style></head><body>
+      <h1>Ricerca di rintracciabilità${company?.name ? " — " + company.name : ""}</h1>
+      <p class="sotto">Criterio: ${testo || "(nessun testo)"}${da ? " · dal " + fmtData(da) : ""}${a ? " · al " + fmtData(a) : ""} — stampato il ${fmtData(new Date().toISOString())}</p>
+      ${blocchi.join("") || "<p>Nessun risultato.</p>"}
+    </body></html>`;
+    const w = window.open("", "_blank", "width=800,height=700");
+    if (!w) { window.alert("Il browser ha bloccato la finestra di stampa: consenti le finestre pop-up."); return; }
+    w.document.write(html); w.document.close(); w.focus();
+    setTimeout(() => w.print(), 300);
+  };
+
+  return (
+    <div style={{ marginTop: 16 }}>
+      <p className="login-info" style={{ marginBottom: 12 }}>
+        <Info size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+        In caso di allerta cerca il lotto, il prodotto o il fornitore: l'app mostra gli arrivi e le preparazioni che li hanno usati, e viceversa. Il risultato si può stampare e allegare alla comunicazione all'ASL.
+      </p>
+
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end", marginBottom: 12 }}>
+        <input style={{ ...cella, flex: "1 1 220px", width: "auto" }} placeholder="Lotto, prodotto o fornitore…" value={testo} onChange={(e) => setTesto(e.target.value)} />
+        <label className="field-label">Dal<input style={{ ...cella, width: 150 }} type="date" value={da} onChange={(e) => setDa(e.target.value)} /></label>
+        <label className="field-label">Al<input style={{ ...cella, width: 150 }} type="date" value={a} onChange={(e) => setA(e.target.value)} /></label>
+        {(testo || da || a) && (
+          <button type="button" className="btn-primary" style={{ background: "#fff", color: "#6E7C73", border: "1px solid #D8DED6" }} onClick={() => { setTesto(""); setDa(""); setA(""); }}>Pulisci</button>
+        )}
+      </div>
+
+      {!cercando ? (
+        <div className="empty"><p>Scrivi un lotto, un prodotto o un fornitore per cercare.</p></div>
+      ) : (arriviTrovati.length === 0 && preparazioniTrovate.length === 0) ? (
+        <div className="empty"><p>Nessun risultato.</p></div>
+      ) : (
+        <>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
+            <span className="sub">{arriviTrovati.length} arrivi · {preparazioniTrovate.length} preparazioni</span>
+            <button type="button" className="btn-primary" onClick={stampa}><Printer size={15} /> Stampa risultato</button>
+          </div>
+
+          {arriviTrovati.length > 0 && (
+            <>
+              <div className="sub" style={{ margin: "10px 0 6px" }}>Arrivi (materie prime)</div>
+              <ul className="dish-list">
+                {arriviTrovati.map((x) => {
+                  const usi = preparazioniCon(x.id);
+                  return (
+                    <li key={x.id} className="dish-row">
+                      <div className="dish-top" style={{ marginBottom: 4 }}>
+                        <div style={{ minWidth: 0 }}>
+                          <strong>{nomeProdotto(x.product_id)}</strong>
+                          {x.lot_number
+                            ? <span className="lot-tag">Lotto {x.lot_number}</span>
+                            : <span className="lot-tag" style={{ color: "#8A5A00", background: "#FFF1D6" }}>Lotto non indicato</span>}
+                        </div>
+                      </div>
+                      <div className="traccia-meta">
+                        <span className="doc-type-tag">{x.supplier_name}</span>
+                        <span className="doc-type-tag">Ricevuto il {fmtData(x.received_date)}</span>
+                        {x.expiry_date && <span className="doc-type-tag">Scade il {fmtData(x.expiry_date)}</span>}
+                      </div>
+                      {usi.length === 0 ? (
+                        <span className="none-label">Nessuna preparazione collegata a questo lotto.</span>
+                      ) : (
+                        <div style={{ fontSize: 13 }}>
+                          <span className="sub">Usato in {usi.length} {usi.length === 1 ? "preparazione" : "preparazioni"}:</span>
+                          <ul style={{ listStyle: "none", margin: "4px 0 0", padding: 0 }}>
+                            {usi.map((p) => <li key={p.id} style={{ padding: "3px 0" }}>{rigaPrep(p)}</li>)}
+                          </ul>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
+
+          {preparazioniTrovate.length > 0 && (
+            <>
+              <div className="sub" style={{ margin: "14px 0 6px" }}>Preparazioni (prodotti finiti)</div>
+              <ul className="dish-list">
+                {preparazioniTrovate.map((p) => {
+                  const mp = materiePrimeDi(p.id);
+                  return (
+                    <li key={p.id} className="dish-row">
+                      <div className="dish-top" style={{ marginBottom: 4 }}>
+                        <div style={{ minWidth: 0 }}>
+                          <strong>{p.product_name}</strong>
+                          <span className="lot-tag">Lotto {p.lot_number}</span>
+                        </div>
+                      </div>
+                      <div className="traccia-meta">
+                        <span className="doc-type-tag">Prodotto il {fmtData(p.production_date)}</span>
+                        {p.expiry_date && <span className="doc-type-tag">Scade il {fmtData(p.expiry_date)}</span>}
+                      </div>
+                      {mp.length === 0 ? (
+                        <span className="none-label">Nessuna materia prima collegata.</span>
+                      ) : (
+                        <div style={{ fontSize: 13 }}>
+                          <span className="sub">Materie prime usate:</span>
+                          <ul style={{ listStyle: "none", margin: "4px 0 0", padding: 0 }}>
+                            {mp.map((x) => <li key={x.id} style={{ padding: "3px 0" }}>{rigaArrivo(x)}</li>)}
+                          </ul>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
+        </>
+      )}
     </div>
   );
 }
