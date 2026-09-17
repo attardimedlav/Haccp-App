@@ -211,7 +211,7 @@ export default function Tracciabilita() {
     <div className="panel">
       <div className="panel-head">
         <div>
-          <h2>Ricevimento merci e rintracciabilità</h2>
+          <h2>Arrivo merci e tracciabilità</h2>
           <p className="sub">Fotografa la bolla o la fattura: fornitore, prodotti, lotti e scadenze vengono letti dal documento.</p>
         </div>
       </div>

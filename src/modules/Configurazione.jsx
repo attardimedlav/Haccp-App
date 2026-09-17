@@ -22,7 +22,7 @@ function addOneYear(dateStr) {
 }
 
 export default function Configurazione() {
-  const { company, updateCompany, error, homeCompanyId } = useAuth();
+  const { company, updateCompany, error, homeCompanyId, consultantCompanies } = useAuth();
   const [name, setName] = useState("");
   const [consultantName, setConsultantName] = useState("");
   const [consultantEmail, setConsultantEmail] = useState("");
@@ -38,6 +38,10 @@ export default function Configurazione() {
   const [hasWaterTank, setHasWaterTank] = useState(false);
   const [servesRawFish, setServesRawFish] = useState(false);
   const [activeHaccp, setActiveHaccp] = useState(true);
+  const [activeTraceability, setActiveTraceability] = useState(true);
+  const [hasBlastChiller, setHasBlastChiller] = useState(false);
+  const [hasIceMachine, setHasIceMachine] = useState(false);
+  const [iceMachineDays, setIceMachineDays] = useState("30");
   const [activeWorkSafety, setActiveWorkSafety] = useState(false);
   const [activeEquipmentChecks, setActiveEquipmentChecks] = useState(false);
   const [activeMedicalSurveillance, setActiveMedicalSurveillance] = useState(false);
@@ -56,6 +60,11 @@ export default function Configurazione() {
   // Solo chi entra come consulente in un'azienda cliente (non la propria) può gestire l'abbonamento.
   const canManageSubscription = !!(company && homeCompanyId && company.id !== homeCompanyId);
 
+  // Tracciabilita', abbattitore e macchina del ghiaccio li attiva solo il
+  // consulente, anche sulla propria azienda (serve per provarli): sono moduli
+  // che richiedono un'impostazione fatta da chi conosce l'attivita'.
+  const isConsultant = (consultantCompanies || []).length > 0;
+
   useEffect(() => {
     if (company) {
       setName(company.name || "");
@@ -72,6 +81,10 @@ export default function Configurazione() {
       setTipologiaAttivita(company.tipologia_attivita || "");
       setHasWaterTank(!!company.has_water_tank);
       setServesRawFish(!!company.serves_raw_fish);
+      setActiveTraceability(company.active_traceability !== false);
+      setHasBlastChiller(!!company.has_blast_chiller);
+      setHasIceMachine(!!company.has_ice_machine);
+      setIceMachineDays(String(company.ice_machine_cleaning_days || 30));
       // Di default il modulo HACCP è attivo: lo consideriamo spento solo se
       // qualcuno lo ha esplicitamente disattivato (valore false), non se la
       // colonna è semplicemente vuota/non ancora impostata.
@@ -109,6 +122,10 @@ export default function Configurazione() {
     tipologia_attivita: tipologiaAttivita,
     has_water_tank: hasWaterTank,
     serves_raw_fish: servesRawFish,
+    active_traceability: activeTraceability,
+    has_blast_chiller: hasBlastChiller,
+    has_ice_machine: hasIceMachine,
+    ice_machine_cleaning_days: Math.max(1, parseInt(iceMachineDays, 10) || 30),
     active_haccp: activeHaccp,
     active_work_safety: activeWorkSafety,
     active_equipment_checks: activeEquipmentChecks,
@@ -244,6 +261,33 @@ export default function Configurazione() {
                     <input type="checkbox" checked={servesRawFish} onChange={(e) => setServesRawFish(e.target.checked)} />
                     L'attività somministra pesce crudo (richiede abbattimento a norma)
                   </label>
+
+                  <div style={{ marginTop: 14, paddingTop: 10, borderTop: "1px dashed #D8DED6" }}>
+                    {!isConsultant && (
+                      <p className="sub" style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                        <Lock size={13} /> Le voci seguenti possono essere modificate solo dal tuo consulente HACCP.
+                      </p>
+                    )}
+                    <label className="checkbox-row">
+                      <input type="checkbox" checked={activeTraceability} disabled={!isConsultant} onChange={(e) => setActiveTraceability(e.target.checked)} />
+                      Attiva Arrivo merci e tracciabilità (ricevimento merci con lettura automatica di bolle e fatture)
+                    </label>
+                    <label className="checkbox-row" style={{ marginTop: 8 }}>
+                      <input type="checkbox" checked={hasBlastChiller} disabled={!isConsultant} onChange={(e) => setHasBlastChiller(e.target.checked)} />
+                      L'attività ha un abbattitore (registro abbattimento dei prodotti cotti)
+                    </label>
+                    <label className="checkbox-row" style={{ marginTop: 8 }}>
+                      <input type="checkbox" checked={hasIceMachine} disabled={!isConsultant} onChange={(e) => setHasIceMachine(e.target.checked)} />
+                      L'attività ha una macchina del ghiaccio (registro pulizia e sanificazione)
+                    </label>
+                    {hasIceMachine && (
+                      <label className="field-label" style={{ marginTop: 8, marginLeft: 26, display: "flex", alignItems: "center", gap: 8, flexDirection: "row" }}>
+                        Pulizia e sanificazione ogni
+                        <input type="number" min="1" value={iceMachineDays} disabled={!isConsultant} onChange={(e) => setIceMachineDays(e.target.value)} className="full-input" style={{ width: 80 }} />
+                        giorni (secondo il manuale del produttore)
+                      </label>
+                    )}
+                  </div>
                 </>
               )}
               <label className="checkbox-row" style={{ marginTop: 8 }}>
