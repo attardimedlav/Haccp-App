@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Info, ScanLine, PenLine, Check, X } from "lucide-react";
+import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Info, ScanLine, PenLine, Check, X, Pencil } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { supabase } from "../supabaseClient";
@@ -81,7 +81,7 @@ const cellaMancante = { ...cella, borderColor: "#E0B25A", background: "#FFF8E8" 
 
 export default function Tracciabilita() {
   const { company, session } = useAuth();
-  const { items, remove, reload, loading } = useTable("traceability_records", company?.id);
+  const { items, remove, update, reload, loading } = useTable("traceability_records", company?.id);
   const { items: prodotti, reload: reloadProdotti } = useTable("products", company?.id);
 
   // fase: "carica" | "verifica"
@@ -223,6 +223,52 @@ export default function Tracciabilita() {
   }
   documenti.forEach((d) => d.righe.sort((x, y) => (x.created_at < y.created_at ? -1 : 1)));
 
+  // Modifica successiva: l'OSA puo' completare un lotto o una scadenza che
+  // sulla bolla non c'erano, oppure correggere fornitore, numero e data
+  // dell'intero documento. Il documento allegato resta quello originale.
+  const [modRiga, setModRiga] = useState(null);
+  const [modDoc, setModDoc] = useState(null);
+
+  const salvaRiga = async () => {
+    if (!modRiga.prodotto.trim()) { setErrore("Il nome del prodotto non può restare vuoto."); return; }
+    setSalvataggio(true); setErrore("");
+    try {
+      const product_id = await prodottoId(modRiga.prodotto, modRiga.unita, {});
+      const ok = await update(modRiga.id, {
+        product_id,
+        quantity: modRiga.quantita === "" ? null : Number(String(modRiga.quantita).replace(",", ".")),
+        unit: modRiga.unita || null,
+        lot_number: modRiga.lotto.trim() || null,
+        expiry_date: modRiga.scadenza || null,
+      });
+      if (!ok) throw new Error("salvataggio non riuscito");
+      await reloadProdotti();
+      setModRiga(null);
+    } catch (err) {
+      setErrore("Errore durante la modifica: " + err.message);
+    } finally {
+      setSalvataggio(false);
+    }
+  };
+
+  const salvaDocumento = async (doc) => {
+    if (!modDoc.fornitore.trim()) { setErrore("Il fornitore non può restare vuoto."); return; }
+    setSalvataggio(true); setErrore("");
+    const { error } = await supabase
+      .from("traceability_records")
+      .update({
+        supplier_name: modDoc.fornitore.trim().replace(/\s+/g, " "),
+        notes: modDoc.numero.trim() ? `Documento n. ${modDoc.numero.trim()}` : null,
+        received_date: modDoc.data || oggi(),
+      })
+      .in("id", doc.righe.map((r) => r.id))
+      .eq("company_id", company.id);
+    setSalvataggio(false);
+    if (error) { setErrore("Errore durante la modifica: " + error.message); return; }
+    await reload();
+    setModDoc(null);
+  };
+
   const eliminaDocumento = async (doc) => {
     if (!window.confirm(`Eliminare tutto il documento di ${doc.fornitore} (${doc.righe.length} prodotti)?`)) return;
     const { error } = await supabase
@@ -319,9 +365,6 @@ export default function Tracciabilita() {
                 ))}
               </tbody>
             </table>
-            <datalist id="catalogo-prodotti">
-              {prodotti.map((p) => <option key={p.id} value={p.name} />)}
-            </datalist>
           </div>
 
           <button type="button" className="icon-btn" onClick={aggiungiRiga} style={{ alignSelf: "flex-start", color: "#2F6F4E", fontSize: 13, gap: 4 }}>
@@ -341,6 +384,10 @@ export default function Tracciabilita() {
         </div>
       )}
 
+      <datalist id="catalogo-prodotti">
+        {prodotti.map((p) => <option key={p.id} value={p.name} />)}
+      </datalist>
+
       {loading ? (
         <p className="sub">Caricamento…</p>
       ) : items.length === 0 ? (
@@ -350,19 +397,57 @@ export default function Tracciabilita() {
           {documenti.map((doc) => (
             <li key={doc.chiave} className="dish-row" style={{ padding: 0, overflow: "hidden" }}>
               <div style={{ padding: "12px 12px 10px", borderBottom: "1px solid #E1E5DF", background: "#F1F4F0" }}>
-                <div className="dish-top" style={{ marginBottom: 4 }}>
-                  <strong style={{ fontSize: 15 }}>{doc.fornitore}</strong>
-                  <button className="icon-btn" onClick={() => eliminaDocumento(doc)} aria-label="Elimina documento" title="Elimina tutto il documento"><Trash2 size={14} /></button>
-                </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 14px", fontSize: 13, alignItems: "center" }}>
-                  {doc.numero && <span><strong>{doc.numero}</strong></span>}
-                  <span><strong>{fmtData(doc.data)}</strong></span>
-                  <span className="sub">{doc.righe.length} {doc.righe.length === 1 ? "prodotto" : "prodotti"}</span>
-                  {doc.allegato && <AttachmentLink path={doc.allegato} />}
-                </div>
+                {modDoc?.chiave === doc.chiave ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    <input style={cella} placeholder="Fornitore" value={modDoc.fornitore} onChange={(e) => setModDoc({ ...modDoc, fornitore: e.target.value })} />
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <input style={{ ...cella, width: 150 }} placeholder="N. documento" value={modDoc.numero} onChange={(e) => setModDoc({ ...modDoc, numero: e.target.value })} />
+                      <input style={{ ...cella, width: 160 }} type="date" value={modDoc.data} onChange={(e) => setModDoc({ ...modDoc, data: e.target.value })} />
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button type="button" className="btn-primary" disabled={salvataggio} onClick={() => salvaDocumento(doc)}><Check size={15} /> Salva</button>
+                      <button type="button" className="btn-primary" style={{ background: "#fff", color: "#6E7C73", border: "1px solid #D8DED6" }} onClick={() => setModDoc(null)}>Annulla</button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="dish-top" style={{ marginBottom: 4 }}>
+                      <strong style={{ fontSize: 15 }}>{doc.fornitore}</strong>
+                      <div style={{ display: "flex", gap: 2 }}>
+                        <button className="icon-btn icon-btn-ok" onClick={() => setModDoc({ chiave: doc.chiave, fornitore: doc.fornitore || "", numero: doc.numero.replace(/^N\.\s*/, ""), data: doc.data || oggi() })} aria-label="Modifica documento" title="Modifica fornitore, numero e data"><Pencil size={14} /></button>
+                        <button className="icon-btn" onClick={() => eliminaDocumento(doc)} aria-label="Elimina documento" title="Elimina tutto il documento"><Trash2 size={14} /></button>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 14px", fontSize: 13, alignItems: "center" }}>
+                      {doc.numero && <span><strong>{doc.numero}</strong></span>}
+                      <span><strong>{fmtData(doc.data)}</strong></span>
+                      <span className="sub">{doc.righe.length} {doc.righe.length === 1 ? "prodotto" : "prodotti"}</span>
+                      {doc.allegato && <AttachmentLink path={doc.allegato} />}
+                    </div>
+                  </>
+                )}
               </div>
               <ul style={{ listStyle: "none", margin: 0, padding: "4px 12px 8px" }}>
-                {doc.righe.map((item) => (
+                {doc.righe.map((item) => modRiga?.id === item.id ? (
+                  <li key={item.id} style={{ display: "flex", flexDirection: "column", gap: 8, padding: "10px 0", borderBottom: "1px dashed #E1E5DF" }}>
+                    <input style={modRiga.prodotto ? cella : cellaMancante} list="catalogo-prodotti" placeholder="Nome prodotto" value={modRiga.prodotto} onChange={(e) => setModRiga({ ...modRiga, prodotto: e.target.value })} />
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                      <label className="sub">Quantità<input style={cella} inputMode="decimal" value={modRiga.quantita} onChange={(e) => setModRiga({ ...modRiga, quantita: e.target.value })} /></label>
+                      <label className="sub">Unità
+                        <select style={cella} value={UNITA.includes(modRiga.unita) ? modRiga.unita : "__altro"} onChange={(e) => setModRiga({ ...modRiga, unita: e.target.value === "__altro" ? "" : e.target.value })}>
+                          {UNITA.map((u) => <option key={u} value={u}>{u}</option>)}
+                          {!UNITA.includes(modRiga.unita) && <option value="__altro">{modRiga.unita || "—"}</option>}
+                        </select>
+                      </label>
+                      <label className="sub">Lotto<input style={modRiga.lotto ? cella : cellaMancante} placeholder="Non indicato" value={modRiga.lotto} onChange={(e) => setModRiga({ ...modRiga, lotto: e.target.value })} /></label>
+                      <label className="sub">Scadenza<input style={cella} type="date" value={modRiga.scadenza} onChange={(e) => setModRiga({ ...modRiga, scadenza: e.target.value })} /></label>
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button type="button" className="btn-primary" disabled={salvataggio} onClick={salvaRiga}><Check size={15} /> Salva</button>
+                      <button type="button" className="btn-primary" style={{ background: "#fff", color: "#6E7C73", border: "1px solid #D8DED6" }} onClick={() => setModRiga(null)}>Annulla</button>
+                    </div>
+                  </li>
+                ) : (
                   <li key={item.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "9px 0", borderBottom: "1px dashed #E1E5DF", flexWrap: "wrap", fontSize: 13.5 }}>
                     <span style={{ flex: "1 1 100%", minWidth: 0, fontWeight: 500 }}>{nomeProdotto(item.product_id)}</span>
                     {item.quantity != null && <span className="doc-type-tag">{String(item.quantity).replace(".", ",")} {item.unit || ""}</span>}
@@ -370,7 +455,10 @@ export default function Tracciabilita() {
                       ? <span className="lot-tag" style={{ marginLeft: 0 }}>Lotto {item.lot_number}</span>
                       : <span className="lot-tag" style={{ marginLeft: 0, color: "#8A5A00", background: "#FFF1D6" }}>Lotto non indicato</span>}
                     {item.expiry_date && <span className="doc-type-tag">Scade il {fmtData(item.expiry_date)}</span>}
-                    <button className="icon-btn" style={{ marginLeft: "auto" }} onClick={() => { if (window.confirm("Eliminare solo questo prodotto dal documento?")) remove(item.id); }} aria-label="Elimina prodotto"><Trash2 size={13} /></button>
+                    <span style={{ marginLeft: "auto", display: "flex", gap: 2 }}>
+                      <button className="icon-btn icon-btn-ok" onClick={() => setModRiga({ id: item.id, prodotto: nomeProdotto(item.product_id), quantita: item.quantity == null ? "" : String(item.quantity).replace(".", ","), unita: item.unit || "", lotto: item.lot_number || "", scadenza: item.expiry_date || "" })} aria-label="Modifica prodotto" title="Modifica"><Pencil size={13} /></button>
+                      <button className="icon-btn" onClick={() => { if (window.confirm("Eliminare solo questo prodotto dal documento?")) remove(item.id); }} aria-label="Elimina prodotto"><Trash2 size={13} /></button>
+                    </span>
                   </li>
                 ))}
               </ul>
