@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { CheckCircle2, CalendarClock, Download, Wrench, Droplets, Settings2, RefreshCw, Lock, Users } from "lucide-react";
+import { CheckCircle2, CalendarClock, Download, Wrench, Droplets, Settings2, RefreshCw, Lock, Users, BookOpen, FileText, Paperclip } from "lucide-react";
 import { useAuth } from "../AuthContext";
 import { downloadReminderICS } from "../hooks/useReminders";
+import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
 import { getSubscriptionStatus, pillClassFor } from "../subscriptionStatus";
 import Attrezzature from "./Attrezzature";
 import Sanificanti from "./Sanificanti";
@@ -42,6 +43,12 @@ export default function Configurazione() {
   const [hasBlastChiller, setHasBlastChiller] = useState(false);
   const [hasIceMachine, setHasIceMachine] = useState(false);
   const [iceMachineDays, setIceMachineDays] = useState("30");
+  const [manualSource, setManualSource] = useState("app");
+  const [manualPath, setManualPath] = useState("");
+  const [manualNote, setManualNote] = useState("");
+  const [manualBusy, setManualBusy] = useState(false);
+  const [manualError, setManualError] = useState("");
+  const [recordsMode, setRecordsMode] = useState("app");
   const [activeWorkSafety, setActiveWorkSafety] = useState(false);
   const [activeEquipmentChecks, setActiveEquipmentChecks] = useState(false);
   const [activeMedicalSurveillance, setActiveMedicalSurveillance] = useState(false);
@@ -85,6 +92,10 @@ export default function Configurazione() {
       setHasBlastChiller(!!company.has_blast_chiller);
       setHasIceMachine(!!company.has_ice_machine);
       setIceMachineDays(String(company.ice_machine_cleaning_days || 30));
+      setManualSource(company.haccp_manual_source === "esterno" ? "esterno" : "app");
+      setManualPath(company.haccp_manual_path || "");
+      setManualNote(company.haccp_manual_note || "");
+      setRecordsMode(company.haccp_records_mode === "cartaceo" ? "cartaceo" : "app");
       // Di default il modulo HACCP è attivo: lo consideriamo spento solo se
       // qualcuno lo ha esplicitamente disattivato (valore false), non se la
       // colonna è semplicemente vuota/non ancora impostata.
@@ -126,6 +137,10 @@ export default function Configurazione() {
     has_blast_chiller: hasBlastChiller,
     has_ice_machine: hasIceMachine,
     ice_machine_cleaning_days: Math.max(1, parseInt(iceMachineDays, 10) || 30),
+    haccp_manual_source: manualSource,
+    haccp_manual_path: manualPath || null,
+    haccp_manual_note: manualNote || null,
+    haccp_records_mode: recordsMode,
     active_haccp: activeHaccp,
     active_work_safety: activeWorkSafety,
     active_equipment_checks: activeEquipmentChecks,
@@ -140,6 +155,42 @@ export default function Configurazione() {
     dpa_signed_at: dpaSignedAt || null,
     ...overrides,
   });
+
+  // Manuale HACCP già esistente: il file viene caricato subito nello storage
+  // dell'azienda; il percorso resta in stato e viene salvato con il resto della
+  // configurazione al Salva.
+  const onManualFile = async (e) => {
+    const f = e.target.files?.[0] || null;
+    setManualError("");
+    if (!f) return;
+    if (f.size > 12 * 1024 * 1024) {
+      setManualError("File troppo grande (limite 12 MB).");
+      e.target.value = "";
+      return;
+    }
+    setManualBusy(true);
+    try {
+      const path = await uploadAttachment(company.id, f);
+      setManualPath(path);
+      const ok = await updateCompany(buildPayload({
+        haccp_manual_source: "esterno",
+        haccp_manual_path: path,
+        haccp_manual_updated_at: new Date().toISOString(),
+      }));
+      if (ok) { setSaved(true); setTimeout(() => setSaved(false), 2500); }
+    } catch (err) {
+      setManualError("Errore durante il caricamento: " + err.message);
+    } finally {
+      setManualBusy(false);
+      e.target.value = "";
+    }
+  };
+
+  const apriManuale = async () => {
+    if (!manualPath) return;
+    const url = await getAttachmentUrl(manualPath);
+    if (url) window.open(url, "_blank", "noopener");
+  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -287,6 +338,68 @@ export default function Configurazione() {
                         giorni (secondo il manuale del produttore)
                       </label>
                     )}
+
+                    <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px dashed #D8DED6" }}>
+                      <p className="field-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <BookOpen size={14} /> Manuale di autocontrollo HACCP
+                      </p>
+                      <label className="checkbox-row" style={{ marginTop: 6 }}>
+                        <input type="radio" name="manual-source" checked={manualSource === "app"} disabled={!isConsultant} onChange={() => setManualSource("app")} />
+                        Il manuale viene redatto qui, con i dati dell'azienda presenti nell'app
+                      </label>
+                      <label className="checkbox-row" style={{ marginTop: 6 }}>
+                        <input type="radio" name="manual-source" checked={manualSource === "esterno"} disabled={!isConsultant} onChange={() => setManualSource("esterno")} />
+                        L'azienda ha già un proprio manuale: lo carico io a mano
+                      </label>
+
+                      {manualSource === "esterno" && (
+                        <div style={{ marginTop: 8, marginLeft: 26 }}>
+                          {manualPath ? (
+                            <p className="sub" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                              <FileText size={14} />
+                              <button type="button" className="link-btn" onClick={apriManuale}>
+                                {manualPath.split("/").pop()}
+                              </button>
+                              <Download size={13} />
+                            </p>
+                          ) : (
+                            <p className="sub">Nessun manuale caricato.</p>
+                          )}
+                          {isConsultant && (
+                            <label className="field-label" style={{ marginTop: 6, display: "flex", alignItems: "center", gap: 8 }}>
+                              <Paperclip size={14} />
+                              {manualBusy ? "Caricamento in corso…" : (manualPath ? "Sostituisci il file (PDF, max 12 MB)" : "Carica il manuale (PDF, max 12 MB)")}
+                              <input type="file" accept="application/pdf,image/*" disabled={manualBusy} onChange={onManualFile} />
+                            </label>
+                          )}
+                          <input
+                            type="text"
+                            placeholder="Riferimenti del manuale esistente (autore, revisione, data)"
+                            value={manualNote}
+                            disabled={!isConsultant}
+                            onChange={(e) => setManualNote(e.target.value)}
+                            className="full-input"
+                            style={{ marginTop: 8 }}
+                          />
+                          {manualError && <p className="file-error" style={{ marginTop: 6 }}>{manualError}</p>}
+                        </div>
+                      )}
+
+                      <p className="field-label" style={{ marginTop: 14, display: "flex", alignItems: "center", gap: 6 }}>
+                        <FileText size={14} /> Come l'azienda tiene le schede di autocontrollo
+                      </p>
+                      <label className="checkbox-row" style={{ marginTop: 6 }}>
+                        <input type="radio" name="records-mode" checked={recordsMode === "app"} disabled={!isConsultant} onChange={() => setRecordsMode("app")} />
+                        Nell'app: temperature, sanificazione, arrivo merci e le altre schede si compilano qui
+                      </label>
+                      <label className="checkbox-row" style={{ marginTop: 6 }}>
+                        <input type="radio" name="records-mode" checked={recordsMode === "cartaceo"} disabled={!isConsultant} onChange={() => setRecordsMode("cartaceo")} />
+                        Su carta: l'azienda compila le schede stampate e le conserva in sede
+                      </label>
+                      <p className="sub" style={{ marginTop: 6, marginLeft: 26 }}>
+                        Questa scelta viene scritta nel manuale: se le registrazioni sono nell'app il manuale lo dichiara, altrimenti rimanda alle schede cartacee allegate. In modalità cartacea le sezioni di registrazione restano comunque disponibili, ma l'azienda non è tenuta a compilarle.
+                      </p>
+                    </div>
                   </div>
                 </>
               )}
