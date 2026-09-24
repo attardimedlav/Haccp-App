@@ -29,26 +29,38 @@ import Manutenzione from "./modules/Manutenzione";
 import { getSubscriptionStatus, isSubscriptionBlocked, getBannerTier } from "./subscriptionStatus";
 
 const MAIN_TABS = [
+  // Registri di ogni giorno
   { id: "temperature", label: "Temperature", icon: Thermometer },
   { id: "sanificazione", label: "Sanificazione", icon: SprayCan },
-  { id: "infestanti", label: "Monitoraggio infestanti", icon: Bug },
-  { id: "acquepotabili", label: "Acque potabili", icon: Droplet },
   { id: "tracciabilita", label: "Arrivo merci e tracciabilità", icon: Package },
   { id: "preparazioni", label: "Preparazioni ed etichette", icon: ChefHat },
-  { id: "oliofrittura", label: "Olio di frittura", icon: Flame },
-  { id: "manutenzione", label: "Manutenzione", icon: Wrench },
-  { id: "nonconformita", label: "Non conformità", icon: ClipboardX },
   { id: "abbattimento", label: "Abbattimento", icon: Snowflake },
+  { id: "oliofrittura", label: "Olio di frittura", icon: Flame },
   { id: "ghiaccio", label: "Macchina del ghiaccio", icon: GlassWater },
+  // Controlli periodici
+  { id: "infestanti", label: "Monitoraggio infestanti", icon: Bug },
+  { id: "acquepotabili", label: "Acque potabili", icon: Droplet },
+  { id: "manutenzione", label: "Manutenzione", icon: Wrench },
+  // Solo quando succede qualcosa
+  { id: "nonconformita", label: "Non conformità", icon: ClipboardX },
 ];
 
 const STATIC_TABS = [
-  { id: "allergeni", label: "Allergeni", icon: ShieldAlert },
-  { id: "fornitori", label: "Fornitori", icon: Truck },
-  { id: "formazione", label: "Formazione", icon: GraduationCap },
   { id: "registrazione", label: "Registrazione sanitaria", icon: Building2 },
+  { id: "fornitori", label: "Fornitori", icon: Truck },
+  { id: "allergeni", label: "Allergeni", icon: ShieldAlert },
+  { id: "formazione", label: "Formazione", icon: GraduationCap },
   { id: "documenti", label: "Documenti", icon: FolderOpen },
 ];
+
+// Il menu è diviso in quattro blocchi, nell'ordine in cui l'azienda li
+// incontra: prima quello che si prepara una volta (anagrafica, fornitori,
+// allergeni, attestati, documenti), poi i registri di ogni giorno, poi i
+// controlli periodici, infine le non conformità, che si aprono solo quando
+// succede qualcosa.
+const QUOTIDIANI = new Set(["temperature", "sanificazione", "tracciabilita", "preparazioni", "abbattimento", "oliofrittura", "ghiaccio"]);
+const PERIODICI = new Set(["infestanti", "acquepotabili", "manutenzione"]);
+const EVENTI = new Set(["nonconformita"]);
 
 const WORK_SAFETY_SUB_ITEMS = [
   { id: "organigramma", label: "Organigramma", icon: Network },
@@ -62,8 +74,8 @@ const WORK_SAFETY_SUB_ITEMS = [
 
 const TABS = [
   { id: "dashboard", label: "Panoramica", icon: ChevronRight },
-  ...MAIN_TABS,
   ...STATIC_TABS,
+  ...MAIN_TABS,
   { id: "sicurezzalavoro", label: "Sicurezza sul lavoro", icon: HardHat },
 ];
 
@@ -166,6 +178,12 @@ function Shell() {
     (t.id !== "ghiaccio" || showGhiaccio) &&
     (t.id !== "oliofrittura" || showOlio)
   );
+  const gruppiMenu = [
+    { titolo: "Anagrafica e documenti", voci: STATIC_TABS },
+    { titolo: "Ogni giorno", voci: visibleMainTabs.filter((t) => QUOTIDIANI.has(t.id)) },
+    { titolo: "Controlli periodici", voci: visibleMainTabs.filter((t) => PERIODICI.has(t.id)) },
+    { titolo: "Quando serve", voci: visibleMainTabs.filter((t) => EVENTI.has(t.id)) },
+  ];
   const visibleWorkSafetyItems = WORK_SAFETY_SUB_ITEMS.filter((t) => !t.requires || company?.[t.requires]);
   const haccpTabAttivo = tab === "dashboard" || HACCP_TAB_IDS.has(tab);
 
@@ -267,15 +285,22 @@ function Shell() {
                 >
                   <ChevronRight size={14} /> Panoramica
                 </button>
-                {[...visibleMainTabs, ...STATIC_TABS].map((t) => (
-                  <button
-                    key={t.id}
-                    className={"nav-subitem" + (tab === t.id ? " active" : "")}
-                    onClick={() => setTab(t.id)}
-                  >
-                    <t.icon size={14} />
-                    {t.label}
-                  </button>
+                {gruppiMenu.map((g) => (
+                  g.voci.length === 0 ? null : (
+                    <div key={g.titolo} className="nav-group">
+                      <span className="nav-group-label">{g.titolo}</span>
+                      {g.voci.map((t) => (
+                        <button
+                          key={t.id}
+                          className={"nav-subitem" + (tab === t.id ? " active" : "")}
+                          onClick={() => setTab(t.id)}
+                        >
+                          <t.icon size={14} />
+                          {t.label}
+                        </button>
+                      ))}
+                    </div>
+                  )
                 ))}
               </div>
             )}
