@@ -1,10 +1,40 @@
 import React, { useState } from "react";
-import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle } from "lucide-react";
+import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, ShieldCheck } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
+import { supabase } from "../supabaseClient";
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
+const FUNZIONE_LETTURA = "clever-responder";
+
+// Stessa conversione usata per bolle ed etichette: i PDF passano interi, le
+// foto si rimpiccioliscono a 2000 px prima di partire.
+function fileInBase64(file) {
+  return new Promise((resolve, reject) => {
+    if (file.type === "application/pdf") {
+      const r = new FileReader();
+      r.onload = () => resolve({ data: String(r.result).split(",")[1], media_type: "application/pdf" });
+      r.onerror = reject;
+      r.readAsDataURL(file);
+      return;
+    }
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const lato = 2000;
+      const scala = Math.min(1, lato / Math.max(img.width, img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(img.width * scala);
+      canvas.height = Math.round(img.height * scala);
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      resolve({ data: canvas.toDataURL("image/jpeg", 0.85).split(",")[1], media_type: "image/jpeg" });
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Immagine non leggibile")); };
+    img.src = url;
+  });
+}
 
 function AttachmentLink({ path }) {
   const [url, setUrl] = useState(null);
@@ -29,12 +59,40 @@ export default function RegistrazioneSanitaria() {
   const [file, setFile] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [leggendo, setLeggendo] = useState(false);
+  const [letto, setLetto] = useState(false);
 
-  const onFileChange = (e) => {
+  // Il documento della registrazione contiene già tutto quello che serve:
+  // si carica, l'app lo legge e compila la scheda. All'utente resta il
+  // controllo di quello che è stato letto.
+  const onFileChange = async (e) => {
     const f = e.target.files?.[0] || null;
     setError("");
-    if (f && f.size > MAX_FILE_BYTES) { setError("File troppo grande (limite 8 MB)."); setFile(null); e.target.value = ""; return; }
+    setLetto(false);
+    if (!f) return;
+    if (f.size > MAX_FILE_BYTES) { setError("File troppo grande (limite 8 MB)."); setFile(null); e.target.value = ""; return; }
     setFile(f);
+    setLeggendo(true);
+    try {
+      const { data: b64, media_type } = await fileInBase64(f);
+      const { data, error: err } = await supabase.functions.invoke(FUNZIONE_LETTURA, {
+        body: { file_base64: b64, media_type, tipo: "registrazione" },
+      });
+      if (err) throw new Error(err.message || "Lettura non riuscita");
+      if (data?.errore) throw new Error(data.errore);
+      if (data?.ragione_sociale) setBusinessName(data.ragione_sociale);
+      if (data?.piva) setVat(data.piva);
+      if (data?.indirizzo) setAddress(data.indirizzo);
+      if (data?.asl) setAsl(data.asl);
+      if (data?.numero_notifica) setNotificationNumber(data.numero_notifica);
+      if (data?.data_notifica) setNotificationDate(data.data_notifica);
+      setLetto(!!(data?.ragione_sociale || data?.numero_notifica));
+      if (!data?.numero_notifica) setError("Dal documento non è stato letto il numero di notifica: controllalo e scrivilo a mano.");
+    } catch (e2) {
+      setError("Lettura non riuscita: " + e2.message + " — puoi comunque compilare a mano.");
+    } finally {
+      setLeggendo(false);
+    }
   };
 
   const submit = async (e) => {
@@ -51,7 +109,7 @@ export default function RegistrazioneSanitaria() {
         notification_date: notificationDate || null,
         attachment_path,
       });
-      setBusinessName(""); setVat(""); setAddress(""); setAsl(""); setNotificationNumber(""); setNotificationDate(""); setFile(null);
+      setBusinessName(""); setVat(""); setAddress(""); setAsl(""); setNotificationNumber(""); setNotificationDate(""); setFile(null); setLetto(false);
       const input = document.getElementById("registrazione-file-input");
       if (input) input.value = "";
     } catch (err) {
@@ -71,6 +129,12 @@ export default function RegistrazioneSanitaria() {
       </div>
 
       <form onSubmit={submit} className="traccia-form">
+        <label className="file-drop" htmlFor="registrazione-file-input">
+          <Paperclip size={15} />
+          <span>{leggendo ? "Lettura del documento in corso…" : file ? file.name : "Carica o fotografa la notifica/SCIA: i dati si compilano da soli"}</span>
+          <input id="registrazione-file-input" type="file" accept=".pdf,image/*" onChange={onFileChange} hidden />
+        </label>
+        {letto && <p className="range-hint"><ShieldCheck size={13} /> Dati letti dal documento: controllali e correggi quello che serve.</p>}
         <div className="row-form">
           <input type="text" placeholder="Ragione sociale" required value={businessName} onChange={(e) => setBusinessName(e.target.value)} className="note-input" />
           <input type="text" placeholder="Partita IVA" value={vat} onChange={(e) => setVat(e.target.value)} />
@@ -83,12 +147,8 @@ export default function RegistrazioneSanitaria() {
             <input type="date" value={notificationDate} onChange={(e) => setNotificationDate(e.target.value)} />
           </label>
         </div>
-        <label className="file-drop" htmlFor="registrazione-file-input">
-          <Paperclip size={15} /><span>{file ? file.name : "Allega notifica/SCIA (PDF o immagine)"}</span>
-          <input id="registrazione-file-input" type="file" accept=".pdf,image/*" onChange={onFileChange} hidden />
-        </label>
         {error && <span className="file-error"><AlertTriangle size={13} /> {error}</span>}
-        <button type="submit" className="btn-primary" disabled={busy} style={{ alignSelf: "flex-start" }}>
+        <button type="submit" className="btn-primary" disabled={busy || leggendo} style={{ alignSelf: "flex-start" }}>
           <Plus size={16} /> {busy ? "Salvataggio…" : "Registra"}
         </button>
       </form>
