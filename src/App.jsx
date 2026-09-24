@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Thermometer, SprayCan, Bug, ChevronRight, ChevronDown, LogOut, ShieldCheck, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen, Snowflake, HardHat, FileText, Paperclip, Award, Wrench, Stethoscope, Network, UtensilsCrossed, GlassWater, Menu, X, ChefHat } from "lucide-react";
+import { Thermometer, SprayCan, Bug, ChevronRight, ChevronDown, LogOut, ShieldCheck, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen, Snowflake, HardHat, FileText, Paperclip, Award, Wrench, Stethoscope, Network, UtensilsCrossed, GlassWater, Menu, X, ChefHat, Flame, Truck } from "lucide-react";
 import { AuthProvider, useAuth } from "./AuthContext";
 import { useTable, EVENTO_SCRITTURA } from "./hooks/useTable";
 import Login from "./Login";
@@ -23,6 +23,9 @@ import NonConformita from "./modules/NonConformita";
 import AcquePotabili from "./modules/AcquePotabili";
 import MieiClienti from "./modules/MieiClienti";
 import Documenti from "./modules/Documenti";
+import OlioFrittura from "./modules/OlioFrittura";
+import Fornitori from "./modules/Fornitori";
+import Manutenzione from "./modules/Manutenzione";
 import { getSubscriptionStatus, isSubscriptionBlocked, getBannerTier } from "./subscriptionStatus";
 
 const MAIN_TABS = [
@@ -32,6 +35,8 @@ const MAIN_TABS = [
   { id: "acquepotabili", label: "Acque potabili", icon: Droplet },
   { id: "tracciabilita", label: "Arrivo merci e tracciabilità", icon: Package },
   { id: "preparazioni", label: "Preparazioni ed etichette", icon: ChefHat },
+  { id: "oliofrittura", label: "Olio di frittura", icon: Flame },
+  { id: "manutenzione", label: "Manutenzione", icon: Wrench },
   { id: "nonconformita", label: "Non conformità", icon: ClipboardX },
   { id: "abbattimento", label: "Abbattimento", icon: Snowflake },
   { id: "ghiaccio", label: "Macchina del ghiaccio", icon: GlassWater },
@@ -39,6 +44,7 @@ const MAIN_TABS = [
 
 const STATIC_TABS = [
   { id: "allergeni", label: "Allergeni", icon: ShieldAlert },
+  { id: "fornitori", label: "Fornitori", icon: Truck },
   { id: "formazione", label: "Formazione", icon: GraduationCap },
   { id: "registrazione", label: "Registrazione sanitaria", icon: Building2 },
   { id: "documenti", label: "Documenti", icon: FolderOpen },
@@ -153,16 +159,18 @@ function Shell() {
   const showAbbattimento = !!(company?.serves_raw_fish || company?.has_blast_chiller);
   const showTracciabilita = company?.active_traceability !== false;
   const showGhiaccio = !!company?.has_ice_machine;
+  const showOlio = !!company?.has_fryer;
   const visibleMainTabs = MAIN_TABS.filter((t) =>
     (t.id !== "abbattimento" || showAbbattimento) &&
     ((t.id !== "tracciabilita" && t.id !== "preparazioni") || showTracciabilita) &&
-    (t.id !== "ghiaccio" || showGhiaccio)
+    (t.id !== "ghiaccio" || showGhiaccio) &&
+    (t.id !== "oliofrittura" || showOlio)
   );
   const visibleWorkSafetyItems = WORK_SAFETY_SUB_ITEMS.filter((t) => !t.requires || company?.[t.requires]);
   const haccpTabAttivo = tab === "dashboard" || HACCP_TAB_IDS.has(tab);
 
   React.useEffect(() => {
-    if ((tab === "abbattimento" && !showAbbattimento) || ((tab === "tracciabilita" || tab === "preparazioni") && !showTracciabilita) || (tab === "ghiaccio" && !showGhiaccio)) {
+    if ((tab === "abbattimento" && !showAbbattimento) || ((tab === "tracciabilita" || tab === "preparazioni") && !showTracciabilita) || (tab === "ghiaccio" && !showGhiaccio) || (tab === "oliofrittura" && !showOlio)) {
       setTab("dashboard");
     }
     if (tab === "sicurezzalavoro" && !company?.active_work_safety) {
@@ -363,6 +371,9 @@ function Shell() {
         {tab === "tracciabilita" && <Tracciabilita />}
         {tab === "preparazioni" && <Preparazioni />}
         {tab === "ghiaccio" && <MacchinaGhiaccio />}
+        {tab === "oliofrittura" && <OlioFrittura />}
+        {tab === "manutenzione" && <Manutenzione />}
+        {tab === "fornitori" && <Fornitori />}
         {tab === "registrazione" && <RegistrazioneSanitaria />}
         {tab === "nonconformita" && <NonConformita />}
         {tab === "acquepotabili" && <AcquePotabili />}
