@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Thermometer, SprayCan, Bug, ChevronRight, ChevronDown, LogOut, ShieldCheck, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen, Snowflake, HardHat, FileText, Paperclip, Award, Wrench, Stethoscope, Network, UtensilsCrossed, GlassWater, Menu, X, ChefHat, Flame, Truck } from "lucide-react";
+import { Thermometer, SprayCan, Bug, ChevronRight, ChevronDown, LogOut, ShieldCheck, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen, Snowflake, HardHat, FileText, Paperclip, Award, Wrench, Stethoscope, Network, UtensilsCrossed, GlassWater, Menu, X, ChefHat, Flame, Truck, BookOpen } from "lucide-react";
 import { AuthProvider, useAuth } from "./AuthContext";
 import { useTable, EVENTO_SCRITTURA } from "./hooks/useTable";
 import Login from "./Login";
@@ -25,6 +25,7 @@ import MieiClienti from "./modules/MieiClienti";
 import Documenti from "./modules/Documenti";
 import OlioFrittura from "./modules/OlioFrittura";
 import Fornitori from "./modules/Fornitori";
+import ManualeHaccp from "./modules/ManualeHaccp";
 import Manutenzione from "./modules/Manutenzione";
 import { getSubscriptionStatus, isSubscriptionBlocked, getBannerTier } from "./subscriptionStatus";
 
@@ -46,6 +47,7 @@ const MAIN_TABS = [
 ];
 
 const STATIC_TABS = [
+  { id: "manuale", label: "Manuale di autocontrollo", icon: BookOpen },
   { id: "registrazione", label: "Registrazione sanitaria", icon: Building2 },
   { id: "fornitori", label: "Fornitori", icon: Truck },
   { id: "allergeni", label: "Allergeni", icon: ShieldAlert },
@@ -399,6 +401,7 @@ function Shell() {
         {tab === "oliofrittura" && <OlioFrittura />}
         {tab === "manutenzione" && <Manutenzione />}
         {tab === "fornitori" && <Fornitori />}
+        {tab === "manuale" && <ManualeHaccp />}
         {tab === "registrazione" && <RegistrazioneSanitaria />}
         {tab === "nonconformita" && <NonConformita />}
         {tab === "acquepotabili" && <AcquePotabili />}
