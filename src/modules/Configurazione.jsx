@@ -42,6 +42,7 @@ export default function Configurazione() {
   const [activeTraceability, setActiveTraceability] = useState(true);
   const [hasBlastChiller, setHasBlastChiller] = useState(false);
   const [hasIceMachine, setHasIceMachine] = useState(false);
+  const [hasFryer, setHasFryer] = useState(false);
   const [iceMachineDays, setIceMachineDays] = useState("30");
   const [manualSource, setManualSource] = useState("app");
   const [manualPath, setManualPath] = useState("");
@@ -91,6 +92,7 @@ export default function Configurazione() {
       setActiveTraceability(company.active_traceability !== false);
       setHasBlastChiller(!!company.has_blast_chiller);
       setHasIceMachine(!!company.has_ice_machine);
+      setHasFryer(!!company.has_fryer);
       setIceMachineDays(String(company.ice_machine_cleaning_days || 30));
       setManualSource(company.haccp_manual_source === "esterno" ? "esterno" : "app");
       setManualPath(company.haccp_manual_path || "");
@@ -136,6 +138,7 @@ export default function Configurazione() {
     active_traceability: activeTraceability,
     has_blast_chiller: hasBlastChiller,
     has_ice_machine: hasIceMachine,
+    has_fryer: hasFryer,
     ice_machine_cleaning_days: Math.max(1, parseInt(iceMachineDays, 10) || 30),
     haccp_manual_source: manualSource,
     haccp_manual_path: manualPath || null,
@@ -330,6 +333,10 @@ export default function Configurazione() {
                     <label className="checkbox-row" style={{ marginTop: 8 }}>
                       <input type="checkbox" checked={hasIceMachine} disabled={!isConsultant} onChange={(e) => setHasIceMachine(e.target.checked)} />
                       L'attività ha una macchina del ghiaccio (registro pulizia e sanificazione)
+                    </label>
+                    <label className="checkbox-row" style={{ marginTop: 8 }}>
+                      <input type="checkbox" checked={hasFryer} disabled={!isConsultant} onChange={(e) => setHasFryer(e.target.checked)} />
+                      L'attività ha una friggitrice (registro dei cambi olio)
                     </label>
                     {hasIceMachine && (
                       <label className="field-label" style={{ marginTop: 8, marginLeft: 26, display: "flex", alignItems: "center", gap: 8, flexDirection: "row" }}>
