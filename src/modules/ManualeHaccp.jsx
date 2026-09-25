@@ -1,8 +1,9 @@
 import React, { useState } from "react";
-import { Plus, Trash2, AlertTriangle, Paperclip, FileText, Download, BookOpen, Lock, CheckCircle2 } from "lucide-react";
+import { Plus, Trash2, AlertTriangle, Paperclip, BookOpen, Lock, CheckCircle2 } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
-import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
+import { uploadAttachment } from "../hooks/useAttachment";
+import DocumentoInPagina from "../DocumentoInPagina";
 
 const MAX_FILE_BYTES = 12 * 1024 * 1024;
 
@@ -16,17 +17,6 @@ const MOTIVI = [
   "Revisione periodica",
   "Altro",
 ];
-
-function DocumentoLink({ path }) {
-  const [url, setUrl] = useState(null);
-  if (!path) return <span className="none-label">Nessun documento allegato</span>;
-  if (!url) { getAttachmentUrl(path).then(setUrl); return <span className="none-label">Caricamento documento…</span>; }
-  return (
-    <a className="attachment-link" href={url} target="_blank" rel="noreferrer">
-      <FileText size={16} /><span className="attachment-name">{path.split("/").pop()}</span><Download size={14} />
-    </a>
-  );
-}
 
 // La revisione successiva a quella più alta presente: 00 -> 01 -> 02.
 function prossimaRevisione(items) {
@@ -52,6 +42,9 @@ export default function ManualeHaccp() {
   const [file, setFile] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // Con il manuale già caricato i campi restano chiusi: si aprono solo per
+  // depositare una revisione nuova.
+  const [formAperto, setFormAperto] = useState(false);
 
   const esterno = company?.haccp_manual_source === "esterno";
 
@@ -60,6 +53,7 @@ export default function ManualeHaccp() {
     return String(a.revision) < String(b.revision) ? 1 : -1;
   });
   const corrente = ordinati[0] || null;
+  const precedenti = ordinati.slice(1);
 
   const onFileChange = (e) => {
     const f = e.target.files?.[0] || null;
@@ -85,7 +79,7 @@ export default function ManualeHaccp() {
         file_path,
         notes,
       });
-      setRevision(""); setNotes(""); setFile(null);
+      setRevision(""); setNotes(""); setFile(null); setFormAperto(false);
       const input = document.getElementById("manuale-file-input");
       if (input) input.value = "";
     } catch (err) {
@@ -94,6 +88,28 @@ export default function ManualeHaccp() {
       setBusy(false);
     }
   };
+
+  const intestazioneRevisione = (item, inVigore) => (
+    <>
+      <div className="dish-top">
+        <div>
+          <BookOpen size={13} style={{ marginRight: 6, verticalAlign: -2 }} color="#2F6F4E" />
+          <strong>Revisione {item.revision}</strong>
+          <span className="lot-tag">{inVigore ? "in vigore" : "superata"}</span>
+          {item.source === "esterno" && <span className="lot-tag">manuale dell'azienda</span>}
+        </div>
+        {isConsultant && (
+          <button className="icon-btn" onClick={() => remove(item.id)} aria-label="Elimina"><Trash2 size={14} /></button>
+        )}
+      </div>
+      <div className="traccia-meta">
+        <span className="doc-type-tag">emessa il {new Date(item.issued_on).toLocaleDateString("it-IT")}</span>
+        {item.prepared_by && <span className="doc-type-tag">{item.prepared_by}</span>}
+        {item.reason && <span className="doc-type-tag">{item.reason}</span>}
+      </div>
+      {item.notes && <p className="pest-note">{item.notes}</p>}
+    </>
+  );
 
   return (
     <div className="panel">
@@ -108,85 +124,92 @@ export default function ManualeHaccp() {
         </div>
         {corrente && (
           <div className="pill">
-            <CheckCircle2 size={14} /> in vigore: rev. {corrente.revision} del {new Date(corrente.issued_on).toLocaleDateString("it-IT")}
+            <CheckCircle2 size={14} /> rev. {corrente.revision} del {new Date(corrente.issued_on).toLocaleDateString("it-IT")}
           </div>
         )}
       </div>
 
-      {!corrente && (
+      {loading ? (
+        <p className="sub">Caricamento…</p>
+      ) : !corrente ? (
         <div className="empty">
           <p>
             Nessun manuale caricato. Finché manca, l'azienda non ha il documento che l'Autorità di controllo
             chiede per primo: il piano di autocontrollo previsto dall'art. 5 del Reg. (CE) n. 852/2004.
           </p>
         </div>
+      ) : (
+        <>
+          {/* La revisione in vigore si legge subito, documento compreso. */}
+          <div className="dish-row">
+            {intestazioneRevisione(corrente, true)}
+            <DocumentoInPagina path={corrente.file_path} />
+          </div>
+
+          {precedenti.length > 0 && (
+            <>
+              <h3 className="section-title">Revisioni precedenti</h3>
+              <ul className="dish-list">
+                {precedenti.map((item) => (
+                  <li key={item.id} className="dish-row">
+                    {intestazioneRevisione(item, false)}
+                    <DocumentoInPagina path={item.file_path} />
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </>
       )}
 
-      {isConsultant ? (
-        <form onSubmit={submit} className="traccia-form">
-          <div className="row-form">
-            <input
-              type="text"
-              placeholder={"Revisione (proposta: " + prossimaRevisione(items) + ")"}
-              value={revision}
-              onChange={(e) => setRevision(e.target.value)}
-              className="note-input"
-            />
-            <label className="field-label">Data di emissione
-              <input type="date" value={issuedOn} onChange={(e) => setIssuedOn(e.target.value)} />
-            </label>
-            <input type="text" placeholder="Redatto da" value={preparedBy} onChange={(e) => setPreparedBy(e.target.value)} className="note-input" />
-          </div>
-          <select value={reason} onChange={(e) => setReason(e.target.value)} className="full-input">
-            {MOTIVI.map((m) => <option key={m} value={m}>{m}</option>)}
-          </select>
-          <input type="text" placeholder="Nota (opzionale)" value={notes} onChange={(e) => setNotes(e.target.value)} className="full-input" />
-          <label className="file-drop" htmlFor="manuale-file-input">
-            <Paperclip size={15} /><span>{file ? file.name : "Allega il manuale (PDF o Word, max 12 MB)"}</span>
-            <input id="manuale-file-input" type="file" accept=".pdf,.doc,.docx" onChange={onFileChange} hidden />
-          </label>
-          {error && <span className="file-error"><AlertTriangle size={13} /> {error}</span>}
-          <button type="submit" className="btn-primary" disabled={busy} style={{ alignSelf: "flex-start" }}>
-            <Plus size={16} /> {busy ? "Caricamento…" : items.length === 0 ? "Carica il manuale" : "Carica una nuova revisione"}
-          </button>
-          <p className="range-hint">
-            Una revisione non sostituisce la precedente: la affianca. Lo storico è la matrice delle revisioni
-            del manuale, e deve corrispondere a documenti che esistono davvero.
-          </p>
-        </form>
-      ) : (
-        <p className="sub" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      {!isConsultant ? (
+        <p className="sub" style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 16 }}>
           <Lock size={13} /> Il manuale è redatto e aggiornato dal consulente HACCP.
         </p>
-      )}
-
-      {loading ? (
-        <p className="sub">Caricamento…</p>
-      ) : ordinati.length > 0 && (
-        <ul className="dish-list">
-          {ordinati.map((item, i) => (
-            <li key={item.id} className="dish-row">
-              <div className="dish-top">
-                <div>
-                  <BookOpen size={13} style={{ marginRight: 6, verticalAlign: -2 }} color="#2F6F4E" />
-                  <strong>Revisione {item.revision}</strong>
-                  {i === 0 ? <span className="lot-tag">in vigore</span> : <span className="lot-tag">superata</span>}
-                  {item.source === "esterno" && <span className="lot-tag">manuale dell'azienda</span>}
-                </div>
-                {isConsultant && (
-                  <button className="icon-btn" onClick={() => remove(item.id)} aria-label="Elimina"><Trash2 size={14} /></button>
-                )}
-              </div>
-              <div className="traccia-meta">
-                <span className="doc-type-tag">emessa il {new Date(item.issued_on).toLocaleDateString("it-IT")}</span>
-                {item.prepared_by && <span className="doc-type-tag">{item.prepared_by}</span>}
-                {item.reason && <span className="doc-type-tag">{item.reason}</span>}
-              </div>
-              {item.notes && <p className="pest-note">{item.notes}</p>}
-              <DocumentoLink path={item.file_path} />
-            </li>
-          ))}
-        </ul>
+      ) : corrente && !formAperto ? (
+        <button type="button" className="link-btn" style={{ marginTop: 14 }} onClick={() => setFormAperto(true)}>
+          <Plus size={13} /> Deposita una nuova revisione
+        </button>
+      ) : (
+        <>
+          <h3 className="section-title">{corrente ? "Nuova revisione" : "Carica il manuale"}</h3>
+          <form onSubmit={submit} className="traccia-form">
+            <label className="file-drop" htmlFor="manuale-file-input">
+              <Paperclip size={15} /><span>{file ? file.name : "Allega il manuale (PDF o Word, max 12 MB)"}</span>
+              <input id="manuale-file-input" type="file" accept=".pdf,.doc,.docx" onChange={onFileChange} hidden />
+            </label>
+            <div className="row-form">
+              <input
+                type="text"
+                placeholder={"Revisione (proposta: " + prossimaRevisione(items) + ")"}
+                value={revision}
+                onChange={(e) => setRevision(e.target.value)}
+                className="note-input"
+              />
+              <label className="field-label">Data di emissione
+                <input type="date" value={issuedOn} onChange={(e) => setIssuedOn(e.target.value)} />
+              </label>
+              <input type="text" placeholder="Redatto da" value={preparedBy} onChange={(e) => setPreparedBy(e.target.value)} className="note-input" />
+            </div>
+            <select value={reason} onChange={(e) => setReason(e.target.value)} className="full-input">
+              {MOTIVI.map((m) => <option key={m} value={m}>{m}</option>)}
+            </select>
+            <input type="text" placeholder="Nota (opzionale)" value={notes} onChange={(e) => setNotes(e.target.value)} className="full-input" />
+            {error && <span className="file-error"><AlertTriangle size={13} /> {error}</span>}
+            <div className="row-form">
+              <button type="submit" className="btn-primary" disabled={busy}>
+                <Plus size={16} /> {busy ? "Caricamento…" : corrente ? "Deposita la revisione" : "Carica il manuale"}
+              </button>
+              {corrente && (
+                <button type="button" className="link-btn" onClick={() => setFormAperto(false)}>Annulla</button>
+              )}
+            </div>
+            <p className="range-hint">
+              Una revisione non sostituisce la precedente: la affianca. Lo storico è la matrice delle revisioni
+              del manuale, e deve corrispondere a documenti che esistono davvero.
+            </p>
+          </form>
+        </>
       )}
     </div>
   );

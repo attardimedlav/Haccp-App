@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from "react";
-import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, ShieldCheck, Eye, EyeOff, ExternalLink } from "lucide-react";
+import React, { useState } from "react";
+import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, ShieldCheck } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
-import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
+import { uploadAttachment } from "../hooks/useAttachment";
+import DocumentoInPagina from "../DocumentoInPagina";
 import { supabase } from "../supabaseClient";
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
@@ -36,51 +37,6 @@ function fileInBase64(file) {
   });
 }
 
-// Il documento si guarda dentro la pagina: i PDF in un riquadro sfogliabile,
-// le foto come immagine. Il link di scarico resta, ma non serve più aprire un
-// altro programma per leggere il numero di notifica.
-function DocumentoInPagina({ path }) {
-  const [url, setUrl] = useState(null);
-  const [aperto, setAperto] = useState(true);
-
-  useEffect(() => { let vivo = true; if (path) getAttachmentUrl(path).then((u) => { if (vivo) setUrl(u); }); return () => { vivo = false; }; }, [path]);
-
-  if (!path) return <span className="none-label">Nessun documento allegato</span>;
-  const nome = path.split("/").pop();
-  const isPdf = /\.pdf$/i.test(nome);
-
-  return (
-    <div className="doc-viewer">
-      <div className="doc-viewer-head">
-        <FileText size={14} />
-        <span className="attachment-name">{nome}</span>
-        <button type="button" className="link-btn" onClick={() => setAperto(!aperto)}>
-          {aperto ? <><EyeOff size={13} /> Nascondi</> : <><Eye size={13} /> Mostra</>}
-        </button>
-        {url && (
-          <a className="link-btn" href={url} target="_blank" rel="noreferrer">
-            <ExternalLink size={13} /> Apri a schermo intero
-          </a>
-        )}
-        {url && (
-          <a className="link-btn" href={url} download={nome}>
-            <Download size={13} /> Scarica
-          </a>
-        )}
-      </div>
-      {aperto && (
-        !url ? (
-          <p className="sub">Caricamento del documento…</p>
-        ) : isPdf ? (
-          <iframe title={nome} src={url + "#view=FitH"} className="doc-frame" />
-        ) : (
-          <img alt={nome} src={url} className="doc-image" />
-        )
-      )}
-    </div>
-  );
-}
-
 export default function RegistrazioneSanitaria() {
   const { company } = useAuth();
   const { items, add, remove, loading } = useTable("health_registrations", company?.id);
@@ -95,6 +51,9 @@ export default function RegistrazioneSanitaria() {
   const [busy, setBusy] = useState(false);
   const [leggendo, setLeggendo] = useState(false);
   const [letto, setLetto] = useState(false);
+  // Quando la registrazione c'è già, i campi restano chiusi: si aprono solo
+  // per sostituirla o per aggiungerne una seconda unità produttiva.
+  const [formAperto, setFormAperto] = useState(false);
 
   // Il documento della registrazione contiene già tutto quello che serve:
   // si carica, l'app lo legge e compila la scheda. All'utente resta il
@@ -162,6 +121,37 @@ export default function RegistrazioneSanitaria() {
         </div>
       </div>
 
+      {loading ? (
+        <p className="sub">Caricamento…</p>
+      ) : items.length === 0 ? (
+        <div className="empty"><p>Nessuna registrazione sanitaria presente.</p></div>
+      ) : (
+        <ul className="dish-list">
+          {items.map((item) => (
+            <li key={item.id} className="dish-row">
+              <div className="dish-top">
+                <div><strong>{item.business_name}</strong>{item.vat && <span className="lot-tag">P.IVA {item.vat}</span>}</div>
+                <button className="icon-btn" onClick={() => remove(item.id)} aria-label="Elimina"><Trash2 size={14} /></button>
+              </div>
+              <div className="traccia-meta">
+                {item.asl && <span className="doc-type-tag">{item.asl}</span>}
+                <span className="doc-type-tag">Notifica {item.notification_number}</span>
+                {item.notification_date && <span className="doc-type-tag">{new Date(item.notification_date).toLocaleDateString("it-IT")}</span>}
+              </div>
+              {item.address && <p className="pest-note">{item.address}</p>}
+              <DocumentoInPagina path={item.attachment_path} />
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {items.length > 0 && !formAperto ? (
+        <button type="button" className="link-btn" onClick={() => setFormAperto(true)}>
+          <Plus size={13} /> Aggiungi o sostituisci la registrazione
+        </button>
+      ) : (
+      <>
+      {items.length > 0 && <h3 className="section-title">Aggiungi o sostituisci la registrazione</h3>}
       <form onSubmit={submit} className="traccia-form">
         <label className="file-drop" htmlFor="registrazione-file-input">
           <Paperclip size={15} />
@@ -186,29 +176,7 @@ export default function RegistrazioneSanitaria() {
           <Plus size={16} /> {busy ? "Salvataggio…" : "Registra"}
         </button>
       </form>
-
-      {loading ? (
-        <p className="sub">Caricamento…</p>
-      ) : items.length === 0 ? (
-        <div className="empty"><p>Nessuna registrazione sanitaria presente.</p></div>
-      ) : (
-        <ul className="dish-list">
-          {items.map((item) => (
-            <li key={item.id} className="dish-row">
-              <div className="dish-top">
-                <div><strong>{item.business_name}</strong>{item.vat && <span className="lot-tag">P.IVA {item.vat}</span>}</div>
-                <button className="icon-btn" onClick={() => remove(item.id)} aria-label="Elimina"><Trash2 size={14} /></button>
-              </div>
-              <div className="traccia-meta">
-                {item.asl && <span className="doc-type-tag">{item.asl}</span>}
-                <span className="doc-type-tag">Notifica {item.notification_number}</span>
-                {item.notification_date && <span className="doc-type-tag">{new Date(item.notification_date).toLocaleDateString("it-IT")}</span>}
-              </div>
-              {item.address && <p className="pest-note">{item.address}</p>}
-              <DocumentoInPagina path={item.attachment_path} />
-            </li>
-          ))}
-        </ul>
+      </>
       )}
     </div>
   );
