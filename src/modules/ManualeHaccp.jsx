@@ -1,9 +1,12 @@
 import React, { useState } from "react";
-import { Plus, Trash2, AlertTriangle, Paperclip, BookOpen, Lock, CheckCircle2 } from "lucide-react";
+import { Plus, Trash2, AlertTriangle, Paperclip, BookOpen, Lock, CheckCircle2, Wand2, FileDown } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { uploadAttachment } from "../hooks/useAttachment";
 import DocumentoInPagina from "../DocumentoInPagina";
+import { supabase } from "../supabaseClient";
+import { pacchettoDocx, scaricaDocx } from "./CorsoFormazione";
+import { corpoManuale, controlli } from "../utils/manualeHaccpDocx";
 
 const MAX_FILE_BYTES = 12 * 1024 * 1024;
 
@@ -45,6 +48,86 @@ export default function ManualeHaccp() {
   // Con il manuale già caricato i campi restano chiusi: si aprono solo per
   // depositare una revisione nuova.
   const [formAperto, setFormAperto] = useState(false);
+  const [generando, setGenerando] = useState(false);
+  const [avvisi, setAvvisi] = useState(null);   // null = non ancora controllato
+
+  // Raccoglie tutto quello che serve al manuale: l'azienda con i suoi flag, la
+  // registrazione sanitaria, gli impianti a temperatura controllata, i
+  // sanificanti e i due cataloghi del consulente.
+  const raccogliDossier = async () => {
+    const settore = company?.haccp_sector || "bar_ristorazione";
+    const [reg, unita, san, cicli, proc] = await Promise.all([
+      supabase.from("health_registrations").select("*").eq("company_id", company.id).order("created_at", { ascending: false }).limit(1),
+      supabase.from("temperature_units").select("*").eq("company_id", company.id).order("label"),
+      supabase.from("sanitizers").select("*").eq("company_id", company.id),
+      supabase.from("cycle_templates").select("*").eq("sector", settore).eq("active", true).order("sort_order"),
+      supabase.from("procedure_templates").select("*").eq("sector", settore).eq("active", true).order("sort_order"),
+    ]);
+    const listaCicli = cicli.data || [];
+    let righe = [];
+    if (listaCicli.length) {
+      const { data } = await supabase
+        .from("hazard_templates")
+        .select("*")
+        .in("cycle_template_id", listaCicli.map((c) => c.id))
+        .order("sort_order");
+      righe = data || [];
+    }
+    return {
+      azienda: company,
+      registrazione: (reg.data || [])[0] || null,
+      impianti: unita.data || [],
+      sanificanti: san.data || [],
+      cicli: listaCicli.map((c) => ({ ...c, righe: righe.filter((r) => r.cycle_template_id === c.id) })),
+      procedure: proc.data || [],
+      revisione: {
+        numero: revision || prossimaRevisione(items),
+        data: issuedOn,
+        motivo: reason,
+        redattoDa: preparedBy || company?.consultant_name || "",
+      },
+    };
+  };
+
+  // Genera il .docx e lo deposita come revisione: il documento non finisce
+  // solo nei download, entra nello storico del manuale.
+  const generaManuale = async (soloProva) => {
+    setGenerando(true);
+    setError("");
+    try {
+      const dossier = await raccogliDossier();
+      const mancanze = controlli(dossier);
+      setAvvisi(mancanze);
+      const files = pacchettoDocx(corpoManuale(dossier));
+      const nome = `Manuale_autocontrollo_${(company?.name || "azienda").replace(/[^A-Za-z0-9]+/g, "_")}_rev_${dossier.revisione.numero}.docx`;
+      if (soloProva) {
+        await scaricaDocx(files, nome);
+        return;
+      }
+      // deposito: si carica nello storage e si registra la revisione
+      const JSZip = (await import("jszip")).default;
+      const zip = new JSZip();
+      Object.entries(files).forEach(([percorso, contenuto]) => zip.file(percorso, contenuto));
+      const blob = await zip.generateAsync({ type: "blob" });
+      const documento = new File([blob], nome, { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+      const file_path = await uploadAttachment(company.id, documento);
+      await add({
+        revision: dossier.revisione.numero,
+        issued_on: issuedOn,
+        reason,
+        prepared_by: dossier.revisione.redattoDa,
+        source: "app",
+        file_path,
+        notes: "Generato da Cardine",
+      });
+      setFormAperto(false);
+      setRevision("");
+    } catch (err) {
+      setError("Generazione non riuscita: " + err.message);
+    } finally {
+      setGenerando(false);
+    }
+  };
 
   const esterno = company?.haccp_manual_source === "esterno";
 
@@ -196,9 +279,34 @@ export default function ManualeHaccp() {
             </select>
             <input type="text" placeholder="Nota (opzionale)" value={notes} onChange={(e) => setNotes(e.target.value)} className="full-input" />
             {error && <span className="file-error"><AlertTriangle size={13} /> {error}</span>}
+            {avvisi && avvisi.length > 0 && (
+              <div className="nc-edit-block">
+                <p className="field-label" style={{ color: "#B3432E" }}>
+                  <AlertTriangle size={13} /> Il manuale sta per dichiarare cose che in azienda non risultano:
+                </p>
+                {avvisi.map((a, i) => <p key={i} className="pest-note">• {a}</p>)}
+                <p className="range-hint">Puoi generarlo lo stesso: il documento uscirà con quelle voci da completare a mano.</p>
+              </div>
+            )}
+            {avvisi && avvisi.length === 0 && (
+              <p className="range-hint"><CheckCircle2 size={13} /> I dati dell'azienda coprono tutto quello che il manuale dichiara.</p>
+            )}
+            <div className="row-form">
+              <button type="button" className="btn-primary" disabled={generando} onClick={() => generaManuale(false)}>
+                <Wand2 size={16} /> {generando ? "Generazione…" : "Genera e deposita il manuale"}
+              </button>
+              <button type="button" className="link-btn" disabled={generando} onClick={() => generaManuale(true)}>
+                <FileDown size={13} /> Genera solo una copia di prova
+              </button>
+            </div>
+            <p className="range-hint">
+              Il manuale si costruisce dai dati di questa azienda e dal catalogo dei cicli e delle procedure:
+              entrano solo i cicli e le procedure che valgono per le attrezzature che l'azienda ha davvero.
+              In alternativa si può allegare qui sotto un documento già pronto.
+            </p>
             <div className="row-form">
               <button type="submit" className="btn-primary" disabled={busy}>
-                <Plus size={16} /> {busy ? "Caricamento…" : corrente ? "Deposita la revisione" : "Carica il manuale"}
+                <Plus size={16} /> {busy ? "Caricamento…" : corrente ? "Deposita la revisione allegata" : "Carica il manuale allegato"}
               </button>
               {corrente && (
                 <button type="button" className="link-btn" onClick={() => setFormAperto(false)}>Annulla</button>
