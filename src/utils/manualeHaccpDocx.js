@@ -265,9 +265,39 @@ export function corpoManuale(dossier) {
      "Redige e aggiorna il manuale, eroga la formazione, effettua le verifiche periodiche del sistema"],
   ], [2400, 2400, 4560]));
 
-  b.push(h2("5.2 Descrizione dei locali e delle attrezzature"));
-  b.push(p("La planimetria dei locali è allegata al manuale e ne costituisce parte integrante: su di essa sono riportate l'ubicazione delle attrezzature e la collocazione dei dispositivi di monitoraggio degli infestanti."));
-  b.push(p("I pavimenti sono in materiale impermeabile, lavabile e disinfettabile; le pareti dei locali di preparazione sono rivestite con materiali lavabili; i corpi illuminanti sono protetti nelle aree di lavorazione; l'aerazione è garantita, con cappe di aspirazione sopra i piani di cottura; gli scarichi sono sifonati e collegati alla fognatura pubblica."));
+  b.push(h2("5.2 Requisiti dei locali e delle attrezzature"));
+  b.push(p("I locali e le attrezzature rispondono ai requisiti generali e specifici stabiliti dall'Allegato II del Reg. (CE) n. 852/2004. La planimetria dei locali è allegata al manuale e ne costituisce parte integrante: su di essa sono riportate la destinazione degli ambienti, l'ubicazione delle attrezzature e la collocazione dei dispositivi di monitoraggio degli infestanti."));
+  b.push(h3("Requisiti generali (Allegato II, Capitolo I)"));
+  [
+    "locali mantenuti puliti, in buono stato e in condizioni tali da consentire una corretta prassi igienica, compresa la protezione contro la contaminazione;",
+    "spazi di lavoro sufficienti a consentire lo svolgimento delle operazioni in condizioni igieniche;",
+    "lavabi per il lavaggio delle mani in numero adeguato, con acqua corrente calda e fredda, materiale per lavarsi e asciugarsi le mani in modo igienico;",
+    "numero adeguato di gabinetti, con scarico idraulico e collegati a un sistema fognario efficace, non direttamente comunicanti con i locali di manipolazione;",
+    "aerazione naturale o meccanica sufficiente, con accesso ai filtri per la pulizia e la sostituzione;",
+    "illuminazione naturale o artificiale adeguata, con corpi illuminanti protetti nelle aree di lavorazione;",
+    "impianti di scarico adeguati allo scopo e costruiti in modo da evitare il rischio di contaminazione;",
+    "spogliatoi adeguati per il personale, con gli effetti personali tenuti separati dalle aree di lavorazione.",
+  ].forEach((t) => b.push(punto(t)));
+  b.push(h3("Requisiti dei locali di preparazione (Allegato II, Capitolo II)"));
+  [
+    "pavimenti in materiale impermeabile, non assorbente, lavabile e non tossico, mantenuti in buone condizioni e di facile pulizia e disinfezione;",
+    "pareti in materiale impermeabile, non assorbente, lavabile e non tossico, con superficie liscia fino a un'altezza adeguata alle operazioni;",
+    "soffitti e attrezzature sospese costruiti e rifiniti in modo da evitare l'accumulo di sporcizia, la formazione di muffe e la caduta di particelle;",
+    "finestre e altre aperture verso l'esterno munite, ove necessario, di dispositivi di protezione contro gli insetti, facilmente smontabili per la pulizia;",
+    "porte di superficie liscia e non assorbente, di facile pulizia e disinfezione;",
+    "superfici a contatto con gli alimenti in materiale liscio, lavabile, resistente alla corrosione e non tossico;",
+    "attrezzature adeguate per la pulizia, la disinfezione e il deposito degli utensili di lavoro.",
+  ].forEach((t) => b.push(punto(t)));
+  b.push(h3("Attrezzature, acqua, rifiuti e personale"));
+  [
+    "attrezzature a contatto con gli alimenti costruite con materiali idonei, mantenute in buono stato, pulite e disinfettate con frequenza sufficiente (Cap. V);",
+    "rifiuti alimentari e di altro genere depositati in contenitori chiudibili, rimossi dai locali con la frequenza necessaria ed eliminati in modo igienico (Cap. VI);",
+    "approvvigionamento idrico con acqua potabile, impiegata ogni volta che è necessario per non contaminare gli alimenti; il ghiaccio destinato al contatto con gli alimenti è ottenuto da acqua potabile (Cap. VII);",
+    "igiene personale curata, indumenti adeguati e puliti, allontanamento dalla manipolazione di chi è affetto da malattia trasmissibile con gli alimenti (Cap. VIII);",
+    "materie prime non accettate quando risultano contaminate o alterate, e conservate in condizioni tali da impedirne il deterioramento (Cap. IX);",
+    "formazione degli addetti in materia di igiene alimentare in relazione alla mansione svolta (Cap. XII).",
+  ].forEach((t) => b.push(punto(t)));
+  b.push(p("Il rispetto di questi requisiti è verificato dal responsabile del piano di autocontrollo nel corso dei controlli ordinari; le difformità rilevate sono gestite come non conformità, con l'azione correttiva e i tempi di ripristino annotati nel registro dedicato.", { italic: true, size: 20 }));
   b.push(h3("Impianti a temperatura controllata"));
   if (impianti.length > 0) {
     b.push(griglia(["Impianto", "Intervallo di conformità", "Monitoraggio"],
