@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Award, HardHat, Wrench, Stethoscope, Network, Pencil, X, Check, ShieldAlert, GraduationCap, FileSignature } from "lucide-react";
+import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Award, HardHat, Wrench, Stethoscope, Network, Pencil, X, Check, ShieldAlert, GraduationCap, FileSignature, Wand2 } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
@@ -12,6 +12,63 @@ import DocumentiSicurezza from "./DocumentiSicurezza";
 import { generateNominaAttachment, findRlsName, findDatoreName } from "../utils/nominaTemplates";
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
+const FUNZIONE_LETTURA = "clever-responder";
+
+// Stessa conversione usata per bolle, etichette e registrazione sanitaria:
+// i PDF passano interi, le foto si rimpiccioliscono a 2000 px prima di partire.
+function fileInBase64(file) {
+  return new Promise((resolve, reject) => {
+    if (file.type === "application/pdf") {
+      const r = new FileReader();
+      r.onload = () => resolve({ data: String(r.result).split(",")[1], media_type: "application/pdf" });
+      r.onerror = reject;
+      r.readAsDataURL(file);
+      return;
+    }
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const lato = 2000;
+      const scala = Math.min(1, lato / Math.max(img.width, img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(img.width * scala);
+      canvas.height = Math.round(img.height * scala);
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      resolve({ data: canvas.toDataURL("image/jpeg", 0.85).split(",")[1], media_type: "image/jpeg" });
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Immagine non leggibile")); };
+    img.src = url;
+  });
+}
+
+const pulisciNome = (s) => String(s || "").trim().replace(/\s+/g, " ");
+const stessoNome = (a, b) =>
+  pulisciNome(a).toLowerCase().split(" ").sort().join(" ") ===
+  pulisciNome(b).toLowerCase().split(" ").sort().join(" ");
+
+// Dal titolo scritto sull'attestato all'incarico dell'app. Quello che non si
+// riconosce resta "Altro": meglio una voce da correggere che una sbagliata.
+export function incaricoDalCorso(titolo) {
+  const t = String(titolo || "").toLowerCase();
+  if (/primo soccorso/.test(t)) return "Addetto al Primo Soccorso";
+  if (/antincendi|incendi/.test(t)) return "Addetto Antincendio";
+  if (/rspp/.test(t)) return /datore/.test(t) ? "RSPP Datore di Lavoro" : "RSPP Esterno";
+  if (/\brls\b|rappresentante dei lavoratori/.test(t)) return "RLS";
+  if (/preposto/.test(t)) return "Preposto";
+  if (/\bdpi\b/.test(t)) return "Consegna DPI";
+  if (/general|specific|lavorator/.test(t)) return "Formazione Generale e Specifica Lavoratori";
+  return "Altro";
+}
+
+// Validità proposta quando l'attestato non la scrive. È una proposta, resta
+// modificabile riga per riga: la periodicità dipende dall'accordo applicato.
+export function anniProposti(incarico) {
+  if (incarico === "Addetto al Primo Soccorso") return 3;
+  if (incarico === "Preposto") return 2;
+  if (incarico === "Altro") return "";
+  return 5;
+}
 
 export const ROLE_OPTIONS = [
   "RSPP Datore di Lavoro",
@@ -216,6 +273,13 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
   const [apptNote, setApptNote] = useState("");
   const [apptError, setApptError] = useState("");
   const [apptBusy, setApptBusy] = useState(false);
+  // Lettura dell'attestato: un documento può contenere un solo attestato
+  // (allora compila il modulo) oppure l'elenco di più partecipanti (allora
+  // si registrano tutti insieme, senza riscrivere nome per nome).
+  const [leggendoAttestato, setLeggendoAttestato] = useState(false);
+  const [lettiDaAttestato, setLettiDaAttestato] = useState([]);
+  const [avvisoLettura, setAvvisoLettura] = useState("");
+  const [batchBusy, setBatchBusy] = useState(false);
   // Il modulo di inserimento si apre nel punto in cui serve:
   // null = chiuso, "" = nuovo nominativo libero, altrimenti il nome della
   // persona a cui si sta aggiungendo un incarico.
@@ -229,6 +293,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
     setRole(ROLE_OPTIONS[0]);
     setNominaIssueDate(""); setIssueDate(""); setValidityYears(""); setExpiryDate("");
     setApptNominaFile(null); setApptAttestatoFile(null); setApptNote(""); setApptError("");
+    setLettiDaAttestato([]); setAvvisoLettura("");
   };
 
   const handleIssueChange = (value) => {
@@ -247,11 +312,141 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
     setApptNominaFile(f);
   };
 
-  const onApptAttestatoFileChange = (e) => {
+  const onApptAttestatoFileChange = async (e) => {
     const f = e.target.files?.[0] || null;
     setApptError("");
+    setAvvisoLettura("");
+    setLettiDaAttestato([]);
     if (f && f.size > MAX_FILE_BYTES) { setApptError("File troppo grande (limite 8 MB)."); setApptAttestatoFile(null); e.target.value = ""; return; }
     setApptAttestatoFile(f);
+    if (!f) return;
+
+    setLeggendoAttestato(true);
+    try {
+      const { data: b64, media_type } = await fileInBase64(f);
+      const { data, error: err } = await supabase.functions.invoke(FUNZIONE_LETTURA, {
+        body: { file_base64: b64, media_type, tipo: "attestato" },
+      });
+      if (err) throw new Error(err.message || "Lettura non riuscita");
+      if (data?.errore) throw new Error(data.errore);
+
+      const grezzi = Array.isArray(data?.attestati) ? data.attestati : [data];
+      const righe = grezzi
+        .map((a) => {
+          const persona = pulisciNome([a?.nome, a?.cognome].filter(Boolean).join(" "));
+          const gia = employees
+            .map((x) => `${x.first_name} ${x.last_name}`.trim())
+            .find((n2) => stessoNome(n2, persona));
+          const incarico = incaricoDalCorso(a?.corso);
+          const anni = a?.validita_anni ? String(a.validita_anni) : String(anniProposti(incarico));
+          return {
+            scelto: true,
+            nome: gia || persona,
+            corso: a?.corso || "",
+            aggiornamento: !!a?.aggiornamento,
+            incarico,
+            data: a?.data_rilascio || "",
+            anni,
+            scadenza: a?.data_scadenza || addYears(a?.data_rilascio, anni) || "",
+            ente: a?.ente || "",
+          };
+        })
+        .filter((r) => r.nome || r.corso);
+
+      if (righe.length === 0) {
+        setApptError("Dall'attestato non è stato letto niente di utilizzabile: compila a mano.");
+      } else if (righe.length === 1 && !addingFor) {
+        // Un solo attestato: riempie il modulo che è già aperto.
+        const r = righe[0];
+        if (r.nome) setPersonName(r.nome);
+        setRole(r.incarico);
+        setIssueDate(r.data);
+        setValidityYears(r.anni);
+        setExpiryDate(r.scadenza);
+        setAvvisoLettura(`Letto dall'attestato: ${[r.nome, r.corso].filter(Boolean).join(" — ")}. Controlla incarico e validità prima di registrare.`);
+      } else if (righe.length === 1 && addingFor) {
+        const r = righe[0];
+        setRole(r.incarico);
+        setIssueDate(r.data);
+        setValidityYears(r.anni);
+        setExpiryDate(r.scadenza);
+        setAvvisoLettura(`Letto dall'attestato: ${r.corso || "corso"}. Il nominativo resta ${addingFor}.`);
+      } else {
+        setLettiDaAttestato(righe);
+        setAvvisoLettura(`Nel documento ci sono ${righe.length} attestati: controllali e registrali tutti insieme.`);
+      }
+    } catch (e2) {
+      setApptError("Lettura non riuscita: " + e2.message + " — puoi comunque compilare a mano.");
+    } finally {
+      setLeggendoAttestato(false);
+    }
+  };
+
+  const cambiaRigaLetta = (i, campo, valore) => {
+    setLettiDaAttestato((righe) => righe.map((r, k) => {
+      if (k !== i) return r;
+      const agg = { ...r, [campo]: valore };
+      if (campo === "incarico" && !r.scadenzaManuale) agg.anni = String(anniProposti(valore));
+      if (campo === "scadenza") agg.scadenzaManuale = true;
+      if (campo !== "scadenza" && (agg.data && agg.anni)) agg.scadenza = addYears(agg.data, agg.anni);
+      return agg;
+    }));
+  };
+
+  // Registrazione in blocco: una scheda per persona, con lo stesso file
+  // allegato a ciascun corso. Chi non è nell'elenco del personale ci entra,
+  // così la persona esiste anche per la sorveglianza sanitaria e per l'HACCP.
+  const registraAttestatiLetti = async () => {
+    const scelti = lettiDaAttestato.filter((r) => r.scelto && r.nome.trim());
+    if (scelti.length === 0) return;
+    setBatchBusy(true);
+    setApptError("");
+    try {
+      const attachment_path = apptAttestatoFile ? await uploadAttachment(company.id, apptAttestatoFile) : null;
+      for (const r of scelti) {
+        const inElenco = employees.some((x) => stessoNome(`${x.first_name} ${x.last_name}`, r.nome));
+        if (!inElenco) {
+          const pezzi = pulisciNome(r.nome).split(" ");
+          await addEmployee({
+            first_name: pezzi[0],
+            last_name: pezzi.slice(1).join(" ") || pezzi[0],
+            security_role: "Dipendente",
+          });
+        }
+        const created = await addAppointment({
+          role: r.incarico,
+          person_name: pulisciNome(r.nome),
+          nomina_issue_date: null,
+          issue_date: null,
+          validity_years: null,
+          expiry_date: null,
+          nomina_attachment_path: null,
+          attestato_attachment_path: null,
+          note: r.ente ? `Ente formatore: ${r.ente}` : "",
+        });
+        if (created?.id) {
+          await addTraining({
+            appointment_id: created.id,
+            course_kind: r.aggiornamento ? "Aggiornamento" : "Corso base",
+            issue_date: r.data || null,
+            validity_years: r.anni === "" ? null : Number(r.anni),
+            expiry_date: r.scadenza || null,
+            attachment_path,
+            note: r.corso || null,
+          });
+        }
+      }
+      setLettiDaAttestato([]);
+      setAvvisoLettura(`Registrati ${scelti.length} attestati.`);
+      setApptAttestatoFile(null);
+      const attestatoInput = document.getElementById("nomine-attestato-file-input");
+      if (attestatoInput) attestatoInput.value = "";
+      setAddingFor(null);
+    } catch (err) {
+      setApptError("Registrazione non riuscita: " + err.message);
+    } finally {
+      setBatchBusy(false);
+    }
   };
 
   const submitAppointment = async (e) => {
@@ -622,9 +817,41 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
           </label>
         </div>
         <label className="file-drop" htmlFor="nomine-attestato-file-input">
-          <Paperclip size={15} /><span>{apptAttestatoFile ? apptAttestatoFile.name : "Allega attestato/i di formazione (PDF o immagine)"}</span>
-          <input id="nomine-attestato-file-input" type="file" accept=".pdf,image/*" onChange={onApptAttestatoFileChange} hidden />
+          <Paperclip size={15} />
+          <span>{leggendoAttestato ? "Lettura dell'attestato in corso…" : apptAttestatoFile ? apptAttestatoFile.name : "Allega attestato/i di formazione (PDF o foto) — lo leggo io"}</span>
+          <input id="nomine-attestato-file-input" type="file" accept=".pdf,image/*" onChange={onApptAttestatoFileChange} hidden disabled={leggendoAttestato} />
         </label>
+        {avvisoLettura && <span className="file-ok"><Wand2 size={13} /> {avvisoLettura}</span>}
+
+        {lettiDaAttestato.length > 0 && (
+          <div className="letti-box">
+            <p className="sub" style={{ margin: "0 0 8px" }}>
+              Un incarico per ciascuno, con l'attestato allegato a tutti. Chi non è nell'elenco del
+              personale ci viene aggiunto. Gli anni di validità sono una proposta: controllali.
+            </p>
+            <ul className="log-list">
+              {lettiDaAttestato.map((r, i) => (
+                <li key={i} className="letto-riga">
+                  <input type="checkbox" checked={r.scelto} onChange={(e) => cambiaRigaLetta(i, "scelto", e.target.checked)} />
+                  <input type="text" value={r.nome} onChange={(e) => cambiaRigaLetta(i, "nome", e.target.value)} className="note-input" placeholder="Nome e cognome" />
+                  <select value={r.incarico} onChange={(e) => cambiaRigaLetta(i, "incarico", e.target.value)}>
+                    {ROLE_OPTIONS.filter((x) => x !== MEDICO_ROLE).map((x) => <option key={x} value={x}>{x}</option>)}
+                  </select>
+                  <input type="date" value={r.data} onChange={(e) => cambiaRigaLetta(i, "data", e.target.value)} />
+                  <input type="number" min="0" step="1" value={r.anni} onChange={(e) => cambiaRigaLetta(i, "anni", e.target.value)} className="num" title="Anni di validità" />
+                  <input type="date" value={r.scadenza} onChange={(e) => cambiaRigaLetta(i, "scadenza", e.target.value)} title="Scadenza" />
+                  {r.corso && <span className="lot-tag">{r.corso}{r.aggiornamento ? " — aggiornamento" : ""}</span>}
+                </li>
+              ))}
+            </ul>
+            <div className="row-form" style={{ margin: "8px 0 0" }}>
+              <button type="button" className="btn-primary" disabled={batchBusy} onClick={registraAttestatiLetti}>
+                <Plus size={16} /> {batchBusy ? "Registrazione…" : `Registra ${lettiDaAttestato.filter((r) => r.scelto).length} attestati`}
+              </button>
+              <button type="button" className="link-btn" onClick={() => { setLettiDaAttestato([]); setAvvisoLettura(""); }}>Scarta la lettura</button>
+            </div>
+          </div>
+        )}
       </fieldset>
 
       <p className="sub" style={{ marginTop: -6 }}>Compila almeno una delle due date (nomina o corso) per registrare la scheda — l'altra puoi aggiungerla in un secondo momento con "Modifica".</p>
