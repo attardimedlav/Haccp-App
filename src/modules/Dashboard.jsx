@@ -1,5 +1,5 @@
 import React from "react";
-import { Thermometer, SprayCan, Bug, AlertTriangle, CheckCircle2, Droplet, FolderOpen, HardHat, Award, Stethoscope, Wrench, GraduationCap } from "lucide-react";
+import { Thermometer, SprayCan, Bug, AlertTriangle, CheckCircle2, Droplet, FolderOpen, HardHat, Award, Stethoscope, Wrench, GraduationCap, Truck, Flame, BookOpen, Package } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { WATER_TANK_CONTROL_TYPE } from "./AcquePotabili";
@@ -49,6 +49,11 @@ export default function Dashboard({ goTo, openWorkSafety }) {
   const equipmentChecks = useTable("equipment_checks", company?.id);
   const medicalVisits = useTable("medical_visits", company?.id);
   const employees = useTable("employees", company?.id);
+  const manutenzioni = useTable("maintenance_logs", company?.id);
+  const fornitori = useTable("suppliers", company?.id);
+  const olio = useTable("frying_oil_logs", company?.id);
+  const arrivi = useTable("traceability_records", company?.id);
+  const manuali = useTable("haccp_manuals", company?.id);
 
   // Tutti gli indicatori di questo blocco riguardano solo il modulo HACCP: se
   // è disattivato (azienda seguita solo per la sicurezza sul lavoro) restano
@@ -194,6 +199,76 @@ export default function Dashboard({ goTo, openWorkSafety }) {
         })
     : [];
 
+  // Segnalazioni che nascono dalle sezioni nuove. Non sono scadenze di legge:
+  // sono promesse che il manuale fa e che qui si controlla siano mantenute.
+  const oggi = new Date().toISOString().slice(0, 10);
+  const haccpIssues = [];
+  if (showHaccp) {
+    // manutenzioni con la prossima scadenza già passata
+    manutenzioni.items
+      .filter((m) => m.next_due && m.next_due < oggi)
+      .forEach((m) => haccpIssues.push({
+        key: "manut-" + m.id, tab: "manutenzione", icon: Wrench,
+        titolo: "Manutenzione scaduta",
+        dettaglio: `${m.equipment} — ${m.intervention_type}, prevista entro il ${new Date(m.next_due).toLocaleDateString("it-IT")}`,
+      }));
+
+    // fornitori attivi senza dichiarazione, o con dichiarazione da riverificare
+    fornitori.items
+      .filter((fo) => fo.active !== false)
+      .forEach((fo) => {
+        const senza = !fo.declaration_date && !fo.attachment_path;
+        const scaduta = fo.declaration_expiry && fo.declaration_expiry < oggi;
+        if (!senza && !scaduta) return;
+        haccpIssues.push({
+          key: "forn-" + fo.id, tab: "fornitori", icon: Truck,
+          titolo: senza ? "Fornitore senza dichiarazione" : "Dichiarazione del fornitore da riverificare",
+          dettaglio: fo.name + (fo.supplied_goods ? " — " + fo.supplied_goods : ""),
+        });
+      });
+
+    // fornitori in sorveglianza rinforzata: non è un errore, è un promemoria
+    fornitori.items
+      .filter((fo) => fo.reinforced_watch)
+      .forEach((fo) => haccpIssues.push({
+        key: "sorv-" + fo.id, tab: "fornitori", icon: Truck,
+        titolo: "Fornitore in sorveglianza rinforzata",
+        dettaglio: `${fo.name} — misurare la temperatura a ogni consegna`,
+      }));
+
+    // arrivi merce registrati senza lotto: sono i casi in cui la
+    // rintracciabilità si regge solo sul documento di consegna
+    const senzaLotto = arrivi.items.filter((a) => !a.lot_number || !String(a.lot_number).trim()).length;
+    if (senzaLotto > 0) {
+      haccpIssues.push({
+        key: "arrivi-lotto", tab: "tracciabilita", icon: Package,
+        titolo: "Arrivi merce senza lotto",
+        dettaglio: `${senzaLotto} ${senzaLotto === 1 ? "registrazione" : "registrazioni"} senza numero di lotto: la rintracciabilità si regge sul solo documento di consegna`,
+      });
+    }
+
+    // olio di frittura: se l'azienda frigge e non risulta nessun cambio
+    if (company?.has_fryer) {
+      const ultimo = olio.items.reduce((max, o) => (o.change_date > max ? o.change_date : max), "");
+      if (!ultimo) {
+        haccpIssues.push({
+          key: "olio", tab: "oliofrittura", icon: Flame,
+          titolo: "Nessun cambio d'olio registrato",
+          dettaglio: "È l'unica documentazione da esibire in caso di controllo strumentale sull'olio in uso",
+        });
+      }
+    }
+
+    // il manuale: senza, l'azienda non ha il documento che l'ispettore chiede per primo
+    if (manuali.items.length === 0) {
+      haccpIssues.push({
+        key: "manuale", tab: "manuale", icon: BookOpen,
+        titolo: "Manuale di autocontrollo mancante",
+        dettaglio: "Nessuna revisione depositata",
+      });
+    }
+  }
+
   const safetyAlertCount =
     safetyIssues.length + (senzaVisita.length > 0 ? 1 : 0) + (senzaFormazione.length > 0 ? 1 : 0);
 
@@ -217,7 +292,7 @@ export default function Dashboard({ goTo, openWorkSafety }) {
         </div>
       </div>
 
-      {(lateChecks.length > 0 || safetyAlertCount > 0) && (
+      {(lateChecks.length > 0 || safetyAlertCount > 0 || haccpIssues.length > 0) && (
         <div className="compliance-banner">
           {lateChecks.map((c) => (
             <button key={c.id} className="compliance-row" onClick={() => goTo(c.tab)}>
@@ -228,6 +303,15 @@ export default function Dashboard({ goTo, openWorkSafety }) {
                 {c.status === "missing"
                   ? ` — nessuna registrazione ancora effettuata`
                   : ` — in ritardo di ${c.daysLate} ${c.daysLate === 1 ? "giorno" : "giorni"}`}
+              </span>
+            </button>
+          ))}
+          {haccpIssues.map((it) => (
+            <button key={it.key} className="compliance-row" onClick={() => goTo(it.tab)}>
+              <AlertTriangle size={15} color="#B3432E" />
+              <it.icon size={15} />
+              <span className="compliance-text">
+                <strong>{it.titolo}</strong>{" — "}{it.dettaglio}
               </span>
             </button>
           ))}
