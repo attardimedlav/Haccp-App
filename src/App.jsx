@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Thermometer, SprayCan, Bug, ChevronRight, ChevronDown, LogOut, ShieldCheck, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen, Snowflake, HardHat, FileText, Paperclip, Award, Wrench, Stethoscope, Network, UtensilsCrossed, GlassWater, Menu, X, ChefHat, Flame, Truck, BookOpen, LayoutDashboard } from "lucide-react";
+import { Thermometer, SprayCan, Bug, ChevronRight, ChevronDown, LogOut, ShieldCheck, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen, Snowflake, HardHat, FileText, Paperclip, Award, Wrench, Stethoscope, Network, UtensilsCrossed, GlassWater, Menu, X, ChefHat, Flame, Truck, BookOpen, LayoutDashboard, Layers } from "lucide-react";
 import { AuthProvider, useAuth } from "./AuthContext";
 import { useTable, EVENTO_SCRITTURA } from "./hooks/useTable";
 import Login from "./Login";
@@ -26,6 +26,7 @@ import Documenti from "./modules/Documenti";
 import OlioFrittura from "./modules/OlioFrittura";
 import Fornitori from "./modules/Fornitori";
 import ManualeHaccp from "./modules/ManualeHaccp";
+import CatalogoCicli from "./modules/CatalogoCicli";
 import Manutenzione from "./modules/Manutenzione";
 import { getSubscriptionStatus, isSubscriptionBlocked, getBannerTier } from "./subscriptionStatus";
 
@@ -263,6 +264,13 @@ function Shell() {
             <Users size={16} /> I miei clienti
           </button>
         )}
+        {/* Il catalogo dei cicli è del consulente, non dell'azienda aperta:
+            sta fuori dai moduli, accanto all'elenco dei clienti. */}
+        {hasMultipleClients && (
+          <button className={"nav-item" + (tab === "catalogo" ? " active" : "")} onClick={() => setTab("catalogo")}>
+            <Layers size={16} /> Catalogo cicli
+          </button>
+        )}
         {/* La Panoramica raccoglie le scadenze di tutti i moduli attivi, HACCP
             e sicurezza sul lavoro: sta fuori dai gruppi, come voce di primo
             livello, perché non appartiene a nessuno dei due. */}
@@ -391,6 +399,7 @@ function Shell() {
         {tab === "manutenzione" && <Manutenzione />}
         {tab === "fornitori" && <Fornitori />}
         {tab === "manuale" && <ManualeHaccp />}
+        {tab === "catalogo" && <CatalogoCicli />}
         {tab === "registrazione" && <RegistrazioneSanitaria />}
         {tab === "nonconformita" && <NonConformita />}
         {tab === "acquepotabili" && <AcquePotabili />}
