@@ -121,7 +121,23 @@ export default function Dashboard({ goTo, openWorkSafety }) {
 
     // Le scadenze degli incarichi stanno nei corsi di formazione: si segnala
     // il corso, dicendo per quale incarico e per quale persona vale.
-    collect(trainings.items, "nomine", Award,
+    //
+    // Un aggiornamento NON si aggiunge al corso base: lo sostituisce. Per ogni
+    // incarico vale quindi soltanto il corso che scade più tardi, che è la
+    // stessa regola usata in Sicurezza sul lavoro (latestTraining). Senza
+    // questo filtro la Panoramica continuava a segnalare come scaduto il corso
+    // base di una persona che aveva già fatto l'aggiornamento.
+    const corsiInVigore = Object.values(
+      trainings.items
+        .filter((t) => t.expiry_date)
+        .reduce((acc, t) => {
+          const chiave = t.appointment_id || t.id;
+          if (!acc[chiave] || new Date(t.expiry_date) > new Date(acc[chiave].expiry_date)) acc[chiave] = t;
+          return acc;
+        }, {})
+    );
+
+    collect(corsiInVigore, "nomine", Award,
       (t) => {
         const appt = workSafety.items.find((a) => a.id === t.appointment_id);
         return appt?.role || "Corso di formazione";
