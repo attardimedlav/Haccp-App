@@ -53,7 +53,12 @@ export function incaricoDalCorso(titolo) {
   const t = String(titolo || "").toLowerCase();
   if (/primo soccorso/.test(t)) return "Addetto al Primo Soccorso";
   if (/antincendi|incendi/.test(t)) return "Addetto Antincendio";
-  if (/rspp/.test(t)) return /datore/.test(t) ? "RSPP Datore di Lavoro" : "RSPP Esterno";
+  // "DL_RSPP" è come gli enti scrivono il corso del datore di lavoro che fa
+  // da RSPP: senza questo finiva fra gli RSPP esterni. Vale anche il richiamo
+  // all'art. 34, che è la norma di quel corso.
+  if (/rspp/.test(t)) {
+    return /datore|\bdl[\s_-]?rspp\b|art\.?\s*34/.test(t) ? "RSPP Datore di Lavoro" : "RSPP Esterno";
+  }
   if (/\brls\b|rappresentante dei lavoratori/.test(t)) return "RLS";
   if (/preposto/.test(t)) return "Preposto";
   if (/\bdpi\b/.test(t)) return "Consegna DPI";
