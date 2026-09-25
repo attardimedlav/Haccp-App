@@ -61,6 +61,9 @@ export function par(testo, o = {}) {
   // un salto pagina che non avveniva.
   const ppr =
     `<w:pPr>` +
+    // <w:pStyle> deve essere il PRIMO figlio di <w:pPr>: fuori posto viene
+    // ignorato in silenzio, e l'indice automatico resta vuoto.
+    (o.stile ? `<w:pStyle w:val="${o.stile}"/>` : "") +
     (o.pageBreakBefore ? "<w:pageBreakBefore/>" : "") +
     (o.bordoSotto ? `<w:pBdr><w:bottom w:val="single" w:sz="6" w:color="777777"/></w:pBdr>` : "") +
     `<w:spacing w:before="${o.before || 0}" w:after="${o.after == null ? 60 : o.after}"` +
@@ -278,10 +281,32 @@ ${conPiePagina ? '<Relationship Id="rId10" Type="http://schemas.openxmlformats.o
 <w:rFonts w:ascii="Calibri" w:hAnsi="Calibri" w:cs="Calibri"/>
 <w:sz w:val="20"/><w:szCs w:val="20"/><w:lang w:val="it-IT"/>
 </w:rPr></w:rPrDefault></w:docDefaults>
+<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/>
+<w:pPr><w:outlineLvl w:val="0"/></w:pPr>
+<w:rPr><w:b/><w:sz w:val="28"/><w:color w:val="1B2A22"/></w:rPr></w:style>
+<w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/>
+<w:pPr><w:outlineLvl w:val="1"/></w:pPr>
+<w:rPr><w:b/><w:sz w:val="26"/><w:color w:val="2F6F4E"/></w:rPr></w:style>
 </w:styles>`,
     "word/document.xml": document,
   };
   if (conPiePagina) files["word/footer1.xml"] = FOOTER_XML;
+  // Con un indice automatico serve dire a Word di ricalcolare i campi quando
+  // apre il file: altrimenti il sommario resta vuoto finché qualcuno non
+  // preme F9, e nessuno lo preme.
+  if (opzioni.aggiornaCampi) {
+    files["word/settings.xml"] =
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:updateFields w:val="true"/></w:settings>`;
+    files["[Content_Types].xml"] = files["[Content_Types].xml"].replace(
+      "</Types>",
+      '<Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/></Types>'
+    );
+    files["word/_rels/document.xml.rels"] = files["word/_rels/document.xml.rels"].replace(
+      "</Relationships>",
+      '<Relationship Id="rId20" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/></Relationships>'
+    );
+  }
   return files;
 }
 
