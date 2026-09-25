@@ -56,6 +56,61 @@ function griglia(intestazione, righe, larghezze, o = {}) {
   return tabella(larghezze, [capo, ...corpo]);
 }
 
+// Riquadro del diagramma di flusso: una tabella di una sola colonna, con il
+// bordo colorato. I CCP escono in rosso, come nei manuali scritti a mano:
+// è l'unica cosa che un ispettore cerca guardando il diagramma.
+function riquadro(titolo, sotto, marcatore) {
+  const critico = /CCP/i.test(marcatore || "");
+  const colore = critico ? "A83A2C" : "8FA894";
+  const spessore = critico ? 12 : 6;
+  const bordi = ["top", "left", "bottom", "right"]
+    .map((b) => `<w:${b} w:val="single" w:sz="${spessore}" w:space="0" w:color="${colore}"/>`).join("");
+  const dentro = [
+    par(titolo, { bold: true, size: 19, align: "center", after: sotto || marcatore ? 30 : 0 }),
+    sotto ? par(sotto, { size: 17, align: "center", after: marcatore ? 30 : 0 }) : "",
+    marcatore ? par(marcatore, { bold: true, size: 17, align: "center", after: 0, color: critico ? "A83A2C" : "3F5147" }) : "",
+  ].join("");
+  return (
+    `<w:tbl><w:tblPr><w:tblW w:w="6600" w:type="dxa"/><w:jc w:val="center"/>` +
+    `<w:tblBorders>${bordi}</w:tblBorders>` +
+    `<w:shd w:val="clear" w:color="auto" w:fill="${critico ? "FBEDEC" : "F1F4F0"}"/></w:tblPr>` +
+    `<w:tblGrid><w:gridCol w:w="6600"/></w:tblGrid>` +
+    `<w:tr><w:trPr><w:jc w:val="center"/></w:trPr>` +
+    `<w:tc><w:tcPr><w:tcW w:w="6600" w:type="dxa"/>` +
+    `<w:shd w:val="clear" w:color="auto" w:fill="${critico ? "FBEDEC" : "F1F4F0"}"/></w:tcPr>${dentro}</w:tc></w:tr></w:tbl>`
+  );
+}
+
+// Una fase del flusso si scrive "Nome della fase" oppure, per marcarla,
+// "Nome della fase | CCP 1" — la stessa barra verticale usata altrove.
+function leggiFase(testo, classificazione) {
+  const pezzi = String(testo || "").split("|").map((x) => x.trim());
+  const nome = pezzi[0];
+  const dettaglio = pezzi.length > 2 ? pezzi[1] : "";
+  const marcato = pezzi.length > 2 ? pezzi[2] : (pezzi.length === 2 ? pezzi[1] : "");
+  // Una fase è critica solo se lo dice il catalogo. Far ereditare la
+  // classificazione del ciclo era sbagliato: dentro un ciclo classificato CCP
+  // la maggior parte delle fasi non lo è — il servizio al cliente e la
+  // dispensa a temperatura ambiente non sono punti critici — e marcarle
+  // tutte in rosso dichiara controlli che non esistono.
+  const marcatore = marcato || "CP";
+  return { nome, dettaglio, marcatore };
+}
+
+function diagramma(ciclo) {
+  const fuori = [];
+  const fasi = (ciclo.flow || []).map((x) => leggiFase(x, ciclo.classification));
+  if (!fasi.length) return fuori;
+  fuori.push(par(`${ciclo.code} — ${ciclo.name}`, { bold: true, size: 22, align: "center", before: 200, after: 120 }));
+  fasi.forEach((f, i) => {
+    fuori.push(riquadro(f.nome, f.dettaglio, f.marcatore));
+    if (i < fasi.length - 1) fuori.push(par("▼", { size: 16, align: "center", after: 0, color: "6E8B78" }));
+  });
+  fuori.push(par("CP — punto di controllo     ·     CCP — punto critico di controllo",
+    { size: 16, align: "center", before: 120, after: 200, color: "5A6B5E" }));
+  return fuori;
+}
+
 // --- filtro sui flag dell'azienda ---------------------------------------
 
 // Una voce entra nel manuale se non chiede nessuna casella, oppure se la
@@ -322,11 +377,13 @@ export function corpoManuale(dossier) {
   b.push(p("I prodotti ottenuti da impasto surgelato o parzialmente cotto sono dichiarati come tali al consumatore, come previsto dal Reg. (UE) n. 1169/2011.", { italic: true, size: 20 }));
 
   b.push(h2("5.4 Diagrammi di flusso"));
-  b.push(p("Per ciascun ciclo è riportata la sequenza delle fasi, dalla materia prima al prodotto servito."));
-  cicliAttivi.forEach((c) => {
-    if (!(c.flow || []).length) return;
-    b.push(h3(c.code + " — " + c.name));
-    b.push(par((c.flow || []).join("   →   "), { size: 20, after: 120 }));
+  b.push(p("Il diagramma di flusso rappresenta le fasi che compongono ciascun ciclo, dalla materia prima al prodotto servito, e indica per ognuna se costituisce punto di controllo (CP) o punto critico di controllo (CCP)."));
+  cicliAttivi.forEach((c, i) => {
+    const d = diagramma(c);
+    if (!d.length) return;
+    d.forEach((x) => b.push(x));
+    // due diagrammi per pagina: più di così si spezzano a metà
+    if (i % 2 === 1 && i < cicliAttivi.length - 1) b.push(saltoPagina());
   });
   b.push(saltoPagina());
 
@@ -354,7 +411,11 @@ export function corpoManuale(dossier) {
     b.push(h2(`${c.code} — ${c.name}`));
     b.push(par("Classificazione: " + c.classification, { bold: true, size: 20, color: /^CCP/.test(c.classification) ? "A83A2C" : VERDE_CHIARO, after: 100 }));
     if (c.intro) b.push(p(c.intro));
-    if ((c.flow || []).length) b.push(par("Flusso:  " + (c.flow || []).join("  →  "), { size: 19, after: 140 }));
+    // nella riga di testo i marcatori non si scrivono: li porta il diagramma
+    if ((c.flow || []).length) {
+      const fasi = (c.flow || []).map((x) => leggiFase(x, c.classification).nome);
+      b.push(par("Flusso:  " + fasi.join("  →  "), { size: 19, after: 140 }));
+    }
     if (righe.length) {
       b.push(griglia(["Fase", "Pericolo", "Misura preventiva / limite", "Monitoraggio", "Azione correttiva"],
         righe.map((r) => [r.phase, r.hazard, r.control_measure, r.monitoring, r.corrective_action]),
