@@ -38,6 +38,13 @@ nav { display: flex; flex-direction: column; gap: 2px; }
    di separazione. Serve a chi usa l'app di rado per capire dove guardare. */
 .nav-group { display: flex; flex-direction: column; }
 .nav-group + .nav-group { margin-top: 10px; padding-top: 8px; border-top: 1px solid #24352B; }
+/* Documento visibile dentro la pagina (registrazione sanitaria e simili). */
+.doc-viewer { margin-top: 10px; border: 1px solid #E1E5DF; border-radius: 8px; background: #fff; overflow: hidden; }
+.doc-viewer-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 10px; background: #F4F6F3; border-bottom: 1px solid #E1E5DF; font-size: 12.5px; color: #1B2A22; }
+.doc-frame { display: block; width: 100%; height: 560px; border: 0; background: #fff; }
+.doc-image { display: block; width: 100%; height: auto; }
+@media (max-width: 780px) { .doc-frame { height: 380px; } }
+
 .nav-group-label { padding: 2px 10px 5px; font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: #6E8B78; }
 .content { flex: 1; padding: 32px 36px; max-width: 860px; }
 
