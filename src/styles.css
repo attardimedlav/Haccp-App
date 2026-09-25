@@ -38,6 +38,8 @@ nav { display: flex; flex-direction: column; gap: 2px; }
    di separazione. Serve a chi usa l'app di rado per capire dove guardare. */
 .nav-group { display: flex; flex-direction: column; }
 .nav-group + .nav-group { margin-top: 10px; padding-top: 8px; border-top: 1px solid #24352B; }
+.section-title { margin: 22px 0 6px; font-size: 14px; color: #1B2A22; }
+
 /* Documento visibile dentro la pagina (registrazione sanitaria e simili). */
 .doc-viewer { margin-top: 10px; border: 1px solid #E1E5DF; border-radius: 8px; background: #fff; overflow: hidden; }
 .doc-viewer-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 10px; background: #F4F6F3; border-bottom: 1px solid #E1E5DF; font-size: 12.5px; color: #1B2A22; }
