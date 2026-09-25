@@ -83,6 +83,10 @@ export default function Tracciabilita() {
   const { company, session } = useAuth();
   const { items, remove, update, reload, loading } = useTable("traceability_records", company?.id);
   const { items: prodotti, reload: reloadProdotti } = useTable("products", company?.id);
+  // L'anagrafica fornitori serve qui per due motivi: suggerire il nome invece
+  // di farlo riscrivere ogni volta, e avvisare quando il fornitore è in
+  // sorveglianza rinforzata, che è esattamente il momento in cui serve saperlo.
+  const { items: fornitori } = useTable("suppliers", company?.id);
 
   const [vista, setVista] = useState("arrivi");
   const daValutare = prodotti.filter((p) => !p.allergens_checked_at).length;
@@ -232,6 +236,14 @@ export default function Tracciabilita() {
   // Riquadro sotto il nome del prodotto, sia in verifica sia nell'elenco:
   // dice se il prodotto è già in catalogo e con quali allergeni. Serve perché
   // gli allergeni si vedevano solo dentro il catalogo.
+  // Confronto sul nome normalizzato: è l'unico aggancio che abbiamo finché
+  // l'arrivo merci non salva anche l'identificativo del fornitore.
+  const fornitoreScelto = fornitore.trim()
+    ? fornitori.find((f) => normalizza(f.name) === normalizza(fornitore))
+    : null;
+  const fornitoreSorvegliato = fornitoreScelto?.reinforced_watch ? fornitoreScelto : null;
+  const fornitoreSconosciuto = fornitore.trim().length > 2 && fornitori.length > 0 && !fornitoreScelto;
+
   const StatoAllergeni = ({ prodotto, fornitoreRiga }) => {
     if (!prodotto) return <span className="lot-tag" style={{ marginLeft: 0, color: "#8A5A00", background: "#FFF1D6" }}>Nuovo prodotto — allergeni da valutare</span>;
     const nuovoFornitore = fornitoreRiga && fornitoriDi(prodotto.id).size > 0 && !fornitoriDi(prodotto.id).has(normalizza(fornitoreRiga));
@@ -379,9 +391,31 @@ export default function Tracciabilita() {
       {fase === "verifica" && (
         <div className="traccia-form">
           {avviso && <span className="file-error" style={{ color: "#8A5A00" }}><AlertTriangle size={13} /> {avviso}</span>}
+          {fornitoreSorvegliato && (
+            <span className="file-error">
+              <AlertTriangle size={13} /> {fornitoreSorvegliato.name} è in sorveglianza rinforzata
+              {fornitoreSorvegliato.reinforced_watch_reason ? ` (${fornitoreSorvegliato.reinforced_watch_reason})` : ""}:
+              misura la temperatura di questa consegna e annotala nelle note.
+            </span>
+          )}
+          {fornitoreSconosciuto && (
+            <span className="file-error" style={{ color: "#8A5A00" }}>
+              <AlertTriangle size={13} /> “{fornitore.trim()}” non è fra i fornitori registrati: aggiungilo in Fornitori con la sua dichiarazione.
+            </span>
+          )}
 
           <div className="row-form" style={{ margin: 0 }}>
-            <input className="note-input" placeholder="Fornitore" value={fornitore} onChange={(e) => setFornitore(e.target.value)} style={!fornitore ? cellaMancante : undefined} />
+            <input
+              className="note-input"
+              list="elenco-fornitori"
+              placeholder="Fornitore"
+              value={fornitore}
+              onChange={(e) => setFornitore(e.target.value)}
+              style={!fornitore ? cellaMancante : undefined}
+            />
+            <datalist id="elenco-fornitori">
+              {fornitori.filter((f) => f.active !== false).map((f) => <option key={f.id} value={f.name} />)}
+            </datalist>
             <input placeholder="N. documento" value={numeroDocumento} onChange={(e) => setNumeroDocumento(e.target.value)} style={{ width: 140 }} />
             <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#4C5A52" }}>
               Ricevuto il
