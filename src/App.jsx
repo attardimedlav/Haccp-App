@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Thermometer, SprayCan, Bug, ChevronRight, ChevronDown, LogOut, ShieldCheck, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen, Snowflake, HardHat, FileText, Paperclip, Award, Wrench, Stethoscope, Network, UtensilsCrossed, GlassWater, Menu, X, ChefHat, Flame, Truck, BookOpen } from "lucide-react";
+import { Thermometer, SprayCan, Bug, ChevronRight, ChevronDown, LogOut, ShieldCheck, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen, Snowflake, HardHat, FileText, Paperclip, Award, Wrench, Stethoscope, Network, UtensilsCrossed, GlassWater, Menu, X, ChefHat, Flame, Truck, BookOpen, LayoutDashboard } from "lucide-react";
 import { AuthProvider, useAuth } from "./AuthContext";
 import { useTable, EVENTO_SCRITTURA } from "./hooks/useTable";
 import Login from "./Login";
@@ -112,7 +112,11 @@ function ResponsabileLine({ tab, showHaccp, rsppNames, haccpManager, activeWorkS
     );
   }
 
-  if (showHaccp && (tab === "dashboard" || HACCP_TAB_IDS.has(tab))) {
+  // In Panoramica, che ora raccoglie tutti i moduli, il responsabile HACCP si
+  // mostra solo quando l'azienda è seguita per il solo autocontrollo: dove ci
+  // sono entrambi i moduli non avrebbe senso indicare uno dei due.
+  const panoramicaSoloHaccp = tab === "dashboard" && showHaccp && !activeWorkSafety;
+  if (panoramicaSoloHaccp || (showHaccp && HACCP_TAB_IDS.has(tab))) {
     return (
       <div className="rspp-line">
         <ShieldCheck size={14} color="#2F6F4E" />
@@ -187,7 +191,7 @@ function Shell() {
     { titolo: "Quando serve", voci: visibleMainTabs.filter((t) => EVENTI.has(t.id)) },
   ];
   const visibleWorkSafetyItems = WORK_SAFETY_SUB_ITEMS.filter((t) => !t.requires || company?.[t.requires]);
-  const haccpTabAttivo = tab === "dashboard" || HACCP_TAB_IDS.has(tab);
+  const haccpTabAttivo = HACCP_TAB_IDS.has(tab);
 
   React.useEffect(() => {
     if ((tab === "abbattimento" && !showAbbattimento) || ((tab === "tracciabilita" || tab === "preparazioni") && !showTracciabilita) || (tab === "ghiaccio" && !showGhiaccio) || (tab === "oliofrittura" && !showOlio)) {
@@ -259,21 +263,19 @@ function Shell() {
             <Users size={16} /> I miei clienti
           </button>
         )}
-        {/* Autocontrollo alimentare. La voce di testa porta alla Panoramica ed
-            apre il gruppo, esattamente come fa "Sicurezza sul lavoro": prima si
-            chiamava "Panoramica" ed era un nome rimasto da quando l'app faceva
-            solo HACCP.
-            Dove il modulo HACCP è spento il gruppo non esiste, e la Panoramica
-            resta una voce a sé: chiamarla "HACCP" in un'azienda che l'HACCP non
-            ce l'ha sarebbe falso. */}
+        {/* La Panoramica raccoglie le scadenze di tutti i moduli attivi, HACCP
+            e sicurezza sul lavoro: sta fuori dai gruppi, come voce di primo
+            livello, perché non appartiene a nessuno dei due. */}
+        <button className={"nav-item" + (tab === "dashboard" ? " active" : "")} onClick={() => setTab("dashboard")}>
+          <LayoutDashboard size={16} /> Panoramica
+        </button>
+        {/* Autocontrollo alimentare. La voce di testa apre e chiude il gruppo,
+            esattamente come fa "Sicurezza sul lavoro". */}
         {showHaccp && (
           <nav className="nav-haccp-group">
             <button
               className={"nav-item nav-item-accordion" + (haccpTabAttivo ? " active" : "")}
-              onClick={() => {
-                setTab("dashboard");
-                setHaccpExpanded((v) => !v);
-              }}
+              onClick={() => setHaccpExpanded((v) => !v)}
             >
               <UtensilsCrossed size={16} />
               <span style={{ flex: 1 }}>HACCP</span>
@@ -281,12 +283,6 @@ function Shell() {
             </button>
             {haccpExpanded && (
               <div className="nav-subitems">
-                <button
-                  className={"nav-subitem" + (tab === "dashboard" ? " active" : "")}
-                  onClick={() => setTab("dashboard")}
-                >
-                  <ChevronRight size={14} /> Panoramica
-                </button>
                 {gruppiMenu.map((g) => (
                   g.voci.length === 0 ? null : (
                     <div key={g.titolo} className="nav-group">
@@ -306,13 +302,6 @@ function Shell() {
                 ))}
               </div>
             )}
-          </nav>
-        )}
-        {!showHaccp && (
-          <nav>
-            <button className={"nav-item" + (tab === "dashboard" ? " active" : "")} onClick={() => setTab("dashboard")}>
-              <ChevronRight size={16} /> Panoramica
-            </button>
           </nav>
         )}
         {company?.active_work_safety && (
