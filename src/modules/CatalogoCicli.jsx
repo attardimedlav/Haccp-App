@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Plus, Trash2, Pencil, Check, X, ChevronDown, ChevronRight, AlertTriangle, Layers } from "lucide-react";
+import { Plus, Trash2, Pencil, Check, X, ChevronDown, ChevronRight, AlertTriangle, Layers, FileText } from "lucide-react";
 import { supabase } from "../supabaseClient";
 import { useAuth } from "../AuthContext";
 
@@ -40,6 +40,45 @@ const CAMPI_RIGA = [
   ["corrective_action", "Azione correttiva"],
 ];
 
+// Il corpo di una procedura è fatto di blocchi tipizzati. Per poterlo
+// modificare senza un editor complicato si usa una scrittura semplice:
+//   riga normale        -> paragrafo
+//   riga che apre con # -> sottotitolo
+//   riga che apre con - -> voce di elenco puntato
+//   riga che apre con | -> riga di tabella (la prima è l'intestazione)
+function corpoInTesto(body) {
+  const fuori = [];
+  (body || []).forEach((bl) => {
+    if (bl.t === "h") fuori.push("# " + bl.x);
+    else if (bl.t === "b") fuori.push("- " + bl.x);
+    else if (bl.t === "tab") {
+      fuori.push("| " + (bl.i || []).join(" | "));
+      (bl.r || []).forEach((r) => fuori.push("| " + r.join(" | ")));
+    } else fuori.push(bl.x);
+  });
+  return fuori.join("\n");
+}
+
+function testoInCorpo(testo) {
+  const blocchi = [];
+  let tabella = null;
+  String(testo || "").split("\n").forEach((riga) => {
+    const r = riga.trim();
+    if (r.startsWith("|")) {
+      const celle = r.replace(/^\|/, "").split("|").map((c) => c.trim());
+      if (!tabella) { tabella = { t: "tab", i: celle, r: [] }; blocchi.push(tabella); }
+      else tabella.r.push(celle);
+      return;
+    }
+    tabella = null;
+    if (!r) return;
+    if (r.startsWith("# ")) blocchi.push({ t: "h", x: r.slice(2).trim() });
+    else if (r.startsWith("- ")) blocchi.push({ t: "b", x: r.slice(2).trim() });
+    else blocchi.push({ t: "p", x: r });
+  });
+  return blocchi;
+}
+
 export default function CatalogoCicli() {
   const { session } = useAuth();
   const consultantId = session?.user?.id || null;
@@ -50,6 +89,12 @@ export default function CatalogoCicli() {
   const [aperto, setAperto] = useState(null); // ciclo espanso
   const [loading, setLoading] = useState(true);
   const [errore, setErrore] = useState("");
+
+  const [vista, setVista] = useState("cicli");     // "cicli" oppure "procedure"
+  const [procedure, setProcedure] = useState([]);
+  const [procAperta, setProcAperta] = useState(null);
+  const [procInModifica, setProcInModifica] = useState(null);
+  const [nuovaProc, setNuovaProc] = useState(null);
 
   const [nuovoCiclo, setNuovoCiclo] = useState(null);   // bozza del ciclo nuovo
   const [cicloInModifica, setCicloInModifica] = useState(null);
@@ -87,7 +132,88 @@ export default function CatalogoCicli() {
     setLoading(false);
   }, [consultantId, settore]);
 
+  const caricaProcedure = useCallback(async () => {
+    if (!consultantId) return;
+    const { data, error } = await supabase
+      .from("procedure_templates")
+      .select("*")
+      .eq("consultant_id", consultantId)
+      .eq("sector", settore)
+      .order("sort_order", { ascending: true });
+    if (error) { setErrore(error.message); return; }
+    setProcedure(data || []);
+  }, [consultantId, settore]);
+
   useEffect(() => { carica(); }, [carica]);
+  useEffect(() => { caricaProcedure(); }, [caricaProcedure]);
+
+  const prossimoCodiceProc = () => {
+    const numeri = procedure.map((p) => parseInt(String(p.code).replace(/\D/g, ""), 10)).filter((n) => !Number.isNaN(n));
+    return "PRO " + String((numeri.length ? Math.max(...numeri) : 0) + 1).padStart(2, "0");
+  };
+
+  const bozzaProc = () => ({
+    code: prossimoCodiceProc(),
+    title: "",
+    purpose: "",
+    testo: "",
+    corrective_action: "",
+    verification_docs: "",
+    requires_flag: "",
+    sort_order: procedure.length + 1,
+  });
+
+  const salvaProc = async (bozza, id) => {
+    setErrore("");
+    const payload = {
+      sector: settore,
+      code: bozza.code.trim(),
+      title: (bozza.title || "").trim(),
+      purpose: bozza.purpose?.trim() || null,
+      body: testoInCorpo(bozza.testo),
+      corrective_action: bozza.corrective_action?.trim() || null,
+      verification_docs: bozza.verification_docs?.trim() || null,
+      requires_flag: bozza.requires_flag || null,
+      sort_order: Number(bozza.sort_order) || 0,
+    };
+    if (!payload.title) { setErrore("La procedura deve avere un titolo."); return; }
+    const res = id
+      ? await supabase.from("procedure_templates").update(payload).eq("id", id)
+      : await supabase.from("procedure_templates").insert({ ...payload, consultant_id: consultantId });
+    if (res.error) { setErrore(res.error.message); return; }
+    setNuovaProc(null); setProcInModifica(null);
+    caricaProcedure();
+  };
+
+  const eliminaProc = async (p) => {
+    if (!window.confirm(`Elimino la procedura "${p.code} — ${p.title}"?`)) return;
+    const { error } = await supabase.from("procedure_templates").delete().eq("id", p.id);
+    if (error) { setErrore(error.message); return; }
+    caricaProcedure();
+  };
+
+  const campoProc = (bozza, setBozza) => (
+    <div className="nc-edit-block">
+      <div className="row-form">
+        <input type="text" placeholder="Codice" value={bozza.code} onChange={(e) => setBozza({ ...bozza, code: e.target.value })} className="note-input" style={{ maxWidth: 120 }} />
+        <input type="text" placeholder="Titolo della procedura" value={bozza.title} onChange={(e) => setBozza({ ...bozza, title: e.target.value })} className="note-input" />
+        <input type="number" placeholder="Ordine" value={bozza.sort_order} onChange={(e) => setBozza({ ...bozza, sort_order: e.target.value })} className="note-input" style={{ maxWidth: 90 }} />
+      </div>
+      <textarea placeholder="Scopo" value={bozza.purpose || ""} onChange={(e) => setBozza({ ...bozza, purpose: e.target.value })} className="full-input nc-textarea" />
+      <textarea
+        placeholder={"Corpo della procedura.\nRiga normale = paragrafo\n# sottotitolo\n- voce di elenco\n| colonna | colonna |  (la prima riga con le barre è l'intestazione della tabella)"}
+        value={bozza.testo || ""}
+        onChange={(e) => setBozza({ ...bozza, testo: e.target.value })}
+        className="full-input nc-textarea"
+        style={{ minHeight: 220 }}
+      />
+      <textarea placeholder="Azioni correttive" value={bozza.corrective_action || ""} onChange={(e) => setBozza({ ...bozza, corrective_action: e.target.value })} className="full-input nc-textarea" />
+      <textarea placeholder="Documenti di verifica" value={bozza.verification_docs || ""} onChange={(e) => setBozza({ ...bozza, verification_docs: e.target.value })} className="full-input nc-textarea" />
+      <select value={bozza.requires_flag || ""} onChange={(e) => setBozza({ ...bozza, requires_flag: e.target.value })} className="full-input">
+        {FLAG.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
+      </select>
+    </div>
+  );
 
   const prossimoCodice = () => {
     const numeri = cicli.map((c) => parseInt(String(c.code).replace(/\D/g, ""), 10)).filter((n) => !Number.isNaN(n));
@@ -215,19 +341,106 @@ export default function CatalogoCicli() {
             i cicli e le righe legati a un'attrezzatura entrano nel manuale solo se quell'azienda ce l'ha.
           </p>
         </div>
-        <div className="pill"><Layers size={14} /> {cicli.length} cicli</div>
+        <div className="pill">
+          <Layers size={14} /> {cicli.length} cicli · {procedure.length} procedure
+        </div>
       </div>
 
       <div className="row-form">
-        <select value={settore} onChange={(e) => { setSettore(e.target.value); setAperto(null); }} className="full-input">
+        <select value={settore} onChange={(e) => { setSettore(e.target.value); setAperto(null); setProcAperta(null); }} className="full-input">
           {SETTORI.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
         </select>
-        <button type="button" className="btn-primary" onClick={() => setNuovoCiclo(bozzaCiclo())}>
-          <Plus size={16} /> Nuovo ciclo
+        <button type="button" className={vista === "cicli" ? "btn-primary" : "link-btn"} onClick={() => setVista("cicli")}>
+          <Layers size={14} /> Cicli di lavorazione
+        </button>
+        <button type="button" className={vista === "procedure" ? "btn-primary" : "link-btn"} onClick={() => setVista("procedure")}>
+          <FileText size={14} /> Procedure
         </button>
       </div>
 
       {errore && <p className="file-error"><AlertTriangle size={13} /> {errore}</p>}
+
+      {vista === "procedure" ? (
+        <>
+          <div className="row-form">
+            <button type="button" className="btn-primary" onClick={() => setNuovaProc(bozzaProc())}>
+              <Plus size={16} /> Nuova procedura
+            </button>
+          </div>
+
+          {nuovaProc && (
+            <>
+              <h3 className="section-title">Nuova procedura</h3>
+              {campoProc(nuovaProc, setNuovaProc)}
+              <div className="row-form" style={{ marginBottom: 12 }}>
+                <button className="btn-primary" onClick={() => salvaProc(nuovaProc)}><Check size={14} /> Salva la procedura</button>
+                <button type="button" className="link-btn" onClick={() => setNuovaProc(null)}>Annulla</button>
+              </div>
+            </>
+          )}
+
+          {procedure.length === 0 ? (
+            <div className="empty"><p>Nessuna procedura per questo settore.</p></div>
+          ) : (
+            <ul className="dish-list">
+              {procedure.map((p) => {
+                const espansa = procAperta === p.id;
+                const inMod = procInModifica?.id === p.id;
+                return (
+                  <li key={p.id} className="dish-row">
+                    <div className="dish-top">
+                      <div>
+                        <button type="button" className="link-btn" onClick={() => setProcAperta(espansa ? null : p.id)}>
+                          {espansa ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                        </button>
+                        <strong>{p.code} — {p.title}</strong>
+                        {p.requires_flag && <span className="lot-tag">{etichettaFlag(p.requires_flag)}</span>}
+                      </div>
+                      <div style={{ display: "flex", gap: 4 }}>
+                        <button className="icon-btn" onClick={() => setProcInModifica({ ...p, testo: corpoInTesto(p.body) })} aria-label="Modifica"><Pencil size={14} /></button>
+                        <button className="icon-btn" onClick={() => eliminaProc(p)} aria-label="Elimina"><Trash2 size={14} /></button>
+                      </div>
+                    </div>
+
+                    {inMod && (
+                      <>
+                        {campoProc(procInModifica, setProcInModifica)}
+                        <div className="row-form">
+                          <button className="btn-primary" onClick={() => salvaProc(procInModifica, p.id)}><Check size={14} /> Salva</button>
+                          <button type="button" className="link-btn" onClick={() => setProcInModifica(null)}><X size={13} /> Annulla</button>
+                        </div>
+                      </>
+                    )}
+
+                    {espansa && !inMod && (
+                      <div style={{ marginTop: 6 }}>
+                        {p.purpose && <p className="pest-note"><em>Scopo:</em> {p.purpose}</p>}
+                        {(p.body || []).map((bl, k) =>
+                          bl.t === "h" ? <p key={k} className="field-label" style={{ marginTop: 8 }}>{bl.x}</p>
+                          : bl.t === "b" ? <p key={k} className="pest-note">• {bl.x}</p>
+                          : bl.t === "tab" ? (
+                            <p key={k} className="traccia-meta" style={{ fontSize: 12 }}>
+                              Tabella: {(bl.i || []).join(" · ")} — {(bl.r || []).length} righe
+                            </p>
+                          ) : <p key={k} className="pest-note">{bl.x}</p>
+                        )}
+                        {p.corrective_action && <p className="pest-note"><em>Azioni correttive:</em> {p.corrective_action}</p>}
+                        {p.verification_docs && <p className="pest-note"><em>Documenti di verifica:</em> {p.verification_docs}</p>}
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </>
+      ) : (
+      <>
+      <div className="row-form">
+        <button type="button" className="btn-primary" onClick={() => setNuovoCiclo(bozzaCiclo())}>
+          <Plus size={16} /> Nuovo ciclo
+        </button>
+      </div>
 
       {nuovoCiclo && (
         <>
@@ -336,6 +549,8 @@ export default function CatalogoCicli() {
             );
           })}
         </ul>
+      )}
+      </>
       )}
     </div>
   );
