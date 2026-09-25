@@ -21,7 +21,10 @@ function AttachmentLink({ path }) {
 export default function NonConformita() {
   const { company } = useAuth();
   const { items, add, remove, update, loading } = useTable("non_conformities", company?.id);
-  const { items: lots } = useTable("traceability_logs", company?.id);
+  // I lotti vengono dalla tracciabilità nuova: la vecchia tabella è vuota per
+  // tutte le aziende, e finché si leggeva quella l'elenco restava vuoto.
+  const { items: lots } = useTable("traceability_records", company?.id);
+  const { items: prodotti } = useTable("products", company?.id);
   const [area, setArea] = useState(NC_CATEGORIES[0]);
   const [description, setDescription] = useState("");
   const [detectedDate, setDetectedDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -57,7 +60,7 @@ export default function NonConformita() {
     try {
       let attachment_path = null;
       if (file) attachment_path = await uploadAttachment(company.id, file);
-      await add({ area, description, detected_date: detectedDate, responsible, attachment_path, traceability_log_id: lotId || null });
+      await add({ area, description, detected_date: detectedDate, responsible, attachment_path, traceability_record_id: lotId || null });
       setDescription(""); setResponsible(""); setFile(null); setLotId("");
       const input = document.getElementById("nc-file-input");
       if (input) input.value = "";
@@ -147,7 +150,10 @@ export default function NonConformita() {
   };
 
   const openCount = items.filter((i) => !i.resolved_date).length;
-  const lotLabel = (lot) => `${lot.product_name} — lotto ${lot.lot} (${lot.supplier})`;
+  const nomeProdotto = (lot) =>
+    prodotti.find((p) => p.id === lot.product_id)?.name || lot.product_name || "Prodotto";
+  const lotLabel = (lot) =>
+    `${nomeProdotto(lot)} — lotto ${lot.lot_number || "non indicato"} (${lot.supplier_name || "fornitore non indicato"})`;
 
   return (
     <div className="panel">
@@ -210,7 +216,7 @@ export default function NonConformita() {
           {items.map((item) => {
             const resolved = !!item.resolved_date;
             const isEditing = editingId === item.id;
-            const linkedLot = item.traceability_log_id ? lots.find((l) => l.id === item.traceability_log_id) : null;
+            const linkedLot = item.traceability_record_id ? lots.find((l) => l.id === item.traceability_record_id) : null;
             return (
               <li key={item.id} className={"dish-row" + (!resolved ? " row-warn" : "")}>
                 <div className="dish-top">

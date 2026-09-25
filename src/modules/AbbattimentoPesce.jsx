@@ -180,7 +180,10 @@ export default function AbbattimentoPesce() {
   const [subTab, setSubTab] = useState(visibleSubTabs[0]?.id || "abbattimento");
   const { items: batches, add: addBatch, remove: removeBatch, update: updateBatch, loading: batchesLoading } = useTable("blast_chill_logs", company?.id);
   const { items: thaws, add: addThaw, remove: removeThaw, update: updateThaw, loading: thawsLoading } = useTable("thaw_logs", company?.id);
-  const { items: lots } = useTable("traceability_logs", company?.id);
+  // Stesso motivo della scheda non conformità: i lotti veri stanno in
+  // traceability_records.
+  const { items: lots } = useTable("traceability_records", company?.id);
+  const { items: prodottiCatalogo } = useTable("products", company?.id);
 
   // --- Form: nuovo ciclo di abbattimento ---
   const [productName, setProductName] = useState("");
@@ -198,7 +201,7 @@ export default function AbbattimentoPesce() {
     setBusy(true);
     await addBatch({
       product_name: productName,
-      traceability_log_id: lotId || null,
+      traceability_record_id: lotId || null,
       kg: Number(kg),
       target_temp: t.temp,
       required_hours: t.hours,
@@ -257,7 +260,10 @@ export default function AbbattimentoPesce() {
     await updateThaw(thaw.id, { outcome, resolved_at: new Date().toISOString() });
   };
 
-  const lotLabel = (lot) => `${lot.product_name} — lotto ${lot.lot} (${lot.supplier})`;
+  const nomeProdotto = (lot) =>
+    prodottiCatalogo.find((p) => p.id === lot.product_id)?.name || lot.product_name || "Prodotto";
+  const lotLabel = (lot) =>
+    `${nomeProdotto(lot)} — lotto ${lot.lot_number || "non indicato"} (${lot.supplier_name || "fornitore non indicato"})`;
 
   return (
     <div className="panel">
