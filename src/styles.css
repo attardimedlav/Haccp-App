@@ -74,6 +74,15 @@ nav { display: flex; flex-direction: column; gap: 2px; }
 .file-drop { display: flex; align-items: center; gap: 8px; border: 1px dashed #C7CFC5; border-radius: 8px; padding: 10px 12px; font-size: 13px; color: #4C5A52; cursor: pointer; background: #F9FAF8; width: fit-content; }
 .file-drop:hover { border-color: #2F6F4E; }
 .file-error { display: flex; align-items: center; gap: 5px; color: #B3432E; font-size: 12.5px; }
+.letti-box { border: 1px solid #DDE7DD; background: #F7FAF7; border-radius: 10px; padding: 10px 12px; margin-top: 8px; }
+.letto-riga { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 10px; border-radius: 8px; background: #FFF; border: 1px solid #EDF0EB; }
+.letto-riga .note-input { min-width: 170px; flex: 1 1 170px; }
+.letto-riga select { flex: 1 1 200px; }
+.letto-riga .num { width: 70px; }
+.file-ok { display: flex; align-items: center; gap: 5px; color: #2F6F4E; font-size: 12.5px; }
+.check-row { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: #3C4A42; background: #F4F8F4; border: 1px solid #DDE7DD; border-radius: 8px; padding: 9px 11px; }
+.check-row input { margin-top: 2px; }
+.check-row span { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 
 /* ---- Lists ---- */
 .empty { padding: 32px 16px; text-align: center; color: #6E7C73; font-size: 14px; border: 1px dashed #D8DED6; border-radius: 10px; }
