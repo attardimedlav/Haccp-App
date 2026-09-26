@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { CheckCircle2, CalendarClock, Download, Wrench, Droplets, Settings2, RefreshCw, Lock, Users, BookOpen, FileText, Paperclip } from "lucide-react";
+import { CheckCircle2, CalendarClock, Download, Wrench, Droplets, Settings2, RefreshCw, Lock, Users, BookOpen, FileText, Paperclip, KeyRound } from "lucide-react";
 import { useAuth } from "../AuthContext";
 import { downloadReminderICS } from "../hooks/useReminders";
 import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
@@ -7,6 +7,7 @@ import { getSubscriptionStatus, pillClassFor } from "../subscriptionStatus";
 import Attrezzature from "./Attrezzature";
 import Sanificanti from "./Sanificanti";
 import Dipendenti from "./Dipendenti";
+import AccessoAzienda from "./AccessoAzienda";
 
 const SUB_TABS = [
   { id: "generale", label: "Generale", icon: Settings2 },
@@ -14,6 +15,9 @@ const SUB_TABS = [
   { id: "sanificanti", label: "Sanificanti", icon: Droplets },
   { id: "dipendenti", label: "Dipendenti", icon: Users },
 ];
+
+// Solo il consulente crea le credenziali con cui l'azienda entra nell'app.
+const TAB_ACCESSO = { id: "accesso", label: "Accesso", icon: KeyRound };
 
 function addOneYear(dateStr) {
   if (!dateStr) return "";
@@ -256,7 +260,7 @@ export default function Configurazione() {
       </div>
 
       <div className="config-subtabs">
-        {SUB_TABS.map((t) => (
+        {(isConsultant ? [...SUB_TABS, TAB_ACCESSO] : SUB_TABS).map((t) => (
           <button
             key={t.id}
             type="button"
@@ -271,6 +275,7 @@ export default function Configurazione() {
       {subTab === "attrezzature" && <Attrezzature />}
       {subTab === "sanificanti" && <Sanificanti />}
       {subTab === "dipendenti" && <Dipendenti />}
+      {subTab === "accesso" && isConsultant && <AccessoAzienda />}
 
       {subTab === "generale" && (
         <>
