@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Award, HardHat, Wrench, Stethoscope, Network, Pencil, X, Check, ShieldAlert, GraduationCap, FileSignature, Wand2 } from "lucide-react";
+import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Award, HardHat, Wrench, Stethoscope, Network, Pencil, X, Check, ShieldAlert, GraduationCap, FileSignature, Wand2, PenLine } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
@@ -9,6 +9,7 @@ import Conformita from "./Conformita";
 import CorsoFormazione from "./CorsoFormazione";
 import ArchivioCorsi from "./ChiusuraCorso";
 import DocumentiSicurezza from "./DocumentiSicurezza";
+import FirmaDocumento from "./FirmaDocumento";
 import { generateNominaAttachment, findRlsName, findDatoreName } from "../utils/nominaTemplates";
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
@@ -179,7 +180,9 @@ function AttachmentLink({ path }) {
 
 export default function SicurezzaLavoro({ subTab, setSubTab }) {
   const { company } = useAuth();
-  const { items: dvrDocs, add: addDvrDoc, remove: removeDvrDoc, loading: dvrLoading } = useTable("dvr_documents", company?.id);
+  const { items: dvrDocs, add: addDvrDoc, remove: removeDvrDoc, update: updateDvrDoc, loading: dvrLoading } = useTable("dvr_documents", company?.id);
+  // Documento aperto in firma: l'id della riga di dvr_documents.
+  const [firmaDvrId, setFirmaDvrId] = useState(null);
   const { items: appointments, add: addAppointment, remove: removeAppointment, update: updateAppointment, loading: appointmentsLoading } = useTable("work_safety_appointments", company?.id);
   const { items: equipmentChecks, add: addEquipmentCheck, remove: removeEquipmentCheck, loading: equipmentLoading } = useTable("equipment_checks", company?.id);
   const { items: medicalVisits, add: addMedicalVisit, remove: removeMedicalVisit, loading: medicalLoading } = useTable("medical_visits", company?.id);
@@ -1285,6 +1288,25 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
                   </div>
                   {item.note && <p className="pest-note">{item.note}</p>}
                   <AttachmentLink path={item.attachment_path} />
+                  {item.attachment_path && (
+                    <button
+                      type="button" className="link-btn"
+                      onClick={() => setFirmaDvrId(firmaDvrId === item.id ? null : item.id)}
+                    >
+                      <PenLine size={14} /> {firmaDvrId === item.id ? "Chiudi la firma" : "Firma il documento"}
+                    </button>
+                  )}
+                  {firmaDvrId === item.id && (
+                    <FirmaDocumento
+                      percorso={item.attachment_path}
+                      titolo={item.title}
+                      tabella="dvr_documents"
+                      rigaId={item.id}
+                      nomiSuggeriti={employees.map((e) => `${e.first_name} ${e.last_name}`.trim())}
+                      onFirmato={(nuovo) => updateDvrDoc(item.id, { attachment_path: nuovo })}
+                      onChiudi={() => setFirmaDvrId(null)}
+                    />
+                  )}
                 </li>
               ))}
             </ul>
