@@ -51,7 +51,7 @@ const STATIC_TABS = [
   { id: "manuale", label: "Manuale di autocontrollo", icon: BookOpen },
   { id: "registrazione", label: "Registrazione sanitaria", icon: Building2 },
   { id: "fornitori", label: "Fornitori", icon: Truck },
-  { id: "allergeni", label: "Allergeni", icon: ShieldAlert },
+  { id: "allergeni", label: "Menu e allergeni", icon: ShieldAlert },
   { id: "formazione", label: "Formazione", icon: GraduationCap },
   { id: "documenti", label: "Documenti", icon: FolderOpen },
 ];
