@@ -541,3 +541,6 @@ nav { display: flex; flex-direction: column; gap: 2px; }
 .credenziali-box { border: 1px solid #CBDCC9; background: #F2F8F2; border-radius: 10px; padding: 12px 14px; margin: 8px 0; display: flex; flex-direction: column; gap: 6px; }
 .credenziali-riga { display: flex; align-items: center; gap: 10px; font-size: 15px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .print-allergen-ingredients { font-size: 11px; color: #3F5147; margin: 4px 0 0; line-height: 1.35; }
+.print-allergen-ingredients, .allergeni-screen-list .pest-note { white-space: pre-line; }
+.print-allergen-componente { margin: 2px 0 0; font-size: 10.5px; line-height: 1.3; color: #3F5147; }
+.chip-condiviso { border-style: dashed; }
