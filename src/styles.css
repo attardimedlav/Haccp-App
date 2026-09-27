@@ -546,3 +546,11 @@ nav { display: flex; flex-direction: column; gap: 2px; }
 .chip-condiviso { border-style: dashed; }
 .scanner-video { width: 100%; max-width: 420px; border-radius: 10px; border: 1px solid #DDE7DD; margin-top: 6px; }
 .scanner-video.nascosto { display: none; }
+.badge-mancante { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: #FBEEEC; border: 1px solid #EFC9C1; color: #B3432E; font-size: 11.5px; }
+/* Sul telefono le azioni della riga vanno a capo e restano raggiungibili:
+   prima finivano fuori dallo schermo e sembravano non esserci. */
+@media (max-width: 720px) {
+  .log-row { flex-wrap: wrap; row-gap: 6px; }
+  .log-row .log-main { flex: 1 1 100%; }
+  .log-row .link-btn { flex: 0 0 auto; }
+}
