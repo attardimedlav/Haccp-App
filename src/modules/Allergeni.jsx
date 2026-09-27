@@ -44,7 +44,10 @@ export default function Allergeni() {
   const { company, consultantCompanies } = useAuth();
   const isConsultant = (consultantCompanies || []).length > 0;
   const { items, add, remove, loading } = useTable("allergen_dishes", company?.id);
-  const { items: prodotti, reload: ricaricaProdotti } = useTable("products", company?.id);
+  // Banca dati di QUESTA sezione: i prodotti composti di terzi che entrano
+  // nelle preparazioni. Non è il catalogo della tracciabilità, che si riempie
+  // dalle bolle e qui non c'entra niente.
+  const { items: prodotti, add: aggiungiProdotto, reload: ricaricaProdotti } = useTable("menu_products", company?.id);
   // Il catalogo condiviso del consulente: un prodotto letto una volta vale
   // per tutti i clienti. Qui si legge soltanto; scegliendolo se ne fa una
   // copia nel catalogo dell'azienda.
@@ -135,11 +138,10 @@ export default function Allergeni() {
 
       let id = esistente?.id;
       if (esistente) {
-        await supabase.from("products").update(campi).eq("id", esistente.id).eq("company_id", company.id);
+        await supabase.from("menu_products").update(campi).eq("id", esistente.id).eq("company_id", company.id);
       } else {
-        const { data: creato, error: e2 } = await supabase
-          .from("products").insert({ ...campi, company_id: company.id }).select().single();
-        if (e2) throw new Error(e2.message);
+        const creato = await aggiungiProdotto(campi);
+        if (!creato?.id) throw new Error("salvataggio del prodotto non riuscito");
         id = creato.id;
       }
       await ricaricaProdotti();
@@ -188,7 +190,7 @@ export default function Allergeni() {
     setErrore(""); setAvviso("");
     const gia = prodotti.find((p) => normalizza(p.name) === normalizza(c.name));
     if (gia) { commutaProdotto(gia.id); return; }
-    const { data, error } = await supabase.from("products").insert({
+    const { data, error } = await supabase.from("menu_products").insert({
       company_id: company.id,
       name: c.name,
       ingredients_text: c.ingredients_text,
@@ -244,7 +246,7 @@ export default function Allergeni() {
       if (trovato.allergeni.length === 0 && trovato.ingredienti) {
         dedotti = allergeniDaIngredienti(trovato.ingredienti);
       }
-      const { data, error } = await supabase.from("products").insert({
+      const { data, error } = await supabase.from("menu_products").insert({
         company_id: company.id,
         name: trovato.nome,
         ean: c,
@@ -308,7 +310,7 @@ export default function Allergeni() {
     setErrore(""); setAvviso("");
     const adesso = new Date().toISOString();
     const { error: e1 } = await supabase
-      .from("products")
+      .from("menu_products")
       .update({ allergens_checked_at: p.allergens_checked_at || adesso })
       .eq("id", p.id).eq("company_id", company.id);
     if (e1) { setErrore("Non è stato possibile segnare il prodotto come verificato: " + e1.message); return; }
@@ -428,8 +430,9 @@ export default function Allergeni() {
 
         {!cercaAttiva && (
           <p className="sub" style={{ margin: 0 }}>
-            Scrivi almeno due lettere per cercare un prodotto. Il catalogo contiene anche tutto quello
-            che è arrivato dalle bolle: qui compaiono solo i prodotti che cerchi.
+            Scrivi almeno due lettere per cercare fra i prodotti composti che hai già registrato qui —
+            creme, semilavorati, prodotti pronti di laboratori esterni. Non è il catalogo degli arrivi
+            merce: qui entra solo quello che aggiungi da questa pagina.
           </p>
         )}
         {cercaAttiva && elencoProdotti.length === 0 && condivisiDaProporre.length === 0 && (
@@ -614,6 +617,14 @@ export default function Allergeni() {
           <p className="print-allergen-legal">
             Le informazioni derivano dalle etichette e dalle schede tecniche dei prodotti impiegati, conservate
             in azienda. In caso di cambio di fornitore o di ricetta l'elenco viene aggiornato.
+          </p>
+          {/* La data in calce dice se il foglio appeso è ancora quello buono:
+              un elenco allergeni senza data, quando cambia un ingrediente,
+              diventa la prova del contrario di quello che si voleva. */}
+          <p className="print-allergen-data">
+            Aggiornato al {new Date(
+              items.reduce((max, i) => Math.max(max, new Date(i.created_at).getTime()), 0) || Date.now(),
+            ).toLocaleDateString("it-IT")} — stampato il {new Date().toLocaleDateString("it-IT")}
           </p>
         </div>
       )}
