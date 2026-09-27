@@ -310,6 +310,8 @@ nav { display: flex; flex-direction: column; gap: 2px; }
 @media print {
   * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
   .sidebar, .content-toolbar, form, .icon-btn, .mobile-topbar, .menu-overlay { display: none !important; }
+  /* Tutto ciò che serve solo a schermo: comandi, caselle di scelta, avvisi. */
+  .no-print { display: none !important; }
   /* Il responsabile compare nell'intestazione di stampa, non due volte. */
   .rspp-line, .ricerca { display: none !important; }
   .subscription-banner, .subscription-banner-warning, .subscription-banner-urgent, .subscription-banner-critical, .viewing-client-banner { display: none !important; }
