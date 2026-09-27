@@ -233,13 +233,11 @@ export default function Allergeni() {
         setErrore("Questo prodotto non risulta nella banca dati aperta: fotografa l'etichetta.");
         return;
       }
-      // Nelle banche dati aperte capita la scheda vuota: nome e basta. Creare
-      // un prodotto da una riga così lascia in catalogo un guscio senza dati,
-      // che è peggio del non averlo trovato.
-      if (!trovato.ingredienti && trovato.allergeni.length === 0) {
-        setErrore(`«${trovato.nome}» risulta in banca dati ma la scheda è vuota: né ingredienti né allergeni. Fotografa l'etichetta.`);
-        return;
-      }
+      // Nelle banche dati aperte capita la scheda con il solo nome. Il prodotto
+      // si salva lo stesso — fotografare l'etichetta richiede una quindicina di
+      // secondi e al banco non sempre ci sono — ma resta marcato in rosso
+      // finché gli allergeni non li indica l'OSA.
+      const soloNome = !trovato.ingredienti && trovato.allergeni.length === 0;
       // Ingredienti sì, allergeni no: si ricavano dal testo con il dizionario
       // interno. Sono una proposta, non una lettura.
       let dedotti = [];
@@ -252,7 +250,11 @@ export default function Allergeni() {
         ean: c,
         ingredients_text: trovato.ingredienti,
         allergens: trovato.allergeni.length ? trovato.allergeni : dedotti,
-        data_source: dedotti.length ? "banca dati aperta, allergeni dedotti dagli ingredienti" : "banca dati aperta",
+        data_source: soloNome
+          ? "banca dati aperta — solo il nome, allergeni da indicare"
+          : dedotti.length
+            ? "banca dati aperta, allergeni dedotti dagli ingredienti"
+            : "banca dati aperta",
         // niente allergens_checked_at: il dato NON è verificato finché non si
         // guarda l'etichetta vera. È la differenza fra un'informazione e una prova.
       }).select().single();
@@ -260,6 +262,14 @@ export default function Allergeni() {
       await ricaricaProdotti();
       setScelti((s2) => [...s2, data.id]);
       setEan("");
+      if (soloNome) {
+        setErrore(
+          `«${trovato.nome}» salvato, ma in banca dati ci sono solo il nome e il codice: ` +
+          "ingredienti e allergeni NON risultano e devono essere indicati dall'OSA. " +
+          "Spunta gli allergeni qui sotto, oppure fotografa l'etichetta quando hai tempo.",
+        );
+        return;
+      }
       setAvviso(
         `«${trovato.nome}» letto dalla banca dati aperta. ` +
         (trovato.allergeni.length
@@ -467,6 +477,9 @@ export default function Allergeni() {
                   <span className="log-note"> {p.ingredients_text || "etichetta non ancora letta"}</span>
                   {!p.allergens_checked_at && p.data_source && (
                     <span className="log-unit"> — da {p.data_source}, non verificato</span>
+                  )}
+                  {(p.allergens || []).length === 0 && (
+                    <span className="badge-mancante">allergeni da indicare</span>
                   )}
                   {(p.allergens || []).length > 0 && (
                     <span className="log-unit"> — {(p.allergens || []).join(", ")}</span>
