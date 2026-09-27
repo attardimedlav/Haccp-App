@@ -557,3 +557,4 @@ nav { display: flex; flex-direction: column; gap: 2px; }
   .log-row .link-btn { flex: 0 0 auto; }
 }
 .print-allergen-data { margin-top: 10px; font-size: 11px; color: #3F5147; text-align: right; }
+.chip-proposto { border-color: #E4C89A; background: #FDF6EA; color: #7A5A22; }
