@@ -50,6 +50,25 @@ export function eanValido(codice) {
   return (10 - (somma % 10)) % 10 === controllo;
 }
 
+// Nelle banche dati aperte il campo ingredienti a volte contiene un
+// segnaposto invece del testo vero: "Unknown", "n/a", un trattino. Vale come
+// vuoto, altrimenti finisce in catalogo un prodotto con scritto "Unknown" al
+// posto della lista ingredienti — ed è quello che è successo con la Calvé.
+const SEGNAPOSTO = [
+  "unknown", "n/a", "na", "none", "null", "-", "--", "sconosciuto",
+  "non disponibile", "da completare", "todo", "?", "x",
+];
+
+function testoIngredienti(grezzo) {
+  const t = String(grezzo || "").trim();
+  if (!t) return null;
+  if (SEGNAPOSTO.includes(t.toLowerCase().replace(/[.\s]/g, ""))) return null;
+  // Una lista ingredienti vera è lunga e ha delle virgole: sotto questa
+  // soglia è quasi sempre una parola messa lì per riempire il campo.
+  if (t.length < 15 && !t.includes(",")) return null;
+  return t;
+}
+
 // Interrogazione della banca dati aperta. Torna null se il prodotto non c'è.
 export async function cercaSuOpenFoodFacts(ean) {
   const campi = "product_name,product_name_it,brands,quantity,ingredients_text_it,ingredients_text,allergens_tags,traces_tags";
@@ -64,7 +83,7 @@ export async function cercaSuOpenFoodFacts(ean) {
   return {
     ean,
     nome: nome || `Prodotto ${ean}`,
-    ingredienti: (p.ingredients_text_it || p.ingredients_text || "").trim() || null,
+    ingredienti: testoIngredienti(p.ingredients_text_it || p.ingredients_text),
     allergeni: daTag(p.allergens_tags),
     tracce: daTag(p.traces_tags),
   };
