@@ -7,6 +7,7 @@ import DocumentoInPagina from "../DocumentoInPagina";
 import { supabase } from "../supabaseClient";
 import { pacchettoDocx, scaricaDocx } from "./CorsoFormazione";
 import { corpoManuale, controlli } from "../utils/manualeHaccpDocx";
+import { scaricaModuliRegistrazione } from "../utils/moduliRegistrazioneDocx";
 
 const MAX_FILE_BYTES = 12 * 1024 * 1024;
 
@@ -33,6 +34,9 @@ function prossimaRevisione(items) {
 export default function ManualeHaccp() {
   const { company, consultantCompanies } = useAuth();
   const { items, add, remove, loading } = useTable("haccp_manuals", company?.id);
+  // Gli impianti censiti servono ai moduli cartacei: una scheda M01 per ciascuno.
+  const { items: impianti } = useTable("temperature_units", company?.id);
+  const [moduliInCorso, setModuliInCorso] = useState(false);
 
   // Il manuale lo carica il consulente. Il cliente lo vede e lo scarica.
   const isConsultant = (consultantCompanies || []).length > 0;
@@ -210,6 +214,32 @@ export default function ManualeHaccp() {
             <CheckCircle2 size={14} /> rev. {corrente.revision} del {new Date(corrente.issued_on).toLocaleDateString("it-IT")}
           </div>
         )}
+      </div>
+
+      <div className="reminder-block" style={{ marginBottom: 12 }}>
+        <div className="reminder-head">
+          <FileDown size={17} color="#2F6F4E" />
+          <div>
+            <h3>Moduli di registrazione da stampare</h3>
+            <p className="sub">
+              Le schede cartacee allegate al manuale: M01 temperature (una per ogni impianto censito),
+              pulizie, arrivo merci, fornitori, non conformità, manutenzione, infestanti, ritiro. Servono
+              all'azienda che tiene le schede su carta, e a chi compila nell'app restano come riserva
+              quando il sistema non è disponibile.
+            </p>
+          </div>
+        </div>
+        <button
+          type="button" className="btn-primary" disabled={moduliInCorso}
+          onClick={async () => {
+            setModuliInCorso(true);
+            try { await scaricaModuliRegistrazione(company || {}, impianti || []); }
+            catch (e) { setError("Moduli non generati: " + e.message); }
+            finally { setModuliInCorso(false); }
+          }}
+        >
+          <FileDown size={16} /> {moduliInCorso ? "Preparazione…" : "Scarica i moduli (.docx)"}
+        </button>
       </div>
 
       {loading ? (
