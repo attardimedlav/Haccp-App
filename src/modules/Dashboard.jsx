@@ -75,19 +75,6 @@ export default function Dashboard({ goTo, openWorkSafety }) {
     compliance.push(tankCompliance);
   }
 
-  if (showHaccp) {
-    // Revisione del piano di autocontrollo: usa review_date (non created_at) come riferimento
-    const planItems = docs.items.filter((i) => i.document_type === PLAN_TYPE);
-    let planCompliance = { id: "haccp_plan", tab: "documenti", label: "Revisione piano di autocontrollo", days: 365, icon: FolderOpen, status: "missing" };
-    if (planItems.length > 0) {
-      const lastReview = planItems.reduce((max, i) => Math.max(max, new Date(i.review_date).getTime()), 0);
-      const elapsed = daysSince(lastReview);
-      planCompliance = elapsed > 365
-        ? { ...planCompliance, status: "late", lastTs: lastReview, daysLate: Math.floor(elapsed - 365) }
-        : { ...planCompliance, status: "ok", lastTs: lastReview };
-    }
-    compliance.push(planCompliance);
-  }
 
   const lateChecks = compliance.filter((c) => c.status !== "ok");
   const deviations = showHaccp ? temp.items.filter((i) => !isTempInRange(i, units.items)).length : 0;
@@ -259,8 +246,13 @@ export default function Dashboard({ goTo, openWorkSafety }) {
       }
     }
 
-    // il manuale: senza, l'azienda non ha il documento che l'ispettore chiede per primo
-    if (manuali.items.length === 0) {
+    // Il manuale non ha una scadenza periodica: il Reg. (CE) 852/2004, art. 5
+    // c. 4 lett. b, chiede di rivederlo quando cambiano il prodotto, il
+    // processo o una qualsiasi fase — non ogni anno. Qui si segnala soltanto
+    // se non c'è: né come revisione depositata, né come vecchio documento
+    // caricato in Documenti.
+    const manualeCaricatoInDocumenti = docs.items.some((i) => i.document_type === PLAN_TYPE);
+    if (manuali.items.length === 0 && !manualeCaricatoInDocumenti) {
       haccpIssues.push({
         key: "manuale", tab: "manuale", icon: BookOpen,
         titolo: "Manuale di autocontrollo mancante",
