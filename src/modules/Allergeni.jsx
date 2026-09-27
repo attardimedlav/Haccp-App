@@ -348,15 +348,26 @@ export default function Allergeni() {
     setBusy(false);
   };
 
-  const condivisiDaProporre = condivisi
-    .filter((c) => !prodotti.some((p) => normalizza(p.name) === normalizza(c.name)))
-    .filter((c) => normalizza(c.name).includes(normalizza(cerca)))
-    .slice(0, cerca ? 20 : 8);
+  // Il catalogo prodotti si riempie da solo leggendo le bolle: dentro c'è
+  // ogni riga di fattura, con i nomi da magazzino. Mostrarlo tutto qui rende
+  // la pagina illeggibile, quindi si vede solo quello che si cerca.
+  const ricerca = normalizza(cerca);
+  const cercaAttiva = ricerca.length >= 2;
 
-  const elencoProdotti = [...prodotti]
-    .filter((p) => normalizza(p.name).includes(normalizza(cerca)))
-    .sort((a, b) => a.name.localeCompare(b.name, "it"))
-    .slice(0, cerca ? 30 : 12);
+  const condivisiDaProporre = !cercaAttiva ? [] : condivisi
+    .filter((c) => !prodotti.some((p) => normalizza(p.name) === normalizza(c.name)))
+    .filter((c) => normalizza(c.name).includes(ricerca))
+    .slice(0, 20);
+
+  const elencoProdotti = !cercaAttiva ? [] : [...prodotti]
+    .filter((p) => normalizza(p.name).includes(ricerca))
+    // prima quelli che servono davvero al menu: con ingredienti o allergeni
+    .sort((a, b) => {
+      const va = (a.ingredients_text || (a.allergens || []).length) ? 0 : 1;
+      const vb = (b.ingredients_text || (b.allergens || []).length) ? 0 : 1;
+      return va - vb || a.name.localeCompare(b.name, "it");
+    })
+    .slice(0, 30);
 
   return (
     <div className="panel">
@@ -415,6 +426,17 @@ export default function Allergeni() {
           </label>
         </div>
 
+        {!cercaAttiva && (
+          <p className="sub" style={{ margin: 0 }}>
+            Scrivi almeno due lettere per cercare un prodotto. Il catalogo contiene anche tutto quello
+            che è arrivato dalle bolle: qui compaiono solo i prodotti che cerchi.
+          </p>
+        )}
+        {cercaAttiva && elencoProdotti.length === 0 && condivisiDaProporre.length === 0 && (
+          <p className="sub" style={{ margin: 0 }}>
+            Nessun prodotto trovato: cercalo col codice a barre o fotografa l'etichetta.
+          </p>
+        )}
         {elencoProdotti.length > 0 && (
           <div className="chip-grid">
             {elencoProdotti.map((p) => (
