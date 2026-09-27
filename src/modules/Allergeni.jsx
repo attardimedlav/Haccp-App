@@ -148,23 +148,30 @@ export default function Allergeni() {
       await ricaricaProdotti();
       setScelti((s) => (s.includes(id) ? s : [...s, id]));
 
-      // Lo stesso prodotto entra nel catalogo condiviso del consulente: la
-      // prossima azienda che lo usa non paga un'altra lettura.
-      if (isConsultant) {
+      // Lo stesso prodotto entra nel catalogo condiviso: la prossima azienda
+      // che lo usa non paga un'altra lettura. Il consulente lo mette come
+      // verificato; un'azienda lo propone soltanto, e solo se la foto c'è —
+      // senza prova non si condivide niente (è anche una regola del database).
+      if (isConsultant || foto) {
         const gia = condivisi.find((c) => normalizza(c.name) === normalizza(nome));
         const campiCondivisi = {
           name: nome,
+          ean: (ean || "").replace(/\D/g, "") || null,
           ingredients_text: data?.ingredienti || null,
           allergens: letti,
           traces: tracce,
           source: "etichetta",
-          verified_at: new Date().toISOString(),
+          verified_at: isConsultant ? new Date().toISOString() : null,
+          contributed_by: isConsultant ? null : company.id,
+          contributed_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
         if (foto) campiCondivisi.label_attachment_path = foto;
-        const esito = gia
+        const esito = gia && isConsultant
           ? await supabase.from("shared_products").update(campiCondivisi).eq("id", gia.id)
-          : await supabase.from("shared_products").insert(campiCondivisi);
+          : gia
+            ? { error: null }        // l'azienda non tocca una voce già presente
+            : await supabase.from("shared_products").insert(campiCondivisi);
         if (esito.error) {
           // Silenziarlo significherebbe credere di avere un catalogo condiviso
           // che in realtà è vuoto: meglio saperlo subito.
@@ -196,13 +203,15 @@ export default function Allergeni() {
       name: c.name,
       ingredients_text: c.ingredients_text,
       allergens: c.allergens || [],
-      allergens_checked_at: c.verified_at || new Date().toISOString(),
+      allergens_checked_at: c.verified_at || null,
       label_attachment_path: c.label_attachment_path || null,
     }).select().single();
     if (error) { setErrore("Non è stato possibile copiare il prodotto: " + error.message); return; }
     await ricaricaProdotti();
     setScelti((s) => [...s, data.id]);
-    setAvviso(`«${c.name}» copiato dal catalogo condiviso: controlla che l'etichetta del fornitore di questa azienda corrisponda.`);
+    setAvviso(c.verified_at
+      ? `«${c.name}» copiato dal catalogo condiviso: controlla che l'etichetta del fornitore di questa azienda corrisponda.`
+      : `«${c.name}» è una proposta di un'altra azienda, NON verificata: confrontala con l'etichetta della confezione prima di stamparla nel menu.`);
   };
 
   // Ricerca per codice a barre, dal meno caro al più caro:
@@ -414,6 +423,9 @@ export default function Allergeni() {
             L'informazione che l'art. 44 del Reg. UE 1169/2011 impone di dare per iscritto sugli alimenti
             non preimballati. Ogni voce si compone dai prodotti del catalogo: allergeni e ingredienti
             arrivano dalle etichette lette, così la dichiarazione ha una prova alle spalle.
+            <strong> La responsabilità della dichiarazione resta dell'operatore del settore alimentare:
+            prima di esporre il menu deve accertarsi che gli allergeni indicati corrispondano alle
+            etichette dei prodotti effettivamente in uso.</strong>
           </p>
         </div>
         <button type="button" className="link-btn no-print" onClick={() => window.print()}>
@@ -497,16 +509,20 @@ export default function Allergeni() {
         {condivisiDaProporre.length > 0 && (
           <>
             <p className="sub" style={{ margin: 0 }}>
-              Dal catalogo condiviso — prodotti già letti per altre aziende: scegliendoli non si paga nessuna lettura.
+              Dal catalogo condiviso — prodotti già letti per altre aziende: scegliendoli non si paga nessuna
+              lettura. Quelli col puntino sono proposte non ancora verificate: guarda la foto dell'etichetta
+              prima di usarli.
             </p>
             <div className="chip-grid">
               {condivisiDaProporre.map((c) => (
                 <button
-                  type="button" key={c.id} className="chip chip-condiviso"
+                  type="button" key={c.id}
+                  className={"chip chip-condiviso" + (c.verified_at ? "" : " chip-proposto")}
                   onClick={() => importaCondiviso(c)}
-                  title={c.ingredients_text || "Ingredienti non registrati"}
+                  title={(c.ingredients_text || "Ingredienti non registrati") +
+                    (c.verified_at ? "" : " — proposto da un'altra azienda, non verificato")}
                 >
-                  <Share2 size={12} /> {c.name}
+                  <Share2 size={12} /> {c.name}{c.verified_at ? "" : " ·"}
                 </button>
               ))}
             </div>
@@ -664,7 +680,9 @@ export default function Allergeni() {
           </div>
           <p className="print-allergen-legal">
             Le informazioni derivano dalle etichette e dalle schede tecniche dei prodotti impiegati, conservate
-            in azienda. In caso di cambio di fornitore o di ricetta l'elenco viene aggiornato.
+            in azienda. In caso di cambio di fornitore o di ricetta l'elenco viene aggiornato. L'operatore del
+            settore alimentare è responsabile della presente dichiarazione e ne verifica la corrispondenza con
+            le etichette dei prodotti effettivamente impiegati.
           </p>
           {/* La data in calce dice se il foglio appeso è ancora quello buono:
               un elenco allergeni senza data, quando cambia un ingrediente,
