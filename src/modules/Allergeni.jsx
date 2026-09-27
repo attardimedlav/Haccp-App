@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Trash2, Camera, Printer, Package, AlertTriangle } from "lucide-react";
+import { Plus, Trash2, Camera, Printer, Package, AlertTriangle, Share2 } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { supabase } from "../supabaseClient";
@@ -39,9 +39,19 @@ function fileInBase64(file) {
 }
 
 export default function Allergeni() {
-  const { company } = useAuth();
+  const { company, consultantCompanies } = useAuth();
+  const isConsultant = (consultantCompanies || []).length > 0;
   const { items, add, remove, loading } = useTable("allergen_dishes", company?.id);
   const { items: prodotti, reload: ricaricaProdotti } = useTable("products", company?.id);
+  // Il catalogo condiviso del consulente: un prodotto letto una volta vale
+  // per tutti i clienti. Qui si legge soltanto; scegliendolo se ne fa una
+  // copia nel catalogo dell'azienda.
+  const [condivisi, setCondivisi] = useState([]);
+  const caricaCondivisi = React.useCallback(async () => {
+    const { data } = await supabase.from("shared_products").select("*").order("name");
+    setCondivisi(data || []);
+  }, []);
+  React.useEffect(() => { caricaCondivisi(); }, [caricaCondivisi]);
 
   const [dish, setDish] = useState("");
   const [scelti, setScelti] = useState([]);      // id dei prodotti che compongono la voce
@@ -64,10 +74,12 @@ export default function Allergeni() {
     ...manuali,
   ])].sort((a, b) => ALLERGENI.indexOf(a) - ALLERGENI.indexOf(b));
 
-  // "Crema di nocciole (zucchero, olio di palma, nocciole 13%, latte...)"
+  // Una riga per componente: il cornetto, la crema, la granella. Ognuno con i
+  // propri ingredienti, come stanno scritti sulla sua etichetta. In un filo
+  // unico separato da puntini, su tre componenti, non si capiva più niente.
   const ingredientiVoce = prodottiScelti
-    .map((p) => (p.ingredients_text ? `${p.name} (${p.ingredients_text})` : p.name))
-    .join(" · ");
+    .map((p) => (p.ingredients_text ? `${p.name}: ${p.ingredients_text}` : `${p.name}: ingredienti non ancora letti`))
+    .join("\n");
 
   const senzaEtichetta = prodottiScelti.filter((p) => !p.allergens_checked_at);
 
@@ -119,16 +131,56 @@ export default function Allergeni() {
       }
       await ricaricaProdotti();
       setScelti((s) => (s.includes(id) ? s : [...s, id]));
+
+      // Lo stesso prodotto entra nel catalogo condiviso del consulente: la
+      // prossima azienda che lo usa non paga un'altra lettura.
+      if (isConsultant) {
+        const gia = condivisi.find((c) => normalizza(c.name) === normalizza(nome));
+        const campiCondivisi = {
+          name: nome,
+          ingredients_text: data?.ingredienti || null,
+          allergens: letti,
+          traces: tracce,
+          source: "etichetta",
+          verified_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        if (foto) campiCondivisi.label_attachment_path = foto;
+        if (gia) await supabase.from("shared_products").update(campiCondivisi).eq("id", gia.id);
+        else await supabase.from("shared_products").insert(campiCondivisi);
+        await caricaCondivisi();
+      }
       setAvviso(
         `Letta l'etichetta di «${nome}»${letti.length ? ": " + letti.join(", ") : " — nessun allergene riconosciuto"}` +
         (tracce.length ? `. Tracce dichiarate: ${tracce.join(", ")} (vanno valutate a parte).` : "") +
-        " Controlla prima di salvare.",
+        ` — salvato nel catalogo prodotti: la prossima volta lo ritrovi fra le voci da spuntare, senza rifotografarlo.`,
       );
     } catch (err) {
       setErrore("Etichetta non letta (" + err.message + "): puoi spuntare gli allergeni a mano.");
     } finally {
       setLeggendo(false);
     }
+  };
+
+  // Dal catalogo condiviso al catalogo dell'azienda: una copia, non un
+  // collegamento. Se il fornitore cambia formulazione, l'azienda corregge la
+  // propria voce senza toccare quella delle altre.
+  const importaCondiviso = async (c) => {
+    setErrore(""); setAvviso("");
+    const gia = prodotti.find((p) => normalizza(p.name) === normalizza(c.name));
+    if (gia) { commutaProdotto(gia.id); return; }
+    const { data, error } = await supabase.from("products").insert({
+      company_id: company.id,
+      name: c.name,
+      ingredients_text: c.ingredients_text,
+      allergens: c.allergens || [],
+      allergens_checked_at: c.verified_at || new Date().toISOString(),
+      label_attachment_path: c.label_attachment_path || null,
+    }).select().single();
+    if (error) { setErrore("Non è stato possibile copiare il prodotto: " + error.message); return; }
+    await ricaricaProdotti();
+    setScelti((s) => [...s, data.id]);
+    setAvviso(`«${c.name}» copiato dal catalogo condiviso: controlla che l'etichetta del fornitore di questa azienda corrisponda.`);
   };
 
   const submit = async (e) => {
@@ -145,6 +197,11 @@ export default function Allergeni() {
     setDish(""); setScelti([]); setManuali([]); setNote(""); setAvviso(""); setCerca("");
     setBusy(false);
   };
+
+  const condivisiDaProporre = condivisi
+    .filter((c) => !prodotti.some((p) => normalizza(p.name) === normalizza(c.name)))
+    .filter((c) => normalizza(c.name).includes(normalizza(cerca)))
+    .slice(0, cerca ? 20 : 8);
 
   const elencoProdotti = [...prodotti]
     .filter((p) => normalizza(p.name).includes(normalizza(cerca)))
@@ -200,6 +257,25 @@ export default function Allergeni() {
           </div>
         )}
 
+        {condivisiDaProporre.length > 0 && (
+          <>
+            <p className="sub" style={{ margin: 0 }}>
+              Dal catalogo condiviso — prodotti già letti per altre aziende: scegliendoli non si paga nessuna lettura.
+            </p>
+            <div className="chip-grid">
+              {condivisiDaProporre.map((c) => (
+                <button
+                  type="button" key={c.id} className="chip chip-condiviso"
+                  onClick={() => importaCondiviso(c)}
+                  title={c.ingredients_text || "Ingredienti non registrati"}
+                >
+                  <Share2 size={12} /> {c.name}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
         <p className="sub" style={{ margin: 0 }}>Allergeni della voce — quelli dei prodotti scelti, più quelli che aggiungi a mano:</p>
         <div className="chip-grid">
           {ALLERGENI.map((a) => {
@@ -218,7 +294,25 @@ export default function Allergeni() {
           })}
         </div>
 
-        {ingredientiVoce && <p className="sub" style={{ margin: 0 }}>Ingredienti: {ingredientiVoce}</p>}
+        {prodottiScelti.length > 0 && (
+          <ul className="log-list">
+            {prodottiScelti.map((p) => (
+              <li key={p.id} className="log-row" style={{ alignItems: "flex-start", flexWrap: "wrap" }}>
+                <Package size={14} color={p.allergens_checked_at ? "#2F6F4E" : "#C58A2A"} />
+                <span className="log-main">
+                  <strong>{p.name}</strong>
+                  <span className="log-note"> {p.ingredients_text || "etichetta non ancora letta"}</span>
+                  {(p.allergens || []).length > 0 && (
+                    <span className="log-unit"> — {(p.allergens || []).join(", ")}</span>
+                  )}
+                </span>
+                <button type="button" className="icon-btn" onClick={() => commutaProdotto(p.id)} aria-label="Togli dalla voce">
+                  <Trash2 size={13} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
         {senzaEtichetta.length > 0 && (
           <span className="file-error">
             <AlertTriangle size={13} /> Etichetta non ancora letta per: {senzaEtichetta.map((p) => p.name).join(", ")}.
@@ -294,7 +388,18 @@ export default function Allergeni() {
                   <span className="print-allergen-none">Nessun allergene dichiarato</span>
                 )}
                 {stampaIngredienti && item.ingredients_text && (
-                  <p className="print-allergen-ingredients">{item.ingredients_text}</p>
+                  <div className="print-allergen-ingredients">
+                    {item.ingredients_text.split("\n").map((riga, i) => {
+                      const taglio = riga.indexOf(":");
+                      const componente = taglio > 0 ? riga.slice(0, taglio) : riga;
+                      const dettaglio = taglio > 0 ? riga.slice(taglio + 1).trim() : "";
+                      return (
+                        <p key={i} className="print-allergen-componente">
+                          <strong>{componente}</strong>{dettaglio ? ": " + dettaglio : ""}
+                        </p>
+                      );
+                    })}
+                  </div>
                 )}
                 {item.note && <p className="print-allergen-ingredients">{item.note}</p>}
               </div>
