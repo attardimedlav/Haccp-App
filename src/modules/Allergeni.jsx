@@ -1,9 +1,10 @@
 import React, { useState } from "react";
-import { Plus, Trash2, Camera, Printer, Package, AlertTriangle, Share2 } from "lucide-react";
+import { Plus, Trash2, Camera, Printer, Package, AlertTriangle, Share2, ScanLine } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { supabase } from "../supabaseClient";
 import { uploadAttachment } from "../hooks/useAttachment";
+import { eanValido, cercaSuOpenFoodFacts, fotocameraDisponibile, leggiCodiceDallaFotocamera } from "../utils/codiceABarre";
 
 const ALLERGENI = ["Glutine", "Latte", "Uova", "Soia", "Frutta a guscio", "Pesce", "Crostacei", "Sedano", "Senape", "Solfiti", "Arachidi", "Sesamo", "Lupini", "Molluschi"];
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
@@ -63,6 +64,10 @@ export default function Allergeni() {
   const [errore, setErrore] = useState("");
   const [avviso, setAvviso] = useState("");
   const [stampaIngredienti, setStampaIngredienti] = useState(true);
+  const [ean, setEan] = useState("");
+  const [cercandoEan, setCercandoEan] = useState(false);
+  const [inquadrando, setInquadrando] = useState(false);
+  const video = React.useRef(null);
 
   const prodottiScelti = scelti.map((id) => prodotti.find((p) => p.id === id)).filter(Boolean);
 
@@ -183,6 +188,77 @@ export default function Allergeni() {
     setAvviso(`«${c.name}» copiato dal catalogo condiviso: controlla che l'etichetta del fornitore di questa azienda corrisponda.`);
   };
 
+  // Ricerca per codice a barre, dal meno caro al più caro:
+  // catalogo dell'azienda → catalogo condiviso → banca dati aperta →
+  // e solo se non si trova niente, la foto dell'etichetta a pagamento.
+  const cercaPerCodice = async (codice) => {
+    const c = String(codice || "").replace(/\D/g, "");
+    setErrore(""); setAvviso("");
+    if (!eanValido(c)) {
+      setErrore("Il codice non è valido: deve avere 8 o 13 cifre e la cifra di controllo deve tornare. Ricontrolla o fotografa l'etichetta.");
+      return;
+    }
+    setCercandoEan(true);
+    try {
+      const mio = prodotti.find((p) => p.ean === c);
+      if (mio) {
+        commutaProdotto(mio.id);
+        setAvviso(`«${mio.name}» era già nel catalogo di questa azienda.`);
+        setEan("");
+        return;
+      }
+      const condiviso = condivisi.find((x) => x.ean === c);
+      if (condiviso) {
+        await importaCondiviso(condiviso);
+        setEan("");
+        return;
+      }
+
+      const trovato = await cercaSuOpenFoodFacts(c);
+      if (!trovato) {
+        setErrore("Questo prodotto non risulta nella banca dati aperta: fotografa l'etichetta.");
+        return;
+      }
+      const { data, error } = await supabase.from("products").insert({
+        company_id: company.id,
+        name: trovato.nome,
+        ean: c,
+        ingredients_text: trovato.ingredienti,
+        allergens: trovato.allergeni,
+        data_source: "banca dati aperta",
+        // niente allergens_checked_at: il dato NON è verificato finché non si
+        // guarda l'etichetta vera. È la differenza fra un'informazione e una prova.
+      }).select().single();
+      if (error) throw new Error(error.message);
+      await ricaricaProdotti();
+      setScelti((s2) => [...s2, data.id]);
+      setEan("");
+      setAvviso(
+        `«${trovato.nome}» letto dalla banca dati aperta${trovato.allergeni.length ? ": " + trovato.allergeni.join(", ") : " — nessun allergene indicato"}. ` +
+        "Dato NON verificato: confrontalo con l'etichetta della confezione e, quando puoi, fotografala.",
+      );
+    } catch (e2) {
+      setErrore("Ricerca non riuscita: " + e2.message + ". Puoi fotografare l'etichetta.");
+    } finally {
+      setCercandoEan(false);
+    }
+  };
+
+  const inquadraCodice = async () => {
+    setErrore(""); setAvviso("");
+    setInquadrando(true);
+    try {
+      const codice = await leggiCodiceDallaFotocamera(video.current);
+      if (!codice) { setErrore("Non sono riuscito a leggere il codice: riprova con più luce o scrivilo a mano."); return; }
+      setEan(codice);
+      await cercaPerCodice(codice);
+    } catch (e2) {
+      setErrore("Fotocamera non disponibile (" + e2.message + "): scrivi il codice a mano.");
+    } finally {
+      setInquadrando(false);
+    }
+  };
+
   const submit = async (e) => {
     e.preventDefault();
     if (!dish.trim()) return;
@@ -229,6 +305,29 @@ export default function Allergeni() {
           type="text" placeholder="Voce di menu (es. Cornetto alla crema di nocciole)" required
           value={dish} onChange={(e) => setDish(e.target.value)} className="note-input" style={{ maxWidth: 420 }}
         />
+
+        <div className="row-form" style={{ margin: 0 }}>
+          <input
+            type="text" inputMode="numeric" placeholder="Codice a barre (8 o 13 cifre)"
+            value={ean} onChange={(e) => setEan(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); cercaPerCodice(ean); } }}
+            className="note-input" style={{ maxWidth: 260 }}
+          />
+          <button type="button" className="btn-primary" disabled={cercandoEan || !ean} onClick={() => cercaPerCodice(ean)}>
+            {cercandoEan ? "Ricerca…" : "Cerca il prodotto"}
+          </button>
+          {fotocameraDisponibile() && (
+            <button type="button" className="link-btn" disabled={inquadrando} onClick={inquadraCodice}>
+              <ScanLine size={14} /> {inquadrando ? "Inquadra il codice…" : "Inquadra col telefono"}
+            </button>
+          )}
+        </div>
+        <video ref={video} playsInline muted className={inquadrando ? "scanner-video" : "scanner-video nascosto"} />
+        <p className="sub" style={{ margin: 0 }}>
+          Il codice a barre cerca prima nel catalogo di questa azienda, poi nel catalogo condiviso, poi
+          nella banca dati aperta Open Food Facts. La foto dell'etichetta serve solo se non si trova niente:
+          è l'unica delle tre che si paga, ed è l'unica che vale come prova.
+        </p>
 
         <div className="row-form" style={{ margin: 0 }}>
           <input
@@ -302,6 +401,9 @@ export default function Allergeni() {
                 <span className="log-main">
                   <strong>{p.name}</strong>
                   <span className="log-note"> {p.ingredients_text || "etichetta non ancora letta"}</span>
+                  {!p.allergens_checked_at && p.data_source && (
+                    <span className="log-unit"> — da {p.data_source}, non verificato</span>
+                  )}
                   {(p.allergens || []).length > 0 && (
                     <span className="log-unit"> — {(p.allergens || []).join(", ")}</span>
                   )}
