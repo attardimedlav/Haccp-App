@@ -11,6 +11,7 @@
 // e se quella casella di Configurazione è spenta quel pezzo non entra.
 
 import { par, cella, tabella, riga } from "../modules/CorsoFormazione";
+import { TITOLO_PROCEDURA, testoProceduraRegistrazioni } from "./proceduraRegistrazioni";
 
 const VERDE = "1B2A22";
 const VERDE_CHIARO = "2F6F4E";
@@ -485,6 +486,18 @@ export function corpoManuale(dossier) {
   b.push(p(inApp
     ? "Le registrazioni sono tenute nell'applicativo gestionale, che conserva anche i documenti di trasporto, le schede tecniche e gli attestati. I moduli cartacei corrispondenti sono allegati al manuale e si utilizzano in caso di indisponibilità del sistema."
     : "Le registrazioni sono tenute sui moduli cartacei allegati al presente manuale, conservati compilati in azienda e messi a disposizione degli organi di controllo."));
+
+  // Quando le schede si compilano nell'app, il manuale deve dire come: è la
+  // prima cosa che un ispettore chiede quando non trova i fogli firmati.
+  if (inApp) {
+    b.push(h2("10.1 " + TITOLO_PROCEDURA));
+    testoProceduraRegistrazioni(azienda).forEach((bl) => {
+      if (bl.t === "h") b.push(h3(bl.x));
+      else if (bl.t === "b") b.push(punto(bl.x));
+      else b.push(p(bl.x));
+    });
+    b.push(par("", { after: 160 }));
+  }
   const moduli = [
     ["M01", "Registro temperature", "Una volta al giorno, alla stessa ora", null],
     ["M02", "Registro cambi olio di frittura", "A ogni sostituzione dell'olio", "has_fryer"],
