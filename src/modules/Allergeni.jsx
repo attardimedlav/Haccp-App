@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Trash2, Camera, Printer, Package, AlertTriangle, Share2, ScanLine } from "lucide-react";
+import { Plus, Trash2, Camera, Printer, Package, AlertTriangle, Share2, ScanLine, Pencil, X, Check, Copy } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { supabase } from "../supabaseClient";
@@ -43,7 +43,7 @@ function fileInBase64(file) {
 export default function Allergeni() {
   const { company, consultantCompanies } = useAuth();
   const isConsultant = (consultantCompanies || []).length > 0;
-  const { items, add, remove, loading } = useTable("allergen_dishes", company?.id);
+  const { items, add, remove, update, loading } = useTable("allergen_dishes", company?.id);
   // Banca dati di QUESTA sezione: i prodotti composti di terzi che entrano
   // nelle preparazioni. Non è il catalogo della tracciabilità, che si riempie
   // dalle bolle e qui non c'entra niente.
@@ -69,6 +69,7 @@ export default function Allergeni() {
   const [errore, setErrore] = useState("");
   const [avviso, setAvviso] = useState("");
   const [stampaIngredienti, setStampaIngredienti] = useState(true);
+  const [inModifica, setInModifica] = useState(null);   // id della voce che si sta correggendo
   const [ean, setEan] = useState("");
   const [cercandoEan, setCercandoEan] = useState(false);
   const [inquadrando, setInquadrando] = useState(false);
@@ -335,18 +336,51 @@ export default function Allergeni() {
     setAvviso(`«${p.name}» è nel catalogo condiviso: da adesso lo ritrovi in tutte le aziende.`);
   };
 
+  const svuotaForm = () => {
+    setDish(""); setScelti([]); setManuali([]); setNote("");
+    setAvviso(""); setErrore(""); setCerca(""); setEan(""); setInModifica(null);
+  };
+
+  // Correggere una voce senza rifarla: si cambia la ricetta — le noci nel
+  // cornetto — e la data di aggiornamento si sposta da sola.
+  const apriModifica = (item) => {
+    setInModifica(item.id);
+    setDish(item.dish || "");
+    setScelti(item.product_ids || []);
+    setManuali(item.allergens || []);
+    setNote(item.note || "");
+    setCerca(""); setEan(""); setErrore(""); setAvviso("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // Duplica: due varianti dello stesso piatto — uno con la granella e uno
+  // senza — si scrivono in dieci secondi invece di rifare tutta la voce.
+  const duplica = (item) => {
+    setInModifica(null);
+    setDish(`${item.dish} (variante)`);
+    setScelti(item.product_ids || []);
+    setManuali(item.allergens || []);
+    setNote(item.note || "");
+    setCerca(""); setEan(""); setErrore("");
+    setAvviso("Copia della voce: cambia il nome e correggi i componenti, poi aggiungila al menu.");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const submit = async (e) => {
     e.preventDefault();
     if (!dish.trim()) return;
     setBusy(true);
-    await add({
+    const campi = {
       dish: dish.trim(),
       allergens: allergeniVoce,
       product_ids: scelti,
       ingredients_text: ingredientiVoce || null,
       note: note.trim() || null,
-    });
-    setDish(""); setScelti([]); setManuali([]); setNote(""); setAvviso(""); setCerca("");
+      updated_at: new Date().toISOString(),
+    };
+    if (inModifica) await update(inModifica, campi);
+    else await add(campi);
+    svuotaForm();
     setBusy(false);
   };
 
@@ -388,6 +422,11 @@ export default function Allergeni() {
       </div>
 
       <form onSubmit={submit} className="traccia-form no-print">
+        {inModifica && (
+          <p className="sub" style={{ margin: 0, color: "#2F6F4E" }}>
+            Stai correggendo una voce già in menu: salvando, la data di aggiornamento del foglio si sposta a oggi.
+          </p>
+        )}
         <input
           type="text" placeholder="Voce di menu (es. Cornetto alla crema di nocciole)" required
           value={dish} onChange={(e) => setDish(e.target.value)} className="note-input" style={{ maxWidth: 420 }}
@@ -532,9 +571,14 @@ export default function Allergeni() {
         {errore && <span className="file-error"><AlertTriangle size={13} /> {errore}</span>}
 
         <input type="text" placeholder="Nota per il cliente (facoltativa)" value={note} onChange={(e) => setNote(e.target.value)} className="full-input" />
-        <button type="submit" className="btn-primary" disabled={busy || leggendo} style={{ alignSelf: "flex-start" }}>
-          <Plus size={16} /> Aggiungi al menu
-        </button>
+        <div className="row-form" style={{ margin: 0 }}>
+          <button type="submit" className="btn-primary" disabled={busy || leggendo}>
+            {inModifica ? <Check size={16} /> : <Plus size={16} />} {inModifica ? "Salva le modifiche" : "Aggiungi al menu"}
+          </button>
+          {inModifica && (
+            <button type="button" className="link-btn" onClick={svuotaForm}><X size={14} /> Annulla la modifica</button>
+          )}
+        </div>
       </form>
 
       {loading ? (
@@ -547,7 +591,11 @@ export default function Allergeni() {
             <li key={item.id} className="dish-row">
               <div className="dish-top">
                 <strong>{item.dish}</strong>
-                <button className="icon-btn" onClick={() => remove(item.id)} aria-label="Elimina"><Trash2 size={14} /></button>
+                <span>
+                  <button className="icon-btn" onClick={() => apriModifica(item)} aria-label="Modifica"><Pencil size={14} /></button>
+                  <button className="icon-btn" onClick={() => duplica(item)} aria-label="Duplica"><Copy size={14} /></button>
+                  <button className="icon-btn" onClick={() => remove(item.id)} aria-label="Elimina"><Trash2 size={14} /></button>
+                </span>
               </div>
               {item.allergens && item.allergens.length > 0 ? (
                 <div className="chip-grid">
@@ -623,7 +671,7 @@ export default function Allergeni() {
               diventa la prova del contrario di quello che si voleva. */}
           <p className="print-allergen-data">
             Aggiornato al {new Date(
-              items.reduce((max, i) => Math.max(max, new Date(i.created_at).getTime()), 0) || Date.now(),
+              items.reduce((max, i) => Math.max(max, new Date(i.updated_at || i.created_at).getTime()), 0) || Date.now(),
             ).toLocaleDateString("it-IT")} — stampato il {new Date().toLocaleDateString("it-IT")}
           </p>
         </div>
