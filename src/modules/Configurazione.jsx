@@ -8,6 +8,7 @@ import Attrezzature from "./Attrezzature";
 import Sanificanti from "./Sanificanti";
 import Dipendenti from "./Dipendenti";
 import AccessoAzienda from "./AccessoAzienda";
+import { scaricaProceduraRegistrazioni } from "../utils/proceduraRegistrazioniDocx";
 
 const SUB_TABS = [
   { id: "generale", label: "Generale", icon: Settings2 },
@@ -408,6 +409,28 @@ export default function Configurazione() {
                         <input type="radio" name="records-mode" checked={recordsMode === "cartaceo"} disabled={!isConsultant} onChange={() => setRecordsMode("cartaceo")} />
                         Su carta: l'azienda compila le schede stampate e le conserva in sede
                       </label>
+                      {recordsMode === "app" && (
+                        <div className="reminder-block" style={{ marginTop: 10 }}>
+                          <div className="reminder-head">
+                            <FileText size={17} color="#2F6F4E" />
+                            <div>
+                              <h3>Procedura da allegare al manuale</h3>
+                              <p className="sub">
+                                Se le schede si compilano nell'app, il manuale deve dirlo. Questo foglio spiega
+                                come sono tenute, conservate ed esibite le registrazioni, con i riferimenti
+                                normativi: si stampa, si firma e si mette nel manuale cartaceo. Quando il manuale
+                                lo genera l'app, lo stesso testo ci finisce dentro da solo.
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button" className="btn-primary"
+                            onClick={() => scaricaProceduraRegistrazioni(company || {})}
+                          >
+                            <Download size={16} /> Scarica la procedura (.docx)
+                          </button>
+                        </div>
+                      )}
                       <p className="sub" style={{ marginTop: 6, marginLeft: 26 }}>
                         Questa scelta viene scritta nel manuale: se le registrazioni sono nell'app il manuale lo dichiara, altrimenti rimanda alle schede cartacee allegate. In modalità cartacea le sezioni di registrazione restano comunque disponibili, ma l'azienda non è tenuta a compilarle.
                       </p>
