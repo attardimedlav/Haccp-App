@@ -409,17 +409,27 @@ export default function Configurazione() {
                         <input type="radio" name="records-mode" checked={recordsMode === "cartaceo"} disabled={!isConsultant} onChange={() => setRecordsMode("cartaceo")} />
                         Su carta: l'azienda compila le schede stampate e le conserva in sede
                       </label>
-                      {recordsMode === "app" && (
+                      {/* Il foglio separato serve solo quando il manuale non lo
+                          scriviamo noi: se lo genera l'app, la procedura è già
+                          dentro al capitolo 10.1 e stamparla a parte
+                          significherebbe avere due copie della stessa cosa. */}
+                      {recordsMode === "app" && manualSource === "app" && (
+                        <p className="sub" style={{ marginTop: 8 }}>
+                          La procedura sulla tenuta delle registrazioni su supporto informatico è già scritta
+                          dentro il manuale generato dall'app, al capitolo 10. Non serve stamparla a parte.
+                        </p>
+                      )}
+                      {recordsMode === "app" && manualSource === "esterno" && (
                         <div className="reminder-block" style={{ marginTop: 10 }}>
                           <div className="reminder-head">
                             <FileText size={17} color="#2F6F4E" />
                             <div>
-                              <h3>Procedura da allegare al manuale</h3>
+                              <h3>Procedura da allegare al manuale dell'azienda</h3>
                               <p className="sub">
-                                Se le schede si compilano nell'app, il manuale deve dirlo. Questo foglio spiega
-                                come sono tenute, conservate ed esibite le registrazioni, con i riferimenti
-                                normativi: si stampa, si firma e si mette nel manuale cartaceo. Quando il manuale
-                                lo genera l'app, lo stesso testo ci finisce dentro da solo.
+                                Il manuale di questa azienda l'ha scritto qualcun altro e non dice niente sulle
+                                registrazioni informatiche. Questo foglio lo spiega — come sono tenute, conservate
+                                ed esibite, con i riferimenti normativi: si stampa, si firma e si allega al manuale
+                                cartaceo esistente.
                               </p>
                             </div>
                           </div>
