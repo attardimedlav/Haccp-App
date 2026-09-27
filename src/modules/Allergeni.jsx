@@ -5,6 +5,7 @@ import { useAuth } from "../AuthContext";
 import { supabase } from "../supabaseClient";
 import { uploadAttachment } from "../hooks/useAttachment";
 import { eanValido, cercaSuOpenFoodFacts, fotocameraDisponibile, leggiCodiceDallaFotocamera } from "../utils/codiceABarre";
+import { allergeniDaIngredienti } from "../utils/allergeniDaIngredienti";
 
 const ALLERGENI = ["Glutine", "Latte", "Uova", "Soia", "Frutta a guscio", "Pesce", "Crostacei", "Sedano", "Senape", "Solfiti", "Arachidi", "Sesamo", "Lupini", "Molluschi"];
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
@@ -112,7 +113,12 @@ export default function Allergeni() {
       if (data?.errore) throw new Error(data.errore);
 
       const nome = (data?.prodotto || "").trim() || "Prodotto da etichetta";
-      const letti = (data?.allergeni || []).filter((x) => ALLERGENI.includes(x));
+      let letti = (data?.allergeni || []).filter((x) => ALLERGENI.includes(x));
+      let dedottiDaTesto = [];
+      if (letti.length === 0 && data?.ingredienti) {
+        dedottiDaTesto = allergeniDaIngredienti(data.ingredienti);
+        letti = dedottiDaTesto;
+      }
       const tracce = (data?.tracce || []).filter((x) => ALLERGENI.includes(x));
       let foto = null;
       try { foto = await uploadAttachment(company.id, f); } catch { /* la foto è utile, non indispensabile */ }
@@ -164,7 +170,7 @@ export default function Allergeni() {
         await caricaCondivisi();
       }
       setAvviso(
-        `Letta l'etichetta di «${nome}»${letti.length ? ": " + letti.join(", ") : " — nessun allergene riconosciuto"}` +
+        `Letta l'etichetta di «${nome}»${letti.length ? (dedottiDaTesto.length ? " — allergeni dedotti dagli ingredienti: " : ": ") + letti.join(", ") : " — nessun allergene riconosciuto"}` +
         (tracce.length ? `. Tracce dichiarate: ${tracce.join(", ")} (vanno valutate a parte).` : "") +
         ` — salvato nel catalogo prodotti: la prossima volta lo ritrovi fra le voci da spuntare, senza rifotografarlo.`,
       );
@@ -227,13 +233,26 @@ export default function Allergeni() {
         setErrore("Questo prodotto non risulta nella banca dati aperta: fotografa l'etichetta.");
         return;
       }
+      // Nelle banche dati aperte capita la scheda vuota: nome e basta. Creare
+      // un prodotto da una riga così lascia in catalogo un guscio senza dati,
+      // che è peggio del non averlo trovato.
+      if (!trovato.ingredienti && trovato.allergeni.length === 0) {
+        setErrore(`«${trovato.nome}» risulta in banca dati ma la scheda è vuota: né ingredienti né allergeni. Fotografa l'etichetta.`);
+        return;
+      }
+      // Ingredienti sì, allergeni no: si ricavano dal testo con il dizionario
+      // interno. Sono una proposta, non una lettura.
+      let dedotti = [];
+      if (trovato.allergeni.length === 0 && trovato.ingredienti) {
+        dedotti = allergeniDaIngredienti(trovato.ingredienti);
+      }
       const { data, error } = await supabase.from("products").insert({
         company_id: company.id,
         name: trovato.nome,
         ean: c,
         ingredients_text: trovato.ingredienti,
-        allergens: trovato.allergeni,
-        data_source: "banca dati aperta",
+        allergens: trovato.allergeni.length ? trovato.allergeni : dedotti,
+        data_source: dedotti.length ? "banca dati aperta, allergeni dedotti dagli ingredienti" : "banca dati aperta",
         // niente allergens_checked_at: il dato NON è verificato finché non si
         // guarda l'etichetta vera. È la differenza fra un'informazione e una prova.
       }).select().single();
@@ -242,7 +261,12 @@ export default function Allergeni() {
       setScelti((s2) => [...s2, data.id]);
       setEan("");
       setAvviso(
-        `«${trovato.nome}» letto dalla banca dati aperta${trovato.allergeni.length ? ": " + trovato.allergeni.join(", ") : " — nessun allergene indicato"}. ` +
+        `«${trovato.nome}» letto dalla banca dati aperta. ` +
+        (trovato.allergeni.length
+          ? "Allergeni dichiarati: " + trovato.allergeni.join(", ") + ". "
+          : dedotti.length
+            ? "Allergeni dedotti dagli ingredienti (non dichiarati in banca dati): " + dedotti.join(", ") + ". "
+            : "Nessun allergene ricavabile. ") +
         "Dato NON verificato: confrontalo con l'etichetta della confezione e, quando puoi, fotografala.",
       );
     } catch (e2) {
