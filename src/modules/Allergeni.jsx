@@ -49,7 +49,8 @@ export default function Allergeni() {
   // copia nel catalogo dell'azienda.
   const [condivisi, setCondivisi] = useState([]);
   const caricaCondivisi = React.useCallback(async () => {
-    const { data } = await supabase.from("shared_products").select("*").order("name");
+    const { data, error } = await supabase.from("shared_products").select("*").order("name");
+    if (error) setErrore("Catalogo condiviso non leggibile: " + error.message);
     setCondivisi(data || []);
   }, []);
   React.useEffect(() => { caricaCondivisi(); }, [caricaCondivisi]);
@@ -119,6 +120,7 @@ export default function Allergeni() {
       const esistente = prodotti.find((p) => normalizza(p.name) === normalizza(nome));
       const campi = {
         name: nome,
+        ean: (ean || "").replace(/\D/g, "") || undefined,
         allergens: letti,
         ingredients_text: data?.ingredienti || null,
         allergens_checked_at: new Date().toISOString(),
@@ -151,8 +153,14 @@ export default function Allergeni() {
           updated_at: new Date().toISOString(),
         };
         if (foto) campiCondivisi.label_attachment_path = foto;
-        if (gia) await supabase.from("shared_products").update(campiCondivisi).eq("id", gia.id);
-        else await supabase.from("shared_products").insert(campiCondivisi);
+        const esito = gia
+          ? await supabase.from("shared_products").update(campiCondivisi).eq("id", gia.id)
+          : await supabase.from("shared_products").insert(campiCondivisi);
+        if (esito.error) {
+          // Silenziarlo significherebbe credere di avere un catalogo condiviso
+          // che in realtà è vuoto: meglio saperlo subito.
+          setErrore("Il prodotto è stato salvato in questa azienda, ma NON nel catalogo condiviso: " + esito.error.message);
+        }
         await caricaCondivisi();
       }
       setAvviso(
@@ -257,6 +265,38 @@ export default function Allergeni() {
     } finally {
       setInquadrando(false);
     }
+  };
+
+  // Promuove un prodotto dell'azienda al catalogo condiviso. È il passo che
+  // mancava per i prodotti arrivati dalla banca dati aperta: li hai guardati
+  // sulla confezione, li dichiari verificati, e da lì valgono per tutti.
+  const confermaECondividi = async (p) => {
+    setErrore(""); setAvviso("");
+    const adesso = new Date().toISOString();
+    const { error: e1 } = await supabase
+      .from("products")
+      .update({ allergens_checked_at: p.allergens_checked_at || adesso })
+      .eq("id", p.id).eq("company_id", company.id);
+    if (e1) { setErrore("Non è stato possibile segnare il prodotto come verificato: " + e1.message); return; }
+
+    const gia = condivisi.find((c) => normalizza(c.name) === normalizza(p.name) || (p.ean && c.ean === p.ean));
+    const campi = {
+      name: p.name,
+      ean: p.ean || null,
+      ingredients_text: p.ingredients_text || null,
+      allergens: p.allergens || [],
+      label_attachment_path: p.label_attachment_path || null,
+      source: p.label_attachment_path ? "etichetta" : (p.data_source || "manuale"),
+      verified_at: adesso,
+      updated_at: adesso,
+    };
+    const esito = gia
+      ? await supabase.from("shared_products").update(campi).eq("id", gia.id)
+      : await supabase.from("shared_products").insert(campi);
+    if (esito.error) { setErrore("Catalogo condiviso: " + esito.error.message); return; }
+    await caricaCondivisi();
+    await ricaricaProdotti();
+    setAvviso(`«${p.name}» è nel catalogo condiviso: da adesso lo ritrovi in tutte le aziende.`);
   };
 
   const submit = async (e) => {
@@ -408,6 +448,11 @@ export default function Allergeni() {
                     <span className="log-unit"> — {(p.allergens || []).join(", ")}</span>
                   )}
                 </span>
+                {isConsultant && (
+                  <button type="button" className="link-btn" onClick={() => confermaECondividi(p)}>
+                    <Share2 size={13} /> {p.allergens_checked_at ? "metti nel condiviso" : "conferma e condividi"}
+                  </button>
+                )}
                 <button type="button" className="icon-btn" onClick={() => commutaProdotto(p.id)} aria-label="Togli dalla voce">
                   <Trash2 size={13} />
                 </button>
