@@ -554,3 +554,4 @@ nav { display: flex; flex-direction: column; gap: 2px; }
   .log-row .log-main { flex: 1 1 100%; }
   .log-row .link-btn { flex: 0 0 auto; }
 }
+.print-allergen-data { margin-top: 10px; font-size: 11px; color: #3F5147; text-align: right; }
