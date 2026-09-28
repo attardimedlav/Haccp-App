@@ -558,3 +558,15 @@ nav { display: flex; flex-direction: column; gap: 2px; }
 }
 .print-allergen-data { margin-top: 10px; font-size: 11px; color: #3F5147; text-align: right; }
 .chip-proposto { border-color: #E4C89A; background: #FDF6EA; color: #7A5A22; }
+
+/* ---- Accesso di sola consultazione ----
+   Il divieto vero sta nelle policy del database: qui si nascondono soltanto i
+   comandi, per non mostrare pulsanti che darebbero errore. */
+.sola-lettura form,
+.sola-lettura .icon-btn,
+.sola-lettura .btn-primary,
+.sola-lettura .link-btn.pericolo,
+.sola-lettura .nav-item-settings-top { display: none !important; }
+.sola-lettura .print-btn { display: inline-flex !important; }
+.radio-row { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: #3C4A42; padding: 6px 0; }
+.radio-row input { margin-top: 3px; }

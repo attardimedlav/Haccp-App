@@ -31,6 +31,7 @@ function writeSelectedCompanyId(companyId) {
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(undefined); // undefined = ancora da caricare
   const [company, setCompany] = useState(null);
+  const [soloLettura, setSoloLettura] = useState(false);
   const [homeCompanyId, setHomeCompanyId] = useState(null); // l'azienda "propria" dell'utente (se dipendente/titolare)
   const [homeCompanyName, setHomeCompanyName] = useState("");
   const [consultantCompanies, setConsultantCompanies] = useState([]); // aziende clienti accessibili come consulente
@@ -53,10 +54,14 @@ export function AuthProvider({ children }) {
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("company_id, full_name")
+      .select("company_id, full_name, access_level")
       .eq("id", userId)
       .single();
 
+    // Utenza "banco": apre i documenti per un controllo, non modifica niente.
+    // Il divieto vero sta nelle policy del database; questo serve a non
+    // mostrare comandi che fallirebbero.
+    setSoloLettura(profile?.access_level === "sola_lettura");
     const ownCompanyId = profile?.company_id || null;
     setHomeCompanyId(ownCompanyId);
 
@@ -213,7 +218,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider value={{
-      session, company, homeCompanyId, homeCompanyName, consultantCompanies, loadingCompany, error,
+      session, company, homeCompanyId, homeCompanyName, consultantCompanies, loadingCompany, error, soloLettura,
       signIn, signOut, updateCompany, recoveryMode, requestPasswordReset, setNewPassword, switchCompany,
       // Ricarica l'elenco dei clienti senza smontare la pagina: serve dopo aver
       // aggiunto un'azienda, per vederla comparire subito nell'elenco.

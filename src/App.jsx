@@ -133,7 +133,7 @@ function ResponsabileLine({ tab, showHaccp, rsppNames, haccpManager, activeWorkS
 }
 
 function Shell() {
-  const { company, signOut, homeCompanyId, consultantCompanies, switchCompany } = useAuth();
+  const { company, signOut, homeCompanyId, consultantCompanies, switchCompany, soloLettura } = useAuth();
   const isViewingClient = homeCompanyId && company && company.id !== homeCompanyId;
   const hasMultipleClients = consultantCompanies.length > 0;
   const [tab, setTab] = useState("dashboard");
@@ -232,7 +232,7 @@ function Shell() {
     : "";
 
   return (
-    <div className="app">
+    <div className={"app" + (soloLettura ? " sola-lettura" : "")}>
       <div className="mobile-topbar">
         <button type="button" className="menu-btn" onClick={() => setMenuOpen(true)} aria-label="Apri il menu">
           <Menu size={18} /> Menu
@@ -256,9 +256,11 @@ function Shell() {
           <span className="brand-mark"><ShieldCheck size={16} /></span>
           <span className="brand-name">{company?.name || "Cardine"}</span>
         </div>
-        <button className={"nav-item nav-item-settings-top" + (tab === SETTINGS_TAB.id ? " active" : "")} onClick={() => setTab(SETTINGS_TAB.id)}>
-          <SETTINGS_TAB.icon size={16} /> {SETTINGS_TAB.label}
-        </button>
+        {!soloLettura && (
+          <button className={"nav-item nav-item-settings-top" + (tab === SETTINGS_TAB.id ? " active" : "")} onClick={() => setTab(SETTINGS_TAB.id)}>
+            <SETTINGS_TAB.icon size={16} /> {SETTINGS_TAB.label}
+          </button>
+        )}
         {hasMultipleClients && (
           <button className={"nav-item nav-item-clients" + (tab === "clienti" ? " active" : "")} onClick={() => setTab("clienti")}>
             <Users size={16} /> I miei clienti
@@ -368,6 +370,12 @@ function Shell() {
                 </>
               )}
             </span>
+          </div>
+        )}
+        {soloLettura && (
+          <div className="viewing-client-banner">
+            Accesso di sola consultazione: i documenti si aprono e si stampano, ma non si può
+            modificare né registrare nulla. Per compilare i registri serve l'utenza del titolare.
           </div>
         )}
         <ResponsabileLine tab={tab} showHaccp={showHaccp} rsppNames={rsppNames} haccpManager={haccpManager} activeWorkSafety={!!company?.active_work_safety} />
