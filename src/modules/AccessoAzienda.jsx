@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { KeyRound, UserPlus, Copy, AlertTriangle, RefreshCw, Trash2, Check } from "lucide-react";
+import { KeyRound, UserPlus, Copy, AlertTriangle, RefreshCw, Trash2, Check, Eye } from "lucide-react";
 import { supabase } from "../supabaseClient";
 import { useAuth } from "../AuthContext";
 
@@ -27,6 +27,7 @@ export default function AccessoAzienda() {
   const [appenaCreato, setAppenaCreato] = useState(null);
   const [cambiaPer, setCambiaPer] = useState(null);
   const [nuovaPassword, setNuovaPassword] = useState("");
+  const [livello, setLivello] = useState("pieno");
 
   const chiama = useCallback(async (corpo) => {
     const { data, error } = await supabase.functions.invoke(FUNZIONE, { body: corpo });
@@ -65,7 +66,7 @@ export default function AccessoAzienda() {
     try {
       const d = await chiama({
         azione: "crea", company_id: company.id,
-        email: email.trim().toLowerCase(), password, nome: nome.trim() || null,
+        email: email.trim().toLowerCase(), password, nome: nome.trim() || null, livello,
       });
       setAppenaCreato({ email: email.trim().toLowerCase(), password, gia_esistente: d.gia_esistente });
       setNome("");
@@ -89,6 +90,20 @@ export default function AccessoAzienda() {
       setNuovaPassword("");
     } catch (e) {
       setErrore("Cambio password non riuscito: " + e.message);
+    } finally {
+      setInCorso(false);
+    }
+  };
+
+  const cambiaLivello = async (u) => {
+    const nuovo = (u.livello === "sola_lettura") ? "pieno" : "sola_lettura";
+    setErrore("");
+    setInCorso(true);
+    try {
+      await chiama({ azione: "livello", company_id: company.id, user_id: u.user_id, livello: nuovo });
+      await carica();
+    } catch (e) {
+      setErrore("Cambio del livello non riuscito: " + e.message);
     } finally {
       setInCorso(false);
     }
@@ -162,10 +177,14 @@ export default function AccessoAzienda() {
                 {u.nome ? <span className="log-unit"> {u.nome}</span> : null}
               </span>
               <span className="log-note">
+                {u.livello === "sola_lettura" ? "sola consultazione · " : ""}
                 {u.ultimo_accesso
                   ? "ultimo accesso " + new Date(u.ultimo_accesso).toLocaleDateString("it-IT")
                   : "non è mai entrato"}
               </span>
+              <button type="button" className="link-btn" disabled={inCorso} onClick={() => cambiaLivello(u)}>
+                <Eye size={13} /> {u.livello === "sola_lettura" ? "dai accesso pieno" : "metti in sola consultazione"}
+              </button>
               <button type="button" className="link-btn" onClick={() => { setCambiaPer(u.user_id); setNuovaPassword(passwordProposta()); }}>
                 <RefreshCw size={13} /> cambia password
               </button>
@@ -196,6 +215,21 @@ export default function AccessoAzienda() {
           <input type="text" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} className="note-input" />
           <button type="button" className="link-btn" onClick={() => setPassword(passwordProposta())}><RefreshCw size={13} /> proponine un'altra</button>
         </div>
+        <fieldset className="config-group" style={{ margin: 0 }}>
+          <legend>Che cosa potrà fare</legend>
+          <label className="radio-row">
+            <input type="radio" name="livello-accesso" checked={livello === "pieno"} onChange={() => setLivello("pieno")} />
+            <span><strong>Accesso pieno</strong> — compila i registri e gestisce i documenti. È l'utenza del titolare.</span>
+          </label>
+          <label className="radio-row">
+            <input type="radio" name="livello-accesso" checked={livello === "sola_lettura"} onChange={() => setLivello("sola_lettura")} />
+            <span>
+              <strong>Sola consultazione</strong> — apre e stampa manuale, registrazione sanitaria, attestati e
+              registri, ma non modifica né registra niente. È l'utenza da lasciare al banco per quando arriva un
+              controllo e il titolare non c'è.
+            </span>
+          </label>
+        </fieldset>
         <p className="sub" style={{ margin: 0 }}>
           La password proposta si detta al telefono senza equivoci. L'email indicata è quella con cui si entra:
           conviene usare quella personale del titolare, che non la dimentica.
