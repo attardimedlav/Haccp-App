@@ -9,7 +9,7 @@ import {
   Droplet,
   CalendarClock,
 } from "lucide-react";
-import useTable from "../hooks/useTable";
+import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
 
@@ -75,18 +75,22 @@ function AttachmentLink({ path }) {
 
 export default function AcquePotabili() {
   const { company } = useAuth();
+  // useTable filtra per company_id, quindi vuole l'id e non l'intera riga.
+  const companyId = company?.id || company;
 
-  const { items, add, remove, loading } = useTable("water_controls", company);
+  const { items, add, remove, loading } = useTable("water_controls", companyId);
   const {
     items: tanks,
     add: addTank,
     remove: removeTank,
     loading: loadingTanks,
-  } = useTable("water_tanks", company);
+  } = useTable("water_tanks", companyId);
 
-  // Chi compila: se resta vuoto ci pensa il database, che vi scrive il
-  // responsabile HACCP dell'azienda (trigger trg_operatore_haccp).
+  // Chi compila: proposto il responsabile HACCP dell'azienda, modificabile.
+  // Se resta vuoto ci pensa comunque il database (trigger trg_operatore_haccp).
+  const responsabile = (company?.haccp_manager || "").trim();
   const [operator, setOperator] = useState("");
+  const chiCompila = operator || responsabile;
 
   const [samplingPoint, setSamplingPoint] = useState("");
   const [controlType, setControlType] = useState(CONTROL_TYPES[0]);
@@ -140,7 +144,7 @@ export default function AcquePotabili() {
         value,
         lab,
         note,
-        operator: operator.trim() || null,
+        operator: chiCompila.trim() || null,
         tank_id: isTankControl && tankId ? tankId : null,
         attachment_path,
       });
@@ -440,8 +444,8 @@ export default function AcquePotabili() {
           <div className="row-form">
             <input
               type="text"
-              placeholder="Chi ha eseguito il controllo (vuoto = responsabile HACCP)"
-              value={operator}
+              placeholder="Chi ha eseguito il controllo"
+              value={chiCompila}
               onChange={(e) => setOperator(e.target.value)}
               className="note-input"
             />
