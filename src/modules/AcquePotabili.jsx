@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import {
   Plus,
   Trash2,
@@ -12,7 +12,6 @@ import {
 import useTable from "../hooks/useTable";
 import useAuth from "../AuthContext";
 import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
-import { supabase } from "../supabaseClient";
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
 
@@ -76,7 +75,6 @@ function AttachmentLink({ path }) {
 
 export default function AcquePotabili() {
   const { company } = useAuth();
-  const companyId = typeof company === "string" ? company : company?.id;
 
   const { items, add, remove, loading } = useTable("water_controls", company);
   const {
@@ -86,28 +84,9 @@ export default function AcquePotabili() {
     loading: loadingTanks,
   } = useTable("water_tanks", company);
 
-  // Chi compila: proposto il responsabile HACCP dell'azienda, resta modificabile.
-  const [responsabile, setResponsabile] = useState("");
+  // Chi compila: se resta vuoto ci pensa il database, che vi scrive il
+  // responsabile HACCP dell'azienda (trigger trg_operatore_haccp).
   const [operator, setOperator] = useState("");
-
-  useEffect(() => {
-    let vivo = true;
-    if (!companyId) return undefined;
-    supabase
-      .from("companies")
-      .select("haccp_manager")
-      .eq("id", companyId)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (!vivo) return;
-        const nome = (data?.haccp_manager || "").trim();
-        setResponsabile(nome);
-        setOperator((prec) => (prec ? prec : nome));
-      });
-    return () => {
-      vivo = false;
-    };
-  }, [companyId]);
 
   const [samplingPoint, setSamplingPoint] = useState("");
   const [controlType, setControlType] = useState(CONTROL_TYPES[0]);
@@ -161,7 +140,7 @@ export default function AcquePotabili() {
         value,
         lab,
         note,
-        operator: operator.trim() || responsabile || null,
+        operator: operator.trim() || null,
         tank_id: isTankControl && tankId ? tankId : null,
         attachment_path,
       });
@@ -461,7 +440,7 @@ export default function AcquePotabili() {
           <div className="row-form">
             <input
               type="text"
-              placeholder="Chi ha eseguito il controllo"
+              placeholder="Chi ha eseguito il controllo (vuoto = responsabile HACCP)"
               value={operator}
               onChange={(e) => setOperator(e.target.value)}
               className="note-input"
