@@ -10,7 +10,7 @@ import {
   CalendarClock,
 } from "lucide-react";
 import useTable from "../hooks/useTable";
-import useAuth from "../AuthContext";
+import { useAuth } from "../AuthContext";
 import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
