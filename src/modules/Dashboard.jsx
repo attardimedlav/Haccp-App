@@ -8,7 +8,6 @@ import { expiryInfo, FORMAZIONE_ROLE, DATORE_ROLES } from "./SicurezzaLavoro";
 import { riassuntoPerArea } from "../utils/pianoPulizie";
 
 const CHECK_PERIODICITY = [
-  { id: "temperature_logs", tab: "temperature", label: "Temperature", days: 1, icon: Thermometer },
 ];
 
 function daysSince(ts) {
@@ -195,6 +194,37 @@ export default function Dashboard({ goTo, openWorkSafety }) {
   const oggi = new Date().toISOString().slice(0, 10);
   const haccpIssues = [];
   if (showHaccp) {
+    // Temperature: il controllo è per impianto, non per tabella. Con una sola
+    // lettura registrata l'intera scheda risultava aggiornata, e un frigorifero
+    // saltato non compariva da nessuna parte — che è proprio il caso in cui
+    // l'avviso serve.
+    const senzaLettura = units.items.filter((u) =>
+      !temp.items.some((t) => t.unit === u.label && String(t.created_at).slice(0, 10) === oggi));
+    if (units.items.length > 0 && senzaLettura.length > 0) {
+      haccpIssues.push({
+        key: "temp-oggi", tab: "temperature", icon: Thermometer,
+        titolo: "Temperature non registrate oggi",
+        dettaglio: senzaLettura.length + " impianti su " + units.items.length + ": " +
+          senzaLettura.map((u) => u.label).join(", "),
+      });
+    }
+
+    // Pulizie di ogni giorno: una riga sola con il conteggio, non una per
+    // voce, altrimenti cinque righe di pulizie coprono le scadenze serie.
+    const quotidiane = piano.items.filter((r) =>
+      r.active !== false && Number(r.frequency_days) === 1 &&
+      (!r.requires_flag || company?.[r.requires_flag]));
+    const quotidianeFatte = quotidiane.filter((r) => san.items.some((s) =>
+      s.area === r.area && (s.operation || "") === r.operation &&
+      String(s.created_at).slice(0, 10) === oggi)).length;
+    if (quotidiane.length > 0 && quotidianeFatte < quotidiane.length) {
+      haccpIssues.push({
+        key: "pulizie-oggi", tab: "sanificazione", icon: SprayCan,
+        titolo: "Pulizie di oggi da completare",
+        dettaglio: quotidianeFatte + " di " + quotidiane.length + " registrate",
+      });
+    }
+
     // Pulizie fuori frequenza, raggruppate per area: una riga per area con
     // il ritardo peggiore. Elencarle una per una coprirebbe le scadenze
     // serie sotto dieci voci di pulizie.
