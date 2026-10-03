@@ -188,7 +188,7 @@ function diagramma(ciclo) {
 // riga vuota da firmare a penna, che e' il comportamento di sempre.
 function firmaOSA(azienda) {
   const nome = azienda.haccp_manager || "";
-  if (!azienda.haccp_signature_path) {
+  if (!azienda.haccp_signature_path || !azienda.haccp_signature_consent_at) {
     return nome + "\n\n\n____________________________________________";
   }
   return {
@@ -652,8 +652,8 @@ export function corpoManuale(dossier) {
     ["Redazione tecnica", revisione.redattoDa || azienda.consultant_name || ""],
   ]));
   b.push(par("", { after: 200 }));
-  b.push(p(azienda.haccp_signature_path
-    ? "La firma riprodotta in calce è quella depositata dall'Operatore del Settore Alimentare nel sistema e da lui apposta a questo documento al momento della generazione. Non equivale alla firma autografa né dà data certa (art. 20 D.Lgs. 82/2005): per l'una o per l'altra si stampa il documento e lo si firma a mano, oppure lo si firma digitalmente."
+  b.push(p(azienda.haccp_signature_path && azienda.haccp_signature_consent_at
+    ? `La firma riprodotta in calce è quella depositata dall'Operatore del Settore Alimentare nel sistema, apposta a questo documento al momento della generazione su sua autorizzazione resa in data ${data(azienda.haccp_signature_consent_at)}. Non equivale alla firma autografa né dà data certa (art. 20 D.Lgs. 82/2005): per l'una o per l'altra si stampa il documento e lo si firma a mano, oppure lo si firma digitalmente.`
     : "La firma può essere apposta a mano sulla copia stampata, poi scansionata e caricata nel sistema, oppure in forma digitale sul file PDF.",
     { italic: true, size: 20 }));
   b.push(p("La redazione tecnica è indicata a fini di tracciabilità del documento: la responsabilità dell'adozione e dell'applicazione del piano di autocontrollo resta in capo all'Operatore del Settore Alimentare.", { italic: true, size: 20 }));
