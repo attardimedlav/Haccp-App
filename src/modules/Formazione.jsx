@@ -120,12 +120,12 @@ export default function Formazione() {
         setName(gia || persona);
       }
       if (primo?.corso) setCourse(primo.aggiornamento ? `${primo.corso} — aggiornamento` : primo.corso);
-      if (primo?.data_rilascio) setIssueDate(data.data_rilascio);
+      if (primo?.data_rilascio) setIssueDate(primo.data_rilascio);
       if (primo?.validita_anni && VALIDITY_OPTIONS.includes(Number(primo.validita_anni))) {
         setValidityYears(Number(primo.validita_anni));
       }
       setScadenzaLetta(primo?.data_scadenza || "");
-      if (primo?.ente) setEnte(data.ente);
+      if (primo?.ente) setEnte(primo.ente);
 
       const letti = [persona && "nominativo", primo?.corso && "corso", primo?.data_rilascio && "data"].filter(Boolean);
       setLetto(letti.length ? `Letto dall'attestato: ${letti.join(", ")}. Controlla prima di salvare.` : "");
