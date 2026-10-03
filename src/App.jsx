@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Thermometer, SprayCan, Bug, ChevronRight, ChevronDown, LogOut, ShieldCheck, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen, Snowflake, HardHat, FileText, Paperclip, Award, Wrench, Stethoscope, Network, UtensilsCrossed, GlassWater, Menu, X, ChefHat, Flame, Truck, BookOpen, LayoutDashboard, Layers } from "lucide-react";
+import { Thermometer, SprayCan, Bug, ChevronRight, ChevronDown, LogOut, ShieldCheck, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen, Snowflake, HardHat, FileText, Paperclip, Award, Wrench, Stethoscope, Network, UtensilsCrossed, GlassWater, Menu, X, Filter, FlaskConical, ChefHat, Flame, Truck, BookOpen, LayoutDashboard, Layers } from "lucide-react";
 import { AuthProvider, useAuth } from "./AuthContext";
 import { useTable, EVENTO_SCRITTURA } from "./hooks/useTable";
 import Login from "./Login";
@@ -28,6 +28,8 @@ import Fornitori from "./modules/Fornitori";
 import ManualeHaccp from "./modules/ManualeHaccp";
 import CatalogoCicli from "./modules/CatalogoCicli";
 import Manutenzione from "./modules/Manutenzione";
+import AcquaFiltrata from "./modules/AcquaFiltrata";
+import ControlliAnalitici from "./modules/ControlliAnalitici";
 import { getSubscriptionStatus, isSubscriptionBlocked, getBannerTier } from "./subscriptionStatus";
 
 const MAIN_TABS = [
@@ -42,6 +44,8 @@ const MAIN_TABS = [
   // Controlli periodici
   { id: "infestanti", label: "Monitoraggio infestanti", icon: Bug },
   { id: "acquepotabili", label: "Acque potabili", icon: Droplet },
+  { id: "acquafiltrata", label: "Acqua filtrata", icon: Filter },
+  { id: "controllianalitici", label: "Controlli analitici", icon: FlaskConical },
   { id: "manutenzione", label: "Manutenzione", icon: Wrench },
   // Solo quando succede qualcosa
   { id: "nonconformita", label: "Non conformità", icon: ClipboardX },
@@ -62,7 +66,7 @@ const STATIC_TABS = [
 // controlli periodici, infine le non conformità, che si aprono solo quando
 // succede qualcosa.
 const QUOTIDIANI = new Set(["temperature", "sanificazione", "tracciabilita", "preparazioni", "abbattimento", "oliofrittura", "ghiaccio"]);
-const PERIODICI = new Set(["infestanti", "acquepotabili", "manutenzione"]);
+const PERIODICI = new Set(["infestanti", "acquepotabili", "acquafiltrata", "controllianalitici", "manutenzione"]);
 const EVENTI = new Set(["nonconformita"]);
 
 const WORK_SAFETY_SUB_ITEMS = [
@@ -179,11 +183,15 @@ function Shell() {
   const showTracciabilita = company?.active_traceability !== false;
   const showGhiaccio = !!company?.has_ice_machine;
   const showOlio = !!company?.has_fryer;
+  // L'acqua filtrata compare solo se l'azienda ha un impianto di trattamento:
+  // si accende da Configurazione, come gli altri moduli opzionali.
+  const showAcquaFiltrata = !!company?.has_water_filter;
   const visibleMainTabs = MAIN_TABS.filter((t) =>
     (t.id !== "abbattimento" || showAbbattimento) &&
     ((t.id !== "tracciabilita" && t.id !== "preparazioni") || showTracciabilita) &&
     (t.id !== "ghiaccio" || showGhiaccio) &&
-    (t.id !== "oliofrittura" || showOlio)
+    (t.id !== "oliofrittura" || showOlio) &&
+    (t.id !== "acquafiltrata" || showAcquaFiltrata)
   );
   const gruppiMenu = [
     { titolo: "Anagrafica e documenti", voci: STATIC_TABS },
@@ -195,7 +203,7 @@ function Shell() {
   const haccpTabAttivo = HACCP_TAB_IDS.has(tab);
 
   React.useEffect(() => {
-    if ((tab === "abbattimento" && !showAbbattimento) || ((tab === "tracciabilita" || tab === "preparazioni") && !showTracciabilita) || (tab === "ghiaccio" && !showGhiaccio) || (tab === "oliofrittura" && !showOlio)) {
+    if ((tab === "abbattimento" && !showAbbattimento) || ((tab === "tracciabilita" || tab === "preparazioni") && !showTracciabilita) || (tab === "ghiaccio" && !showGhiaccio) || (tab === "oliofrittura" && !showOlio) || (tab === "acquafiltrata" && !showAcquaFiltrata)) {
       setTab("dashboard");
     }
     if (tab === "sicurezzalavoro" && !company?.active_work_safety) {
@@ -210,7 +218,7 @@ function Shell() {
     if (workSafetySubTab === "visitemediche" && !company?.active_medical_surveillance) {
       setWorkSafetySubTab("dvr");
     }
-  }, [showAbbattimento, showTracciabilita, showGhiaccio, company?.active_work_safety, company?.active_equipment_checks, company?.active_medical_surveillance, showHaccp, tab, workSafetySubTab]);
+  }, [showAbbattimento, showTracciabilita, showGhiaccio, showAcquaFiltrata, company?.active_work_safety, company?.active_equipment_checks, company?.active_medical_surveillance, showHaccp, tab, workSafetySubTab]);
 
   const openWorkSafety = (subTabId) => {
     setTab("sicurezzalavoro");
@@ -411,6 +419,8 @@ function Shell() {
         {tab === "registrazione" && <RegistrazioneSanitaria />}
         {tab === "nonconformita" && <NonConformita />}
         {tab === "acquepotabili" && <AcquePotabili />}
+      {tab === "acquafiltrata" && <AcquaFiltrata />}
+      {tab === "controllianalitici" && <ControlliAnalitici />}
         {tab === "documenti" && <Documenti />}
         {tab === "config" && <Configurazione />}
         {tab === "clienti" && <MieiClienti goTo={setTab} />}
