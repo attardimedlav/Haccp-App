@@ -241,7 +241,8 @@ export function pacchettoDocx(corpo, opzioni = {}) {
   const document =
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
- xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+ xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+ xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">
 <w:body>${corpo}
 <w:sectPr>
 ${conPiePagina ? '<w:footerReference w:type="default" r:id="rId10"/>' : ""}
@@ -307,7 +308,67 @@ ${conPiePagina ? '<Relationship Id="rId10" Type="http://schemas.openxmlformats.o
       '<Relationship Id="rId20" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/></Relationships>'
     );
   }
+  // Immagini (per ora: la firma del responsabile sul manuale). Arrivano in
+  // base64 perche' e' la forma in cui stanno in banca dati; qui tornano byte,
+  // perche' dentro un .docx l'immagine e' un file vero dentro word/media/.
+  // Gli identificativi partono da rId30: rId1 sono gli stili, rId10 il pie'
+  // di pagina, rId20 le impostazioni.
+  const immagini = opzioni.immagini || {};
+  const nomiImmagini = Object.keys(immagini);
+  if (nomiImmagini.length) {
+    let rels = "";
+    nomiImmagini.forEach((nome, i) => {
+      files["word/media/" + nome] = daBase64(immagini[nome]);
+      rels += `<Relationship Id="${RID_IMMAGINE(i)}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/${nome}"/>`;
+    });
+    files["word/_rels/document.xml.rels"] = files["word/_rels/document.xml.rels"]
+      .replace("</Relationships>", rels + "</Relationships>");
+    if (files["[Content_Types].xml"].indexOf('Extension="png"') < 0) {
+      files["[Content_Types].xml"] = files["[Content_Types].xml"]
+        .replace("</Types>", '<Default Extension="png" ContentType="image/png"/></Types>');
+    }
+  }
   return files;
+}
+
+// L'identificativo della relazione: deve essere lo stesso che il corpo del
+// documento scrive dentro <a:blip r:embed="...">, altrimenti Word apre il
+// file e al posto dell'immagine mostra una croce rossa.
+export const RID_IMMAGINE = (i) => "rId" + (30 + i);
+
+function daBase64(dato) {
+  const puro = String(dato || "").replace(/^data:[^,]*,/, "");
+  const bin = atob(puro);
+  const byte = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) byte[i] = bin.charCodeAt(i);
+  return byte;
+}
+
+// Immagine in linea nel testo. Le misure sono in EMU: 360000 per centimetro.
+export function immagineInline(rId, larghezzaCm, altezzaCm, nome = "immagine") {
+  const cx = Math.round(larghezzaCm * 360000);
+  const cy = Math.round(altezzaCm * 360000);
+  return (
+    `<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">` +
+    `<wp:extent cx="${cx}" cy="${cy}"/><wp:effectExtent l="0" t="0" r="0" b="0"/>` +
+    `<wp:docPr id="${1 + Math.floor(Math.random() * 10000)}" name="${esc(nome)}"/>` +
+    `<wp:cNvGraphicFramePr><a:graphicFrameLocks xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" noChangeAspect="1"/></wp:cNvGraphicFramePr>` +
+    `<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">` +
+    `<a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">` +
+    `<pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">` +
+    `<pic:nvPicPr><pic:cNvPr id="0" name="${esc(nome)}"/><pic:cNvPicPr/></pic:nvPicPr>` +
+    `<pic:blipFill><a:blip r:embed="${rId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +
+    `<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm>` +
+    `<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>` +
+    `</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>`
+  );
+}
+
+// Un paragrafo che contiene soltanto un'immagine.
+export function parImmagine(rId, larghezzaCm, altezzaCm, o = {}) {
+  return `<w:p><w:pPr><w:spacing w:before="${o.before || 0}" w:after="${o.after == null ? 60 : o.after}"/>` +
+    (o.align ? `<w:jc w:val="${o.align}"/>` : "") + `</w:pPr>` +
+    immagineInline(rId, larghezzaCm, altezzaCm, o.nome || "immagine") + `</w:p>`;
 }
 
 export function fileRegistro(dati) {

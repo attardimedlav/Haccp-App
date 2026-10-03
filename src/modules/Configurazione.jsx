@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { CheckCircle2, CalendarClock, Download, Wrench, Droplets, SprayCan, Settings2, RefreshCw, Lock, Users, BookOpen, FileText, Paperclip, KeyRound } from "lucide-react";
+import { CheckCircle2, CalendarClock, Download, Wrench, Droplets, SprayCan, Settings2, RefreshCw, Lock, Users, BookOpen, FileText, Paperclip, KeyRound, PenLine, Trash2 } from "lucide-react";
 import { useAuth } from "../AuthContext";
 import { downloadReminderICS } from "../hooks/useReminders";
 import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
+import { fotoInFirma } from "../utils/firmaImmagine";
 import { getSubscriptionStatus, pillClassFor } from "../subscriptionStatus";
 import Attrezzature from "./Attrezzature";
 import Sanificanti from "./Sanificanti";
@@ -62,6 +63,13 @@ export default function Configurazione() {
   const [activeEquipmentChecks, setActiveEquipmentChecks] = useState(false);
   const [activeMedicalSurveillance, setActiveMedicalSurveillance] = useState(false);
   const [haccpManager, setHaccpManager] = useState("");
+  // Firma del responsabile: si allega come qualunque altro allegato, nello
+  // storage dell'azienda; qui resta il percorso, e l'anteprima e' il PNG
+  // appena elaborato oppure un link temporaneo al file gia' caricato.
+  const [firmaPath, setFirmaPath] = useState("");
+  const [firmaAnteprima, setFirmaAnteprima] = useState("");
+  const [firmaBusy, setFirmaBusy] = useState(false);
+  const [firmaErrore, setFirmaErrore] = useState("");
   const [subscriptionStart, setSubscriptionStart] = useState("");
   const [subscriptionEnd, setSubscriptionEnd] = useState("");
   const [subscriptionAmount, setSubscriptionAmount] = useState("");
@@ -115,6 +123,7 @@ export default function Configurazione() {
       setActiveEquipmentChecks(!!company.active_equipment_checks);
       setActiveMedicalSurveillance(!!company.active_medical_surveillance);
       setHaccpManager(company.haccp_manager || "");
+      setFirmaPath(company.haccp_signature_path || "");
       setSubscriptionStart(company.subscription_start || "");
       setSubscriptionEnd(company.subscription_end || "");
       setSubscriptionAmount(
@@ -159,6 +168,7 @@ export default function Configurazione() {
     active_equipment_checks: activeEquipmentChecks,
     active_medical_surveillance: activeMedicalSurveillance,
     haccp_manager: haccpManager,
+    haccp_signature_path: firmaPath || null,
     subscription_start: subscriptionStart || null,
     subscription_end: subscriptionEnd || null,
     subscription_amount: subscriptionAmount === "" ? null : Number(subscriptionAmount),
@@ -172,6 +182,50 @@ export default function Configurazione() {
   // Manuale HACCP già esistente: il file viene caricato subito nello storage
   // dell'azienda; il percorso resta in stato e viene salvato con il resto della
   // configurazione al Salva.
+  // La foto della firma non si carica com'e': la carta diventa trasparente,
+  // il tratto viene isolato e ritagliato, e quello che finisce nello storage
+  // e' un PNG della misura che il manuale si aspetta. Senza questo passaggio
+  // nel documento comparirebbe il rettangolo grigio del foglio fotografato.
+  const onFirmaFile = async (e) => {
+    const f = e.target.files?.[0] || null;
+    setFirmaErrore("");
+    if (!f) return;
+    if (f.size > 12 * 1024 * 1024) {
+      setFirmaErrore("Foto troppo grande (limite 12 MB).");
+      e.target.value = "";
+      return;
+    }
+    setFirmaBusy(true);
+    try {
+      const firma = await fotoInFirma(f);
+      const path = await uploadAttachment(company.id, firma.file);
+      setFirmaPath(path);
+      setFirmaAnteprima(firma.dataUrl);
+      await updateCompany(buildPayload({ haccp_signature_path: path }));
+    } catch (err) {
+      setFirmaErrore(err.message || "Non è stato possibile elaborare la foto.");
+    } finally {
+      setFirmaBusy(false);
+      e.target.value = "";
+    }
+  };
+
+  const togliFirma = async () => {
+    if (!window.confirm("Togliere la firma del responsabile? I manuali già generati non cambiano.")) return;
+    setFirmaPath("");
+    setFirmaAnteprima("");
+    await updateCompany(buildPayload({ haccp_signature_path: null }));
+  };
+
+  // anteprima del file già caricato in una sessione precedente
+  useEffect(() => {
+    let vivo = true;
+    if (firmaPath && !firmaAnteprima) {
+      getAttachmentUrl(firmaPath).then((url) => { if (vivo && url) setFirmaAnteprima(url); });
+    }
+    return () => { vivo = false; };
+  }, [firmaPath]);   // eslint-disable-line react-hooks/exhaustive-deps
+
   const onManualFile = async (e) => {
     const f = e.target.files?.[0] || null;
     setManualError("");
@@ -487,6 +541,38 @@ export default function Configurazione() {
               />
               <p className="sub" style={{ marginTop: 6 }}>
                 Questo nome comparirà come scelta rapida nei campi operatore/responsabile delle schede.
+              </p>
+
+              <label className="file-drop" htmlFor="firma-haccp-file-input" style={{ marginTop: 12 }}>
+                <PenLine size={15} />
+                <span>
+                  {firmaBusy
+                    ? "Elaborazione della firma…"
+                    : firmaPath
+                      ? "Sostituisci la firma del responsabile"
+                      : "Allega la firma del responsabile (foto o immagine)"}
+                </span>
+                <input
+                  id="firma-haccp-file-input" type="file" accept="image/*" hidden
+                  onChange={onFirmaFile} disabled={firmaBusy || !company?.id}
+                />
+              </label>
+              {firmaErrore && <span className="file-error"><Paperclip size={13} /> {firmaErrore}</span>}
+              {firmaAnteprima && (
+                <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 10 }}>
+                  <img
+                    src={firmaAnteprima} alt="Firma del responsabile HACCP"
+                    style={{ height: 58, background: "#FFFFFF", border: "1px solid #D8E0DA", borderRadius: 6, padding: "4px 10px" }}
+                  />
+                  <button type="button" className="icon-btn" onClick={togliFirma} aria-label="Togli la firma" title="Togli la firma">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              )}
+              <p className="sub" style={{ marginTop: 6 }}>
+                Il responsabile firma a penna su un foglio bianco e ne scatta una foto: l'app isola il
+                tratto, rende trasparente la carta e tiene solo la firma. Da quel momento il manuale
+                generato esce già firmato, in calce alla dichiarazione di adozione.
               </p>
             </fieldset>
 

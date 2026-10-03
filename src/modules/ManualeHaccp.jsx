@@ -7,6 +7,7 @@ import DocumentoInPagina from "../DocumentoInPagina";
 import { supabase } from "../supabaseClient";
 import { pacchettoDocx, scaricaDocx } from "./CorsoFormazione";
 import { corpoManuale, controlli } from "../utils/manualeHaccpDocx";
+import { base64DaBlob } from "../utils/firmaImmagine";
 import { scaricaModuliRegistrazione } from "../utils/moduliRegistrazioneDocx";
 
 const MAX_FILE_BYTES = 12 * 1024 * 1024;
@@ -93,6 +94,22 @@ export default function ManualeHaccp() {
     };
   };
 
+  // La firma sta nello storage come ogni altro allegato: si rilegge al
+  // momento della generazione, cosi' il manuale porta sempre quella corrente.
+  // Se il file non si riesce a leggere il manuale si genera lo stesso, con la
+  // riga da firmare a penna: un documento senza firma e' recuperabile, un
+  // documento che non esce no.
+  const firmaDellAzienda = async () => {
+    if (!company?.haccp_signature_path) return null;
+    try {
+      const { data, error } = await supabase.storage.from("attachments").download(company.haccp_signature_path);
+      if (error || !data) return null;
+      return await base64DaBlob(data);
+    } catch {
+      return null;
+    }
+  };
+
   // Genera il .docx e lo deposita come revisione: il documento non finisce
   // solo nei download, entra nello storico del manuale.
   const generaManuale = async (soloProva) => {
@@ -102,7 +119,10 @@ export default function ManualeHaccp() {
       const dossier = await raccogliDossier();
       const mancanze = controlli(dossier);
       setAvvisi(mancanze);
-      const files = pacchettoDocx(corpoManuale(dossier));
+      // La firma depositata in Configurazione entra nel pacchetto come
+      // immagine: il corpo del manuale la cita, qui si allega il file.
+      const firma = await firmaDellAzienda();
+      const files = pacchettoDocx(corpoManuale(dossier), firma ? { immagini: { "firma.png": firma } } : {});
       const nome = `Manuale_autocontrollo_${(company?.name || "azienda").replace(/[^A-Za-z0-9]+/g, "_")}_rev_${dossier.revisione.numero}.docx`;
       if (soloProva) {
         await scaricaDocx(files, nome);
