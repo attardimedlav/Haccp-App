@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { CheckCircle2, CalendarClock, Download, Wrench, Droplets, Settings2, RefreshCw, Lock, Users, BookOpen, FileText, Paperclip, KeyRound } from "lucide-react";
+import { CheckCircle2, CalendarClock, Download, Wrench, Droplets, SprayCan, Settings2, RefreshCw, Lock, Users, BookOpen, FileText, Paperclip, KeyRound } from "lucide-react";
 import { useAuth } from "../AuthContext";
 import { downloadReminderICS } from "../hooks/useReminders";
 import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
 import { getSubscriptionStatus, pillClassFor } from "../subscriptionStatus";
 import Attrezzature from "./Attrezzature";
 import Sanificanti from "./Sanificanti";
+import PianoPulizie from "./PianoPulizie";
 import Dipendenti from "./Dipendenti";
 import AccessoAzienda from "./AccessoAzienda";
 import { scaricaProceduraRegistrazioni } from "../utils/proceduraRegistrazioniDocx";
@@ -14,6 +15,7 @@ const SUB_TABS = [
   { id: "generale", label: "Generale", icon: Settings2 },
   { id: "attrezzature", label: "Attrezzature", icon: Wrench },
   { id: "sanificanti", label: "Sanificanti", icon: Droplets },
+  { id: "pulizie", label: "Piano pulizie", icon: SprayCan },
   { id: "dipendenti", label: "Dipendenti", icon: Users },
 ];
 
@@ -278,6 +280,7 @@ export default function Configurazione() {
 
       {subTab === "attrezzature" && <Attrezzature />}
       {subTab === "sanificanti" && <Sanificanti />}
+      {subTab === "pulizie" && <PianoPulizie />}
       {subTab === "dipendenti" && <Dipendenti />}
       {subTab === "accesso" && isConsultant && <AccessoAzienda />}
 
