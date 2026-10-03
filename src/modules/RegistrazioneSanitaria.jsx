@@ -69,7 +69,7 @@ export default function RegistrazioneSanitaria() {
     try {
       const { data: b64, media_type } = await fileInBase64(f);
       const { data, error: err } = await supabase.functions.invoke(FUNZIONE_LETTURA, {
-        body: { file_base64: b64, media_type, tipo: "registrazione" },
+        body: { file_base64: b64, media_type, tipo: "registrazione", company_id: company?.id },
       });
       if (err) throw new Error(err.message || "Lettura non riuscita");
       if (data?.errore) throw new Error(data.errore);
