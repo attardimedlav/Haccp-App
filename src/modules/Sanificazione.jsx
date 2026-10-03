@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Plus, Trash2, CheckCircle2, AlertTriangle } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
-import { operazioniDiArea, statoPiano, etichettaFrequenza } from "../utils/pianoPulizie";
+import { operazioniDiArea, daAvvisare, etichettaFrequenza, SOGLIA_AVVISO_GIORNI } from "../utils/pianoPulizie";
 
 export const SAN_AREAS = ["Cucina", "Sala", "Bagni", "Magazzino", "Attrezzature", "Frigoriferi"];
 
@@ -38,15 +38,17 @@ export default function Sanificazione() {
     if (sanitizers.length > 0 && !sanitizer) setSanitizer(sanitizers[0].name);
   }, [sanitizers, sanitizer]);
 
-  const previste = operazioniDiArea(piano, area);
+  // Nel menu compaiono solo le pulizie periodiche. Quella ordinaria di ogni
+  // giorno è la voce vuota, già selezionata: registrare la pulizia di fine
+  // turno resta un clic, come prima.
+  const previste = operazioniDiArea(piano, area)
+    .filter((r) => Number(r.frequency_days) >= SOGLIA_AVVISO_GIORNI);
 
-  // Cambiando area si propone la prima operazione prevista lì: quasi sempre
-  // è quella giornaliera, cioè quella che si registra più spesso.
+  // Cambiando area si torna alla pulizia ordinaria: è quella che si
+  // registra quasi sempre.
   React.useEffect(() => {
-    const elenco = operazioniDiArea(piano, area);
-    const presente = elenco.some((r) => r.operation === operazione);
-    if (!presente) setOperazione(elenco.length ? elenco[0].operation : "");
-  }, [area, piano]);
+    setOperazione("");
+  }, [area]);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -63,7 +65,7 @@ export default function Sanificazione() {
   };
 
   // In cima quello che è in ritardo: è la ragione per cui si apre la scheda.
-  const inRitardo = statoPiano(piano, items).filter((s) => s.cls === "pill-alert");
+  const inRitardo = daAvvisare(piano, items);
 
   return (
     <div className="panel">
@@ -100,6 +102,7 @@ export default function Sanificazione() {
           </select>
           {previste.length > 0 ? (
             <select value={operazione} onChange={(e) => setOperazione(e.target.value)} className="note-input">
+              <option value="">Pulizia ordinaria dell'area</option>
               {previste.map((r) => (
                 <option key={r.id} value={r.operation}>
                   {r.operation} — {etichettaFrequenza(r.frequency_days).toLowerCase()}
