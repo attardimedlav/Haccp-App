@@ -42,6 +42,7 @@ export default function Configurazione() {
   const [codiceAteco, setCodiceAteco] = useState("");
   const [tipologiaAttivita, setTipologiaAttivita] = useState("");
   const [hasWaterTank, setHasWaterTank] = useState(false);
+  const [hasWaterFilter, setHasWaterFilter] = useState(false);
   const [servesRawFish, setServesRawFish] = useState(false);
   const [activeHaccp, setActiveHaccp] = useState(true);
   const [activeTraceability, setActiveTraceability] = useState(true);
@@ -93,6 +94,7 @@ export default function Configurazione() {
       setCodiceAteco(company.codice_ateco || "");
       setTipologiaAttivita(company.tipologia_attivita || "");
       setHasWaterTank(!!company.has_water_tank);
+      setHasWaterFilter(!!company.has_water_filter);
       setServesRawFish(!!company.serves_raw_fish);
       setActiveTraceability(company.active_traceability !== false);
       setHasBlastChiller(!!company.has_blast_chiller);
@@ -139,6 +141,7 @@ export default function Configurazione() {
     codice_ateco: codiceAteco,
     tipologia_attivita: tipologiaAttivita,
     has_water_tank: hasWaterTank,
+    has_water_filter: hasWaterFilter,
     serves_raw_fish: servesRawFish,
     active_traceability: activeTraceability,
     has_blast_chiller: hasBlastChiller,
@@ -316,6 +319,10 @@ export default function Configurazione() {
                   <label className="checkbox-row" style={{ marginTop: 8 }}>
                     <input type="checkbox" checked={hasWaterTank} onChange={(e) => setHasWaterTank(e.target.checked)} />
                     L'attività ha una vasca di accumulo dell'acqua
+                  </label>
+                  <label className="checkbox-row" style={{ marginTop: 8 }}>
+                    <input type="checkbox" checked={hasWaterFilter} onChange={(e) => setHasWaterFilter(e.target.checked)} />
+                    L'attività ha un impianto di filtrazione o trattamento dell'acqua (addolcitore, osmosi, filtri)
                   </label>
                   <label className="checkbox-row" style={{ marginTop: 8 }}>
                     <input type="checkbox" checked={servesRawFish} onChange={(e) => setServesRawFish(e.target.checked)} />
