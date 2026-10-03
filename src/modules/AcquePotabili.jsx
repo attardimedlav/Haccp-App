@@ -15,15 +15,9 @@ import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
 
-const CONTROL_TYPES = [
-  "Cloro residuo",
-  "Analisi chimico-microbiologica",
-  "Ispezione visiva impianto",
-  "Manutenzione filtri/addolcitori",
-  "Ispezione e pulizia vasca di accumulo",
-  "Altro",
-];
-
+// Questa sezione registra una cosa sola: l'ispezione e pulizia delle vasche di
+// accumulo, con periodicità semestrale. Le analisi di laboratorio stanno in
+// Controlli analitici, la manutenzione dei filtri in Acqua filtrata.
 export const WATER_TANK_CONTROL_TYPE = "Ispezione e pulizia vasca di accumulo";
 
 const RESULTS = ["Conforme", "Non conforme"];
@@ -39,7 +33,6 @@ function fmtDate(v) {
   });
 }
 
-// Giorni che mancano (positivi) o di ritardo (negativi) rispetto a una scadenza.
 function giorniA(dataISO) {
   if (!dataISO) return null;
   const oggi = new Date();
@@ -59,7 +52,7 @@ function aggiungiMesi(dataISO, mesi) {
 
 function AttachmentLink({ path }) {
   const [url, setUrl] = useState(null);
-  if (!path) return <span className="none-label">Nessun referto allegato</span>;
+  if (!path) return <span className="none-label">Nessun allegato</span>;
   if (!url) {
     getAttachmentUrl(path).then(setUrl);
     return <span className="none-label">Caricamento allegato…</span>;
@@ -75,7 +68,6 @@ function AttachmentLink({ path }) {
 
 export default function AcquePotabili() {
   const { company } = useAuth();
-  // useTable filtra per company_id, quindi vuole l'id e non l'intera riga.
   const companyId = company?.id || company;
 
   const { items, add, remove, loading } = useTable("water_controls", companyId);
@@ -86,25 +78,9 @@ export default function AcquePotabili() {
     loading: loadingTanks,
   } = useTable("water_tanks", companyId);
 
-  // Chi compila: proposto il responsabile HACCP dell'azienda, modificabile.
-  // Se resta vuoto ci pensa comunque il database (trigger trg_operatore_haccp).
   const responsabile = (company?.haccp_manager || "").trim();
   const [operator, setOperator] = useState("");
   const chiCompila = operator || responsabile;
-
-  const [samplingPoint, setSamplingPoint] = useState("");
-  const [controlType, setControlType] = useState(CONTROL_TYPES[0]);
-  const [controlDate, setControlDate] = useState(
-    new Date().toISOString().slice(0, 10)
-  );
-  const [result, setResult] = useState(RESULTS[0]);
-  const [value, setValue] = useState("");
-  const [lab, setLab] = useState("");
-  const [note, setNote] = useState("");
-  const [tankId, setTankId] = useState("");
-  const [file, setFile] = useState(null);
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
 
   // Nuova vasca
   const [tankName, setTankName] = useState("");
@@ -114,7 +90,16 @@ export default function AcquePotabili() {
   const [tankBusy, setTankBusy] = useState(false);
   const [tankError, setTankError] = useState("");
 
-  const isTankControl = controlType === WATER_TANK_CONTROL_TYPE;
+  // Nuova ispezione
+  const [tankId, setTankId] = useState("");
+  const [controlDate, setControlDate] = useState(
+    new Date().toISOString().slice(0, 10)
+  );
+  const [result, setResult] = useState(RESULTS[0]);
+  const [note, setNote] = useState("");
+  const [file, setFile] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
   const onFileChange = (e) => {
     const f = e.target.files?.[0] || null;
@@ -126,40 +111,6 @@ export default function AcquePotabili() {
       return;
     }
     setFile(f);
-  };
-
-  const submit = async (e) => {
-    e.preventDefault();
-    if (!samplingPoint.trim()) return;
-    setBusy(true);
-    setError("");
-    try {
-      let attachment_path = null;
-      if (file) attachment_path = await uploadAttachment(company, file);
-      await add({
-        sampling_point: samplingPoint,
-        control_type: controlType,
-        control_date: controlDate,
-        result,
-        value,
-        lab,
-        note,
-        operator: chiCompila.trim() || null,
-        tank_id: isTankControl && tankId ? tankId : null,
-        attachment_path,
-      });
-      setSamplingPoint("");
-      setValue("");
-      setLab("");
-      setNote("");
-      setFile(null);
-      const input = document.getElementById("acqua-file-input");
-      if (input) input.value = "";
-    } catch (err) {
-      setError("Errore durante il caricamento: " + err.message);
-    } finally {
-      setBusy(false);
-    }
   };
 
   const submitTank = async (e) => {
@@ -186,32 +137,66 @@ export default function AcquePotabili() {
     }
   };
 
-  // Per ogni vasca: ultimo controllo di pulizia e scadenza.
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!tankId) {
+      setError("Scegli la vasca ispezionata.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      let attachment_path = null;
+      if (file) attachment_path = await uploadAttachment(company, file);
+      const vasca = tanks.find((t) => t.id === tankId);
+      await add({
+        sampling_point: vasca?.name || "Vasca di accumulo",
+        control_type: WATER_TANK_CONTROL_TYPE,
+        control_date: controlDate,
+        result,
+        note: note.trim() || null,
+        operator: chiCompila.trim() || null,
+        tank_id: tankId,
+        attachment_path,
+      });
+      setNote("");
+      setFile(null);
+      const input = document.getElementById("vasca-file-input");
+      if (input) input.value = "";
+    } catch (err) {
+      setError("Errore durante il salvataggio: " + err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Solo le ispezioni delle vasche: tutto il resto non appartiene a questa sezione.
+  const ispezioni = useMemo(
+    () =>
+      items
+        .filter((i) => i.control_type === WATER_TANK_CONTROL_TYPE)
+        .sort((a, b) => (a.control_date < b.control_date ? 1 : -1)),
+    [items]
+  );
+
+  const altriControlli = items.length - ispezioni.length;
+
   const statoVasche = useMemo(() => {
-    const puliture = items.filter(
-      (i) => i.control_type === WATER_TANK_CONTROL_TYPE
-    );
     return (tanks || []).map((t) => {
-      const sue = puliture
-        .filter((p) => p.tank_id === t.id)
-        .sort((a, b) => (a.control_date < b.control_date ? 1 : -1));
+      const sue = ispezioni.filter((p) => p.tank_id === t.id);
       const ultima = sue[0]?.control_date || null;
       const mesi = t.cleaning_months || 6;
       const scadenza = ultima ? aggiungiMesi(ultima, mesi) : null;
-      const giorni = giorniA(scadenza);
-      return { ...t, ultima, scadenza, giorni, mesi };
+      return { ...t, ultima, scadenza, giorni: giorniA(scadenza), mesi };
     });
-  }, [tanks, items]);
+  }, [tanks, ispezioni]);
 
-  const vascheScoperte = statoVasche.filter(
+  const scoperte = statoVasche.filter(
     (v) => v.active !== false && (v.giorni === null || v.giorni < 0)
   ).length;
 
-  const nonConformi = items.filter((i) => i.result === "Non conforme").length;
-
   return (
     <>
-      {/* ------------------------- VASCHE DI ACCUMULO ------------------------- */}
       <div className="panel">
         <div className="panel-head">
           <div>
@@ -219,16 +204,15 @@ export default function AcquePotabili() {
               <Droplet size={18} /> Vasche e serbatoi di accumulo
             </h2>
             <p className="sub">
-              Ogni vasca va ispezionata e pulita a intervalli regolari: la
-              periodicità predefinita è di sei mesi (D.Lgs. 18/2023).
+              Ispezione e pulizia con periodicità semestrale, per ogni vasca
+              presente in azienda (D.Lgs. 18/2023).
             </p>
           </div>
           <div>
-            {vascheScoperte > 0 && (
+            {scoperte > 0 && (
               <div className="pill pill-alert">
-                <AlertTriangle size={14} />
-                {vascheScoperte}{" "}
-                {vascheScoperte === 1 ? "vasca da pulire" : "vasche da pulire"}
+                <AlertTriangle size={14} /> {scoperte}{" "}
+                {scoperte === 1 ? "vasca da pulire" : "vasche da pulire"}
               </div>
             )}
           </div>
@@ -297,8 +281,8 @@ export default function AcquePotabili() {
         ) : (
           <div className="dish-list">
             {statoVasche.map((v) => {
-              const scaduta = v.giorni !== null && v.giorni < 0;
               const mai = v.ultima === null;
+              const scaduta = v.giorni !== null && v.giorni < 0;
               return (
                 <div className="dish-row" key={v.id}>
                   <div className="dish-main">
@@ -312,7 +296,8 @@ export default function AcquePotabili() {
                       {mai
                         ? " · nessuna pulizia registrata"
                         : ` · ultima il ${fmtDate(v.ultima)}`}
-                      {v.scadenza && ` · prossima entro il ${fmtDate(v.scadenza)}`}
+                      {v.scadenza &&
+                        ` · prossima entro il ${fmtDate(v.scadenza)}`}
                     </div>
                   </div>
                   <div className="dish-side">
@@ -335,7 +320,7 @@ export default function AcquePotabili() {
                       onClick={() => {
                         if (
                           window.confirm(
-                            `Eliminare la vasca "${v.name}"? I controlli già registrati restano.`
+                            `Eliminare la vasca "${v.name}"? Le ispezioni già registrate restano.`
                           )
                         )
                           removeTank(v.id);
@@ -351,74 +336,34 @@ export default function AcquePotabili() {
         )}
       </div>
 
-      {/* ------------------------- CONTROLLI SULL'ACQUA ------------------------ */}
       <div className="panel">
         <div className="panel-head">
           <div>
-            <h2>Acque potabili interne</h2>
+            <h2>Registro delle ispezioni e pulizie</h2>
             <p className="sub">
-              Autocontrollo della qualità dell'acqua distribuita internamente
-              (D.Lgs. 18/2023).
+              Ogni intervento di ispezione e pulizia di una vasca. Da qui riparte
+              il conteggio dei sei mesi.
             </p>
-          </div>
-          <div>
-            {nonConformi > 0 && (
-              <div className="pill pill-alert">
-                <AlertTriangle size={14} /> {nonConformi}{" "}
-                {nonConformi === 1 ? "non conforme" : "non conformi"}
-              </div>
-            )}
           </div>
         </div>
 
         <form onSubmit={submit} className="traccia-form">
           <div className="row-form">
-            <input
-              type="text"
-              placeholder="Punto di prelievo (es. Rubinetto cucina)"
-              required
-              value={samplingPoint}
-              onChange={(e) => setSamplingPoint(e.target.value)}
-              className="note-input"
-            />
             <select
-              value={controlType}
-              onChange={(e) => setControlType(e.target.value)}
+              value={tankId}
+              onChange={(e) => setTankId(e.target.value)}
+              required
             >
-              {CONTROL_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {t}
+              <option value="">Vasca ispezionata…</option>
+              {statoVasche.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name}
+                  {v.location ? ` — ${v.location}` : ""}
                 </option>
               ))}
             </select>
-          </div>
-
-          {isTankControl && (
-            <div className="row-form">
-              <select
-                value={tankId}
-                onChange={(e) => setTankId(e.target.value)}
-                required
-              >
-                <option value="">Scegli la vasca controllata…</option>
-                {statoVasche.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.name}
-                    {v.location ? ` — ${v.location}` : ""}
-                  </option>
-                ))}
-              </select>
-              {statoVasche.length === 0 && (
-                <span className="file-error">
-                  <AlertTriangle size={14} /> Aggiungi prima la vasca qui sopra.
-                </span>
-              )}
-            </div>
-          )}
-
-          <div className="row-form">
             <label className="field-label">
-              Data controllo
+              Data intervento
               <input
                 type="date"
                 value={controlDate}
@@ -432,46 +377,41 @@ export default function AcquePotabili() {
                 </option>
               ))}
             </select>
-            <input
-              type="text"
-              placeholder="Valore rilevato (opzionale)"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              className="note-input"
-            />
           </div>
+
+          {statoVasche.length === 0 && (
+            <span className="file-error">
+              <AlertTriangle size={14} /> Aggiungi prima la vasca qui sopra.
+            </span>
+          )}
 
           <div className="row-form">
             <input
               type="text"
-              placeholder="Chi ha eseguito il controllo"
+              placeholder="Chi ha eseguito l'intervento"
               value={chiCompila}
               onChange={(e) => setOperator(e.target.value)}
               className="note-input"
             />
             <input
               type="text"
-              placeholder="Laboratorio / ente incaricato (opzionale)"
-              value={lab}
-              onChange={(e) => setLab(e.target.value)}
+              placeholder="Nota: prodotti usati, anomalie riscontrate (opzionale)"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
               className="note-input"
             />
           </div>
 
-          <input
-            type="text"
-            placeholder="Nota (opzionale)"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            className="full-input"
-          />
-
-          <label className="file-drop" htmlFor="acqua-file-input">
+          <label className="file-drop" htmlFor="vasca-file-input">
             <Paperclip size={16} />
-            <span>{file ? file.name : "Allega referto analisi (opzionale)"}</span>
+            <span>
+              {file
+                ? file.name
+                : "Allega rapporto della ditta o foto (opzionale)"}
+            </span>
           </label>
           <input
-            id="acqua-file-input"
+            id="vasca-file-input"
             type="file"
             accept=".pdf,image/*"
             onChange={onFileChange}
@@ -489,29 +429,26 @@ export default function AcquePotabili() {
             disabled={busy}
             style={{ alignSelf: "flex-start" }}
           >
-            <Plus size={16} /> {busy ? "Salvataggio…" : "Registra controllo"}
+            <Plus size={16} />{" "}
+            {busy ? "Salvataggio…" : "Registra ispezione e pulizia"}
           </button>
         </form>
 
         {loading ? (
           <p className="sub">Caricamento…</p>
-        ) : items.length === 0 ? (
-          <div className="empty">Nessun controllo registrato.</div>
+        ) : ispezioni.length === 0 ? (
+          <div className="empty">Nessuna ispezione registrata.</div>
         ) : (
           <div className="dish-list">
-            {items.map((item) => {
+            {ispezioni.map((item) => {
               const bad = item.result === "Non conforme";
               const vasca = tanks.find((t) => t.id === item.tank_id);
               return (
                 <div className="dish-row" key={item.id}>
                   <div className="dish-main">
-                    <strong>{item.sampling_point}</strong>
-                    <span className="sub"> · {item.control_type}</span>
-                    {vasca && <span className="sub"> · {vasca.name}</span>}
+                    <strong>{vasca?.name || item.sampling_point}</strong>
                     <div className="sub">
                       {fmtDate(item.control_date)}
-                      {item.value ? ` · ${item.value}` : ""}
-                      {item.lab ? ` · ${item.lab}` : ""}
                       {item.operator ? ` · ${item.operator}` : ""}
                     </div>
                     {item.note && <div className="sub">{item.note}</div>}
@@ -524,7 +461,7 @@ export default function AcquePotabili() {
                     <button
                       type="button"
                       className="icon-btn"
-                      title="Elimina controllo"
+                      title="Elimina registrazione"
                       onClick={() => remove(item.id)}
                     >
                       <Trash2 size={16} />
@@ -534,6 +471,17 @@ export default function AcquePotabili() {
               );
             })}
           </div>
+        )}
+
+        {altriControlli > 0 && (
+          <p className="sub" style={{ marginTop: 12 }}>
+            In archivio ci sono {altriControlli}{" "}
+            {altriControlli === 1
+              ? "registrazione di altro tipo"
+              : "registrazioni di altro tipo"}{" "}
+            (cloro, analisi, filtri): non si perdono, ma non appartengono a
+            questa sezione.
+          </p>
         )}
       </div>
     </>
