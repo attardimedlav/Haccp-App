@@ -333,7 +333,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
     try {
       const { data: b64, media_type } = await fileInBase64(f);
       const { data, error: err } = await supabase.functions.invoke(FUNZIONE_LETTURA, {
-        body: { file_base64: b64, media_type, tipo: "attestato" },
+        body: { file_base64: b64, media_type, tipo: "attestato", company_id: company?.id },
       });
       if (err) throw new Error(err.message || "Lettura non riuscita");
       if (data?.errore) throw new Error(data.errore);
