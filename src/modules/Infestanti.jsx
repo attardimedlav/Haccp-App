@@ -647,19 +647,30 @@ export default function Infestanti() {
                         </div>
                         {g.note && <p className="pest-note">{g.note}</p>}
 
-                        {allarmi.length > 0 && (
+                        {/* Tutte le postazioni controllate, non solo quelle con
+                            rilievi: il giro è il documento che dice quali esche
+                            sono state guardate, una per una. */}
+                        {suoi.length > 0 && (
                           <ul className="tr-list">
-                            {allarmi.map(function (e) {
-                              return (
-                                <li key={e.id} className="tr-item">
-                                  <div className="tr-item-top">
-                                    <span className="tr-kind">{nomePostazione(e.station_id)}</span>
-                                    <span className="pill pill-alert">{etichettaEsito(e.outcome)}</span>
-                                  </div>
-                                  {e.note && <p className="pest-note" style={{ margin: "4px 0 0" }}>{e.note}</p>}
-                                </li>
-                              );
-                            })}
+                            {[...suoi]
+                              .sort(function (a, b) {
+                                return String(nomePostazione(a.station_id))
+                                  .localeCompare(String(nomePostazione(b.station_id)), "it", { numeric: true });
+                              })
+                              .map(function (e) {
+                                const male = ESITI_ALLARME.indexOf(e.outcome) >= 0;
+                                return (
+                                  <li key={e.id} className="tr-item">
+                                    <div className="tr-item-top">
+                                      <span className="tr-kind">{nomePostazione(e.station_id)}</span>
+                                      <span className={"pill " + (male ? "pill-alert" : "pill-ok")}>
+                                        {etichettaEsito(e.outcome)}
+                                      </span>
+                                    </div>
+                                    {e.note && <p className="pest-note" style={{ margin: "4px 0 0" }}>{e.note}</p>}
+                                  </li>
+                                );
+                              })}
                           </ul>
                         )}
                         <AttachmentLink path={g.attachment_path} nome="Rapporto di intervento" vuoto="Nessun rapporto allegato" />
