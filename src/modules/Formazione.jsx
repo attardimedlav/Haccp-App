@@ -63,6 +63,33 @@ function AttachmentLink({ path }) {
   );
 }
 
+// Primo rilascio e aggiornamento sono due righe diverse nel database, ma per
+// chi legge sono la storia di una sola formazione: separate, un corso base
+// scaduto sembra una posizione scoperta anche quando il rinnovo c'è già.
+//
+// I titoli non sono mai scritti allo stesso modo ("Formazione alimentaristi -
+// Rischio 2 (Cat. A)", "Corso Alimentaristi … — aggiornamento"), quindi la
+// famiglia del corso si riconosce dalle parole e non dal titolo esatto.
+function famigliaCorso(titolo) {
+  const t = String(titolo || "").toLowerCase();
+  if (/aliment/.test(t)) return "Alimentaristi (HACCP)";
+  if (/primo soccorso/.test(t)) return "Primo soccorso";
+  if (/antincendi|incendi/.test(t)) return "Antincendio";
+  if (/\brls\b|rappresentante dei lavoratori/.test(t)) return "RLS";
+  if (/preposto/.test(t)) return "Preposto";
+  if (/rspp/.test(t)) return "RSPP";
+  if (/\bhaccp\b/.test(t)) return "HACCP";
+  return pulisci(titolo).replace(/\s*[—-]\s*aggiornamento\s*$/i, "") || "Altro corso";
+}
+
+const eAggiornamento = (titolo) => /aggiornament/i.test(String(titolo || ""));
+
+function fmtData(iso) {
+  if (!iso) return "";
+  const p = String(iso).slice(0, 10).split("-");
+  return p[2] + "/" + p[1] + "/" + p[0];
+}
+
 export default function Formazione() {
   const { company } = useAuth();
   const { items, add, remove, loading } = useTable("training_records", company?.id);
@@ -197,6 +224,36 @@ export default function Formazione() {
     return days < 60 && days >= 0;
   };
 
+  // Una scheda per persona e per famiglia di corso, con dentro gli attestati in
+  // ordine di rilascio: il primo è il rilascio iniziale, quelli dopo i rinnovi.
+  const schede = (() => {
+    const mappa = new Map();
+    items.forEach((it) => {
+      const persona = pulisci(it.employee_name) || "Senza nominativo";
+      const famiglia = famigliaCorso(it.course);
+      const chiave = persona.toLowerCase() + "|" + famiglia.toLowerCase();
+      if (!mappa.has(chiave)) mappa.set(chiave, { chiave, persona, famiglia, righe: [] });
+      mappa.get(chiave).righe.push(it);
+    });
+    return [...mappa.values()]
+      .map((g) => {
+        const righe = [...g.righe].sort((a, b) => new Date(a.issue_date || 0) - new Date(b.issue_date || 0));
+        // Lo stato della persona è quello dell'attestato che scade più tardi:
+        // se il rinnovo c'è, il corso base scaduto non è una mancanza.
+        const valido = righe.reduce((best, r) => {
+          if (!r.expiry) return best;
+          return !best || new Date(r.expiry) > new Date(best.expiry) ? r : best;
+        }, null);
+        return { chiave: g.chiave, persona: g.persona, famiglia: g.famiglia, righe, valido };
+      })
+      // Chi è scoperto sta in cima: è l'unica cosa su cui si deve intervenire.
+      .sort((a, b) => {
+        const sa = a.valido && !isExpired(a.valido.expiry) ? 1 : 0;
+        const sb = b.valido && !isExpired(b.valido.expiry) ? 1 : 0;
+        return sa - sb || a.persona.localeCompare(b.persona, "it");
+      });
+  })();
+
   return (
     <div className="panel">
       <div className="panel-head">
@@ -261,25 +318,53 @@ export default function Formazione() {
         <div className="empty"><p>Nessun corso registrato.</p></div>
       ) : (
         <ul className="dish-list">
-          {items.map((item) => {
-            const expired = isExpired(item.expiry);
-            const soon = isExpiringSoon(item.expiry);
+          {schede.map((s) => {
+            const scaduto = !s.valido || isExpired(s.valido.expiry);
+            const inScadenza = !!s.valido && isExpiringSoon(s.valido.expiry);
             return (
-              <li key={item.id} className="dish-row">
+              <li key={s.chiave} className={"dish-row" + (scaduto ? " row-warn" : "")}>
                 <div className="dish-top">
-                  <div><strong>{item.employee_name}</strong><span className="lot-tag">{item.course}</span></div>
-                  <button className="icon-btn" onClick={() => remove(item.id)} aria-label="Elimina"><Trash2 size={14} /></button>
+                  <div style={{ minWidth: 0 }}>
+                    <strong>{s.persona}</strong>
+                    <span className="lot-tag">{s.famiglia}</span>
+                  </div>
+                  <span className={"pill " + (scaduto ? "pill-alert" : inScadenza ? "pill-warn" : "pill-ok")}>
+                    {!s.valido
+                      ? "Senza scadenza"
+                      : scaduto
+                        ? "Scaduto il " + fmtData(s.valido.expiry)
+                        : inScadenza
+                          ? "In scadenza il " + fmtData(s.valido.expiry)
+                          : "Valido fino al " + fmtData(s.valido.expiry)}
+                  </span>
                 </div>
-                <div className="traccia-meta">
-                  {item.issue_date && <span className="doc-type-tag">Rilasciato {new Date(item.issue_date).toLocaleDateString("it-IT")} · {item.validity_years} {item.validity_years === 1 ? "anno" : "anni"}</span>}
-                  {item.expiry && (
-                    <span className="doc-type-tag" style={{ color: expired ? "#B3432E" : soon ? "#C58A2A" : "#6E7C73" }}>
-                      {expired ? "Scaduto" : soon ? "In scadenza" : "Valido"} · {new Date(item.expiry).toLocaleDateString("it-IT")}
-                    </span>
-                  )}
-                  {item.training_body && <span className="doc-type-tag">{item.training_body}</span>}
-                </div>
-                <AttachmentLink path={item.attachment_path} />
+
+                <ul className="tr-list">
+                  {s.righe.map((item, i) => (
+                    <li key={item.id} className="tr-item">
+                      <div className="tr-item-top">
+                        <span className="tr-kind">
+                          {i === 0 && !eAggiornamento(item.course) ? "Primo rilascio" : "Aggiornamento"}
+                        </span>
+                        {item.issue_date && <span className="doc-type-tag">del {fmtData(item.issue_date)}</span>}
+                        {item.validity_years && (
+                          <span className="doc-type-tag">
+                            {item.validity_years} {item.validity_years === 1 ? "anno" : "anni"}
+                          </span>
+                        )}
+                        {item.expiry && <span className="doc-type-tag">fino al {fmtData(item.expiry)}</span>}
+                        <button className="icon-btn" onClick={() => remove(item.id)} aria-label="Elimina attestato">
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                      <p className="pest-note" style={{ margin: "4px 0 0" }}>{item.course}</p>
+                      {item.training_body && (
+                        <p className="pest-note" style={{ margin: "2px 0 0" }}>{item.training_body}</p>
+                      )}
+                      <AttachmentLink path={item.attachment_path} />
+                    </li>
+                  ))}
+                </ul>
               </li>
             );
           })}
