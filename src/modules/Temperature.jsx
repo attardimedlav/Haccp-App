@@ -14,6 +14,11 @@ export default function Temperature() {
   const { company } = useAuth();
   const { items, add, remove, update, loading } = useTable("temperature_logs", company?.id);
   const { items: units, loading: unitsLoading } = useTable("temperature_units", company?.id);
+
+  // Chi compila le schede è di norma il responsabile HACCP: il campo si apre
+  // già scritto col suo nome e resta modificabile se a controllare è un altro.
+  const responsabile = (company?.haccp_manager || "").trim();
+
   const [unitLabel, setUnitLabel] = useState("");
   const [value, setValue] = useState("");
   const [inRange, setInRange] = useState(null); // null = non ancora scelto
@@ -28,6 +33,12 @@ export default function Temperature() {
   React.useEffect(() => {
     if (units.length > 0 && !unitLabel) setUnitLabel(units[0].label);
   }, [units, unitLabel]);
+
+  // L'azienda arriva dal contesto poco dopo il primo render: appena c'è, si
+  // riempie il campo, senza sovrascrivere quello che l'utente avesse già scritto.
+  React.useEffect(() => {
+    if (responsabile) setOperator((prec) => (prec ? prec : responsabile));
+  }, [responsabile]);
 
   const unitDef = units.find((u) => u.label === unitLabel);
   const unitTypeLabel = unitDef?.equipment_type
@@ -46,7 +57,9 @@ export default function Temperature() {
       operator,
       in_range: inRange,
     });
-    setValue(""); setNote(""); setInRange(null); setOperator("");
+    setValue(""); setNote(""); setInRange(null);
+    // si riparte dal responsabile, così la registrazione successiva è immediata
+    setOperator(responsabile);
     setBusy(false);
   };
 
@@ -140,11 +153,6 @@ export default function Temperature() {
 
         <div className="row-form" style={{ margin: "0 0 4px" }}>
           <input type="text" placeholder="Operatore" required value={operator} onChange={(e) => setOperator(e.target.value)} className="note-input" />
-          {company?.haccp_manager && (
-            <button type="button" className="link-btn" onClick={() => setOperator(company.haccp_manager)}>
-              Usa responsabile HACCP
-            </button>
-          )}
         </div>
 
         <button type="submit" className="btn-primary" disabled={busy || inRange === null} style={{ alignSelf: "flex-start" }}>
