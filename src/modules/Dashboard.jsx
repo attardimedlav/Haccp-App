@@ -5,11 +5,10 @@ import { useAuth } from "../AuthContext";
 import { WATER_TANK_CONTROL_TYPE } from "./AcquePotabili";
 import { PLAN_TYPE } from "./Documenti";
 import { expiryInfo, FORMAZIONE_ROLE, DATORE_ROLES } from "./SicurezzaLavoro";
+import { riassuntoPerArea } from "../utils/pianoPulizie";
 
 const CHECK_PERIODICITY = [
   { id: "temperature_logs", tab: "temperature", label: "Temperature", days: 1, icon: Thermometer },
-  { id: "sanitization_logs", tab: "sanificazione", label: "Sanificazione", days: 1, icon: SprayCan },
-  { id: "pest_logs", tab: "infestanti", label: "Monitoraggio infestanti", days: 7, icon: Bug },
 ];
 
 function daysSince(ts) {
@@ -42,6 +41,11 @@ export default function Dashboard({ goTo, openWorkSafety }) {
   const units = useTable("temperature_units", company?.id);
   const san = useTable("sanitization_logs", company?.id);
   const pest = useTable("pest_logs", company?.id);
+  // Il piano di pulizia e i giri sulle postazioni: le scadenze nascono da
+  // qui, non piu da un controllo generico per area.
+  const piano = useTable("cleaning_plan", company?.id);
+  const giriInfestanti = useTable("pest_rounds", company?.id);
+  const vasche = useTable("water_tanks", company?.id);
   const water = useTable("water_controls", company?.id);
   const docs = useTable("haccp_documents", company?.id);
   const workSafety = useTable("work_safety_appointments", company?.id);
@@ -191,6 +195,65 @@ export default function Dashboard({ goTo, openWorkSafety }) {
   const oggi = new Date().toISOString().slice(0, 10);
   const haccpIssues = [];
   if (showHaccp) {
+    // Pulizie fuori frequenza, raggruppate per area: una riga per area con
+    // il ritardo peggiore. Elencarle una per una coprirebbe le scadenze
+    // serie sotto dieci voci di pulizie.
+    riassuntoPerArea(piano.items, san.items).forEach((a) => haccpIssues.push({
+      key: "pulizie-" + a.area, tab: "sanificazione", icon: SprayCan,
+      titolo: "Pulizie in ritardo — " + a.area,
+      dettaglio: a.peggiore
+        ? a.peggiore.riga.operation + ": " + a.peggiore.label.toLowerCase() +
+          (a.scadute > 1 ? " (e altre " + (a.scadute - 1) + " in quest'area)" : "")
+        : a.scadute + " operazioni da recuperare",
+    }));
+
+    // Monitoraggio infestanti: vale l'ultimo giro sulle postazioni della
+    // planimetria, non piu il vecchio registro per area.
+    const giorniGiro = Number(company?.pest_round_days) || 7;
+    const ultimoGiro = giriInfestanti.items.reduce((m, g) => ((g.round_date || "") > m ? g.round_date : m), "");
+    if (!ultimoGiro) {
+      haccpIssues.push({
+        key: "infestanti-mai", tab: "infestanti", icon: Bug,
+        titolo: "Monitoraggio infestanti mai eseguito",
+        dettaglio: "Nessun giro registrato sulle postazioni",
+      });
+    } else {
+      const trascorsi = Math.floor((Date.now() - new Date(ultimoGiro).getTime()) / 86400000);
+      if (trascorsi > giorniGiro) {
+        haccpIssues.push({
+          key: "infestanti-tardi", tab: "infestanti", icon: Bug,
+          titolo: "Giro infestanti in ritardo",
+          dettaglio: "Ultimo giro il " + new Date(ultimoGiro).toLocaleDateString("it-IT") +
+            ", " + trascorsi + " giorni fa (previsto ogni " + giorniGiro + ")",
+        });
+      }
+    }
+
+    // Vasche di accumulo: una per una, con la periodicita della vasca.
+    // Prima il controllo era sull'azienda e bastava pulirne una qualsiasi
+    // per far sparire l'avviso di tutte.
+    vasche.items.filter((vs) => vs.active !== false).forEach((vs) => {
+      const mesi = Number(vs.cleaning_months) || 6;
+      const sue = water.items.filter((w) => w.tank_id === vs.id);
+      const ultima = sue.reduce((m, w) => ((w.created_at || "") > m ? w.created_at : m), "");
+      if (!ultima) {
+        haccpIssues.push({
+          key: "vasca-" + vs.id, tab: "acquepotabili", icon: Droplet,
+          titolo: "Vasca mai pulita", dettaglio: vs.name,
+        });
+        return;
+      }
+      const scad = new Date(ultima);
+      scad.setMonth(scad.getMonth() + mesi);
+      if (scad < new Date()) {
+        haccpIssues.push({
+          key: "vasca-" + vs.id, tab: "acquepotabili", icon: Droplet,
+          titolo: "Pulizia della vasca scaduta",
+          dettaglio: vs.name + " — ultima il " + new Date(ultima).toLocaleDateString("it-IT"),
+        });
+      }
+    });
+
     // manutenzioni con la prossima scadenza già passata
     manutenzioni.items
       .filter((m) => m.next_due && m.next_due < oggi)
@@ -268,7 +331,7 @@ export default function Dashboard({ goTo, openWorkSafety }) {
     ? [
         { id: "temperature", label: "Letture temperatura", value: temp.items.length, icon: Thermometer, flag: deviations > 0 ? `${deviations} da verificare` : null },
         { id: "sanificazione", label: "Interventi di sanificazione", value: san.items.length, icon: SprayCan, flag: null },
-        { id: "infestanti", label: "Controlli infestanti", value: pest.items.length, icon: Bug, flag: pestAlerts > 0 ? `${pestAlerts} con tracce` : null },
+        { id: "infestanti", label: "Giri di monitoraggio", value: giriInfestanti.items.length, icon: Bug, flag: null },
       ]
     : [];
 
