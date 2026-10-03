@@ -124,7 +124,7 @@ export default function Tracciabilita() {
     try {
       const { data: b64, media_type } = await fileInBase64(file);
       const { data, error } = await supabase.functions.invoke(FUNZIONE_LETTURA, {
-        body: { file_base64: b64, media_type },
+        body: { file_base64: b64, media_type, company_id: company?.id },
       });
       if (error) throw new Error(error.message || "Lettura non riuscita");
       if (data?.errore) throw new Error(data.errore);
@@ -799,7 +799,7 @@ function CatalogoProdotti({ company, prodotti, arrivi, reloadProdotti, reloadArr
     try {
       const { data: b64, media_type } = await fileInBase64(f);
       const { data, error } = await supabase.functions.invoke(FUNZIONE_LETTURA, {
-        body: { file_base64: b64, media_type, tipo: "etichetta" },
+        body: { file_base64: b64, media_type, tipo: "etichetta", company_id: company?.id },
       });
       if (error) throw new Error(error.message || "Lettura non riuscita");
       if (data?.errore) throw new Error(data.errore);
