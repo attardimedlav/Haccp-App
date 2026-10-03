@@ -100,7 +100,7 @@ export default function ManualeHaccp() {
   // riga da firmare a penna: un documento senza firma e' recuperabile, un
   // documento che non esce no.
   const firmaDellAzienda = async () => {
-    if (!company?.haccp_signature_path) return null;
+    if (!company?.haccp_signature_path || !company?.haccp_signature_consent_at) return null;
     try {
       const { data, error } = await supabase.storage.from("attachments").download(company.haccp_signature_path);
       if (error || !data) return null;

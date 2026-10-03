@@ -70,6 +70,11 @@ export default function Configurazione() {
   const [firmaAnteprima, setFirmaAnteprima] = useState("");
   const [firmaBusy, setFirmaBusy] = useState(false);
   const [firmaErrore, setFirmaErrore] = useState("");
+  // Autorizzazione del firmatario: senza, la firma non si carica e non si
+  // appone. Apporre la firma di un'altra persona regge solo se quella
+  // persona lo ha consentito, e la data serve a dire da quando.
+  const [firmaConsensoAl, setFirmaConsensoAl] = useState("");
+  const [firmaConsensoNota, setFirmaConsensoNota] = useState("");
   const [subscriptionStart, setSubscriptionStart] = useState("");
   const [subscriptionEnd, setSubscriptionEnd] = useState("");
   const [subscriptionAmount, setSubscriptionAmount] = useState("");
@@ -124,6 +129,8 @@ export default function Configurazione() {
       setActiveMedicalSurveillance(!!company.active_medical_surveillance);
       setHaccpManager(company.haccp_manager || "");
       setFirmaPath(company.haccp_signature_path || "");
+      setFirmaConsensoAl(company.haccp_signature_consent_at || "");
+      setFirmaConsensoNota(company.haccp_signature_consent_note || "");
       setSubscriptionStart(company.subscription_start || "");
       setSubscriptionEnd(company.subscription_end || "");
       setSubscriptionAmount(
@@ -169,6 +176,8 @@ export default function Configurazione() {
     active_medical_surveillance: activeMedicalSurveillance,
     haccp_manager: haccpManager,
     haccp_signature_path: firmaPath || null,
+    haccp_signature_consent_at: firmaConsensoAl || null,
+    haccp_signature_consent_note: firmaConsensoNota || null,
     subscription_start: subscriptionStart || null,
     subscription_end: subscriptionEnd || null,
     subscription_amount: subscriptionAmount === "" ? null : Number(subscriptionAmount),
@@ -195,6 +204,11 @@ export default function Configurazione() {
       e.target.value = "";
       return;
     }
+    if (!firmaConsensoAl) {
+      setFirmaErrore("Prima serve la dichiarazione di autorizzazione del responsabile, qui sotto.");
+      e.target.value = "";
+      return;
+    }
     setFirmaBusy(true);
     try {
       const firma = await fotoInFirma(f);
@@ -208,6 +222,22 @@ export default function Configurazione() {
       setFirmaBusy(false);
       e.target.value = "";
     }
+  };
+
+  // Togliendo l'autorizzazione si toglie anche la firma: tenerla caricata
+  // ma inutilizzabile sarebbe uno stato che nessuno capisce guardando la
+  // pagina, e il primo a non capirlo sarebbe chi genera il manuale.
+  const cambiaConsenso = async (dato) => {
+    if (!dato && firmaPath) {
+      if (!window.confirm("Togliendo l'autorizzazione si toglie anche la firma caricata. Procedere?")) return;
+      setFirmaPath("");
+      setFirmaAnteprima("");
+      setFirmaConsensoAl("");
+      await updateCompany(buildPayload({ haccp_signature_path: null, haccp_signature_consent_at: null }));
+      return;
+    }
+    setFirmaConsensoAl(dato);
+    await updateCompany(buildPayload({ haccp_signature_consent_at: dato || null }));
   };
 
   const togliFirma = async () => {
@@ -543,6 +573,29 @@ export default function Configurazione() {
                 Questo nome comparirà come scelta rapida nei campi operatore/responsabile delle schede.
               </p>
 
+              <label className="checkbox-row" style={{ marginTop: 14, alignItems: "flex-start" }}>
+                <input
+                  type="checkbox" checked={!!firmaConsensoAl}
+                  onChange={(e) => cambiaConsenso(e.target.checked ? new Date().toISOString().slice(0, 10) : "")}
+                />
+                <span>
+                  Il responsabile mi ha autorizzato ad apporre la sua firma sui documenti che l'app
+                  genera per questa azienda.
+                </span>
+              </label>
+              {firmaConsensoAl && (
+                <div className="row-form" style={{ marginTop: 8 }}>
+                  <label className="field-label">
+                    Autorizzazione resa il
+                    <input type="date" value={firmaConsensoAl} onChange={(e) => setFirmaConsensoAl(e.target.value)} />
+                  </label>
+                  <input
+                    type="text" className="note-input" placeholder="Come è stata resa (a voce, per iscritto, via email…)"
+                    value={firmaConsensoNota} onChange={(e) => setFirmaConsensoNota(e.target.value)}
+                  />
+                </div>
+              )}
+
               <label className="file-drop" htmlFor="firma-haccp-file-input" style={{ marginTop: 12 }}>
                 <PenLine size={15} />
                 <span>
@@ -554,7 +607,7 @@ export default function Configurazione() {
                 </span>
                 <input
                   id="firma-haccp-file-input" type="file" accept="image/*" hidden
-                  onChange={onFirmaFile} disabled={firmaBusy || !company?.id}
+                  onChange={onFirmaFile} disabled={firmaBusy || !company?.id || !firmaConsensoAl}
                 />
               </label>
               {firmaErrore && <span className="file-error"><Paperclip size={13} /> {firmaErrore}</span>}
@@ -572,7 +625,9 @@ export default function Configurazione() {
               <p className="sub" style={{ marginTop: 6 }}>
                 Il responsabile firma a penna su un foglio bianco e ne scatta una foto: l'app isola il
                 tratto, rende trasparente la carta e tiene solo la firma. Da quel momento il manuale
-                generato esce già firmato, in calce alla dichiarazione di adozione.
+                generato esce già firmato, in calce alla dichiarazione di adozione, con l'indicazione
+                della data in cui l'autorizzazione è stata resa. Senza la dichiarazione qui sopra la
+                firma non si carica e non viene apposta.
               </p>
             </fieldset>
 
