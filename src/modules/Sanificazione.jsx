@@ -1,81 +1,123 @@
 import React, { useState } from "react";
-import { Plus, Trash2, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Trash2, CheckCircle2, AlertTriangle, Info, Check } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
-import { operazioniDiArea, daAvvisare, etichettaFrequenza, SOGLIA_AVVISO_GIORNI } from "../utils/pianoPulizie";
+import { statoRiga, etichettaFrequenza, fmtData, SOGLIA_AVVISO_GIORNI } from "../utils/pianoPulizie";
 
 export const SAN_AREAS = ["Cucina", "Sala", "Bagni", "Magazzino", "Attrezzature", "Frigoriferi"];
 
-function fmtDate(ts) {
+// Sanificazione.
+//
+// La scheda è il calendario delle pulizie del manuale, con le stesse righe e
+// nello stesso ordine: punto di intervento, frequenza, prodotto, spunta. Le
+// righe sono fisse e si vedono sempre, anche quando non c'è nulla da fare —
+// è la differenza fra un registro e un elenco di eventi: un registro dice
+// anche quello che NON è stato fatto.
+//
+// Chi compila è il responsabile HACCP, già scritto. All'OSA restano cinque
+// spunte per chiudere la giornata.
+
+function fmtOra(ts) {
   const d = new Date(ts);
   return d.toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" }) +
     " · " + d.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
 }
 
+// Le fasce sono quelle della scheda cartacea: si legge per fascia, non per
+// area, perché è così che si lavora — a fine turno si fa il giro delle
+// quotidiane, il lunedì quello delle settimanali.
+const FASCE = [
+  { id: "giorno", titolo: "Ogni giorno, a fine turno", test: (g) => g === 1 },
+  { id: "settimana", titolo: "Ogni settimana", test: (g) => g > 1 && g <= 14 },
+  { id: "mese", titolo: "Ogni mese", test: (g) => g > 14 && g <= 90 },
+  { id: "raro", titolo: "Più volte l'anno", test: (g) => g > 90 },
+  { id: "occorre", titolo: "Quando occorre", test: (g) => !g || g <= 0 },
+];
+
+const oggiISO = () => new Date().toISOString().slice(0, 10);
+
 export default function Sanificazione() {
   const { company } = useAuth();
-  const { items, add, remove, loading } = useTable("sanitization_logs", company?.id);
-  const { items: sanitizers, loading: sanitizersLoading } = useTable("sanitizers", company?.id);
-  // Il piano di pulizia decide che cosa si può registrare e ogni quanto:
-  // l'operatore sceglie fra le operazioni previste per quell'area invece di
-  // dichiarare genericamente "ho pulito la cucina". Senza l'operazione una
-  // passata ai piani di lavoro farebbe risultare in regola anche la cappa,
-  // che si pulisce una volta al mese.
-  const { items: piano } = useTable("cleaning_plan", company?.id);
-
-  const [area, setArea] = useState(SAN_AREAS[0]);
-  const [operazione, setOperazione] = useState("");
-  const [sanitizer, setSanitizer] = useState("");
-  const [operator, setOperator] = useState("");
-  const [busy, setBusy] = useState(false);
+  const companyId = company?.id;
+  const { items, add, remove, loading } = useTable("sanitization_logs", companyId);
+  const { items: sanitizers } = useTable("sanitizers", companyId);
+  const { items: piano, loading: pianoLoading } = useTable("cleaning_plan", companyId);
 
   const responsabile = (company?.haccp_manager || "").trim();
+  const [operator, setOperator] = useState(responsabile);
+  const [prodotti, setProdotti] = useState({});
+  const [busy, setBusy] = useState("");
+  const [errore, setErrore] = useState("");
+  const [mostraStorico, setMostraStorico] = useState(false);
+
   React.useEffect(() => {
     if (responsabile) setOperator((prec) => (prec ? prec : responsabile));
   }, [responsabile]);
 
-  React.useEffect(() => {
-    if (sanitizers.length > 0 && !sanitizer) setSanitizer(sanitizers[0].name);
-  }, [sanitizers, sanitizer]);
+  // Le righe che valgono per questa azienda: quelle legate a un'attrezzatura
+  // compaiono solo se l'interruttore è acceso in Configurazione. Un cliente
+  // senza macchina del ghiaccio non deve vedersi una riga che non lo riguarda.
+  const righe = piano
+    .filter((r) => r.active !== false)
+    .filter((r) => !r.requires_flag || company?.[r.requires_flag])
+    .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
 
-  // Nel menu compaiono solo le pulizie periodiche. Quella ordinaria di ogni
-  // giorno è la voce vuota, già selezionata: registrare la pulizia di fine
-  // turno resta un clic, come prima.
-  const previste = operazioniDiArea(piano, area)
-    .filter((r) => Number(r.frequency_days) >= SOGLIA_AVVISO_GIORNI);
+  const fattoOggi = (riga) =>
+    items.find((i) =>
+      i.area === riga.area &&
+      (i.operation || "") === riga.operation &&
+      String(i.created_at).slice(0, 10) === oggiISO()
+    ) || null;
 
-  // Cambiando area si torna alla pulizia ordinaria: è quella che si
-  // registra quasi sempre.
-  React.useEffect(() => {
-    setOperazione("");
-  }, [area]);
-
-  const submit = async (e) => {
-    e.preventDefault();
-    if (!operator.trim()) return;
-    setBusy(true);
-    await add({
-      area,
-      operation: operazione || null,
-      operator,
-      sanitizer: sanitizer || null,
-    });
-    setOperator(responsabile);
-    setBusy(false);
+  const prodottoDi = (riga) => {
+    if (prodotti[riga.id] !== undefined) return prodotti[riga.id];
+    if (riga.product && sanitizers.some((s) => s.name === riga.product)) return riga.product;
+    return sanitizers.length ? sanitizers[0].name : "";
   };
 
-  // In cima quello che è in ritardo: è la ragione per cui si apre la scheda.
-  const inRitardo = daAvvisare(piano, items);
+  const spunta = async (riga) => {
+    setBusy(riga.id);
+    setErrore("");
+    try {
+      await add({
+        area: riga.area,
+        operation: riga.operation,
+        sanitizer: prodottoDi(riga) || riga.product || null,
+        operator: (operator || responsabile).trim(),
+      });
+    } catch (err) {
+      setErrore("Non è stato possibile registrare: " + err.message);
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const annulla = async (log) => {
+    if (!window.confirm("Togliere la spunta e cancellare questa registrazione?")) return;
+    await remove(log.id);
+  };
+
+  const inRitardo = righe
+    .map((r) => statoRiga(r, items))
+    .filter((s) => s.cls === "pill-alert" && Number(s.riga.frequency_days) >= SOGLIA_AVVISO_GIORNI);
+
+  const quoteGiorno = righe.filter((r) => Number(r.frequency_days) === 1);
+  const fatteOggi = quoteGiorno.filter((r) => fattoOggi(r)).length;
 
   return (
     <div className="panel">
       <div className="panel-head">
         <div>
           <h2>Sanificazione</h2>
-          <p className="sub">Registra ogni intervento di pulizia e sanificazione previsto dal piano.</p>
+          <p className="sub">
+            Programma di pulizia e sanificazione dell'azienda: spunta ogni intervento eseguito.
+          </p>
         </div>
-        {inRitardo.length > 0 && (
-          <div className="pill pill-alert"><AlertTriangle size={14} /> {inRitardo.length} in ritardo</div>
+        {quoteGiorno.length > 0 && (
+          <div className={"pill " + (fatteOggi === quoteGiorno.length ? "pill-ok" : "pill-warn")}>
+            {fatteOggi === quoteGiorno.length ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+            Oggi {fatteOggi} di {quoteGiorno.length}
+          </div>
         )}
       </div>
 
@@ -86,83 +128,157 @@ export default function Sanificazione() {
           </p>
           {inRitardo.slice(0, 6).map((s) => (
             <p key={s.riga.id} className="pest-note" style={{ margin: "2px 0" }}>
-              • {s.riga.area} — {s.riga.operation} ({s.label.toLowerCase()})
+              • {s.riga.operation} — {s.label.toLowerCase()}
             </p>
           ))}
-          {inRitardo.length > 6 && (
-            <p className="range-hint">e altre {inRitardo.length - 6}: le trovi tutte nel piano, in Configurazione.</p>
-          )}
         </div>
       )}
 
-      <form onSubmit={submit} className="traccia-form">
-        <div className="row-form" style={{ marginTop: 0 }}>
-          <select value={area} onChange={(e) => setArea(e.target.value)}>
-            {SAN_AREAS.map((a) => <option key={a} value={a}>{a}</option>)}
-          </select>
-          {previste.length > 0 ? (
-            <select value={operazione} onChange={(e) => setOperazione(e.target.value)} className="note-input">
-              <option value="">Pulizia ordinaria dell'area</option>
-              {previste.map((r) => (
-                <option key={r.id} value={r.operation}>
-                  {r.operation} — {etichettaFrequenza(r.frequency_days).toLowerCase()}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <input
-              type="text" className="note-input" placeholder="Che cosa è stato pulito"
-              value={operazione} onChange={(e) => setOperazione(e.target.value)}
-            />
-          )}
-          {!sanitizersLoading && sanitizers.length > 0 && (
-            <select value={sanitizer} onChange={(e) => setSanitizer(e.target.value)}>
-              {sanitizers.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
-            </select>
-          )}
+      <div className="row-form" style={{ marginTop: 0, marginBottom: 12 }}>
+        <label className="field-label" style={{ flex: "1 1 260px" }}>
+          Chi esegue e registra
           <input
-            type="text" placeholder="Operatore" required value={operator}
-            onChange={(e) => setOperator(e.target.value)} className="note-input"
+            type="text" className="full-input" value={operator}
+            onChange={(e) => setOperator(e.target.value)}
+            placeholder="Nome di chi compila"
           />
-          <button type="submit" className="btn-primary" disabled={busy}><Plus size={16} /> Registra</button>
-        </div>
-      </form>
+        </label>
+      </div>
 
-      {previste.length === 0 && (
-        <p className="range-hint">
-          Per quest'area il piano di pulizia non prevede ancora nulla: lo imposti in
-          Configurazione → Piano pulizie. Finché è vuoto puoi registrare scrivendo a mano
-          che cosa hai pulito, ma non nascono avvisi di scadenza.
-        </p>
-      )}
-      {!sanitizersLoading && sanitizers.length === 0 && (
-        <p className="range-hint">
-          Nessun sanificante configurato: vai su Configurazione → Sanificanti per aggiungerne uno
-          (opzionale, puoi comunque registrare senza specificarlo).
-        </p>
-      )}
+      {errore && <span className="file-error"><AlertTriangle size={13} /> {errore}</span>}
 
-      {loading ? (
+      {pianoLoading || loading ? (
         <p className="sub">Caricamento…</p>
-      ) : items.length === 0 ? (
-        <div className="empty"><p>Nessun intervento registrato.</p></div>
+      ) : righe.length === 0 ? (
+        <div className="empty">
+          <p>
+            Il programma di pulizia non è ancora impostato per questa azienda: si compila in
+            Configurazione → Piano pulizie, ed è lo stesso che il manuale stampa.
+          </p>
+        </div>
       ) : (
-        <ul className="log-list">
-          {items.map((item) => (
-            <li key={item.id} className="log-row">
-              <CheckCircle2 size={15} color="#2F6F4E" />
-              <span className="log-main">
-                <strong>{item.area}</strong>
-                {item.operation ? " — " + item.operation : ""}
-              </span>
-              {item.sanitizer && <span className="log-unit">{item.sanitizer}</span>}
-              <span className="log-note">{item.operator}</span>
-              <span className="log-time">{fmtDate(item.created_at)}</span>
-              <button className="icon-btn" onClick={() => remove(item.id)} aria-label="Elimina"><Trash2 size={14} /></button>
-            </li>
-          ))}
-        </ul>
+        FASCE.map((fascia) => {
+          const diFascia = righe.filter((r) => fascia.test(Number(r.frequency_days)));
+          if (diFascia.length === 0) return null;
+          return (
+            <div key={fascia.id} style={{ marginBottom: 18 }}>
+              <h3 className="section-title" style={{ marginBottom: 6 }}>{fascia.titolo}</h3>
+              <ul className="dish-list">
+                {diFascia.map((riga) => {
+                  const log = fattoOggi(riga);
+                  const stato = statoRiga(riga, items);
+                  const periodica = Number(riga.frequency_days) >= SOGLIA_AVVISO_GIORNI;
+                  const scaduta = periodica && stato.cls === "pill-alert";
+                  return (
+                    <li key={riga.id} className={"dish-row" + (scaduta ? " row-warn" : "")}>
+                      <div className="dish-top" style={{ marginBottom: 6 }}>
+                        <div style={{ minWidth: 0 }}>
+                          <strong>{riga.operation}</strong>
+                          <span className="lot-tag">{riga.area}</span>
+                        </div>
+                        {log ? (
+                          <button
+                            type="button" className="icon-btn" aria-label="Annulla la spunta"
+                            title="Annulla la spunta" onClick={() => annulla(log)}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        ) : (
+                          <button
+                            type="button" className="btn-primary"
+                            disabled={busy === riga.id || !(operator || responsabile).trim()}
+                            onClick={() => spunta(riga)}
+                          >
+                            <Check size={15} /> {busy === riga.id ? "…" : "Fatto"}
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="traccia-meta">
+                        <span className="doc-type-tag">{etichettaFrequenza(riga.frequency_days)}</span>
+                        {log ? (
+                          <span className="pill pill-ok">
+                            <CheckCircle2 size={12} /> Eseguito oggi da {log.operator}
+                          </span>
+                        ) : periodica ? (
+                          <span className={"pill " + stato.cls}>{stato.label}</span>
+                        ) : stato.ultima ? (
+                          <span className="doc-type-tag">ultima volta il {fmtData(stato.ultima.created_at)}</span>
+                        ) : (
+                          <span className="none-label">mai registrata</span>
+                        )}
+                      </div>
+
+                      {!log && (
+                        <div className="row-form" style={{ margin: "6px 0 0" }}>
+                          {sanitizers.length > 0 ? (
+                            <label className="field-label" style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                              Prodotto
+                              <select
+                                value={prodottoDi(riga)}
+                                onChange={(e) => setProdotti({ ...prodotti, [riga.id]: e.target.value })}
+                              >
+                                {sanitizers.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
+                                <option value="">— nessuno —</option>
+                              </select>
+                            </label>
+                          ) : riga.product ? (
+                            <span className="sub">Prodotto previsto: {riga.product}</span>
+                          ) : null}
+                          {riga.method && <span className="sub">{riga.method}</span>}
+                        </div>
+                      )}
+                      {log && log.sanitizer && (
+                        <span className="doc-type-tag">{log.sanitizer}</span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          );
+        })
       )}
+
+      {sanitizers.length === 0 && (
+        <p className="range-hint">
+          Nessun prodotto di sanificazione registrato: si aggiungono in Configurazione → Sanificanti.
+          Il manuale rimanda alle loro schede tecniche, quindi conviene inserirli.
+        </p>
+      )}
+
+      <button type="button" className="link-btn" onClick={() => setMostraStorico(!mostraStorico)}>
+        {mostraStorico ? "Nascondi lo storico" : "Mostra lo storico delle registrazioni"}
+      </button>
+
+      {mostraStorico && (
+        items.length === 0 ? (
+          <div className="empty"><p>Nessun intervento registrato.</p></div>
+        ) : (
+          <ul className="log-list">
+            {items.slice(0, 120).map((item) => (
+              <li key={item.id} className="log-row">
+                <CheckCircle2 size={15} color="#2F6F4E" />
+                <span className="log-main">
+                  <strong>{item.operation || item.area}</strong>
+                  {item.operation ? " — " + item.area : ""}
+                </span>
+                {item.sanitizer && <span className="log-unit">{item.sanitizer}</span>}
+                <span className="log-note">{item.operator}</span>
+                <span className="log-time">{fmtOra(item.created_at)}</span>
+                <button className="icon-btn" onClick={() => remove(item.id)} aria-label="Elimina"><Trash2 size={14} /></button>
+              </li>
+            ))}
+          </ul>
+        )
+      )}
+
+      <p className="login-info" style={{ marginTop: 14 }}>
+        <Info size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+        Le righe sono quelle del programma di pulizia scritto nel manuale di autocontrollo: si
+        modificano in Configurazione → Piano pulizie e cambiano insieme nei due posti. Le voci legate
+        a un'attrezzatura compaiono solo se l'azienda ce l'ha.
+      </p>
     </div>
   );
 }
