@@ -57,59 +57,127 @@ function griglia(intestazione, righe, larghezze, o = {}) {
   return tabella(larghezze, [capo, ...corpo]);
 }
 
-// Riquadro del diagramma di flusso: una tabella di una sola colonna, con il
-// bordo colorato. I CCP escono in rosso, come nei manuali scritti a mano:
-// è l'unica cosa che un ispettore cerca guardando il diagramma.
-function riquadro(titolo, sotto, marcatore) {
-  const critico = /CCP/i.test(marcatore || "");
-  const colore = critico ? "A83A2C" : "8FA894";
-  const spessore = critico ? 12 : 6;
-  const bordi = ["top", "left", "bottom", "right"]
-    .map((b) => `<w:${b} w:val="single" w:sz="${spessore}" w:space="0" w:color="${colore}"/>`).join("");
-  const dentro = [
-    par(titolo, { bold: true, size: 19, align: "center", after: sotto || marcatore ? 30 : 0 }),
-    sotto ? par(sotto, { size: 17, align: "center", after: marcatore ? 30 : 0 }) : "",
-    marcatore ? par(marcatore, { bold: true, size: 17, align: "center", after: 0, color: critico ? "A83A2C" : "3F5147" }) : "",
-  ].join("");
+// --- diagrammi di flusso ------------------------------------------------
+//
+// Il diagramma non e' decorazione: e' la pagina che un ispettore guarda per
+// prima e deve leggersi in un colpo d'occhio. Le fasi scendono numerate
+// lungo una linea continua - la colonna dei numeri, che non e' un disegno
+// ma una striscia di celle dello stesso colore - invece di essere separate
+// da frecce scritte con un carattere, che a seconda del font installato in
+// Word diventano un quadratino vuoto. Ogni ciclo ha la sua pagina.
+
+const DIA = { num: 560, box: 5620, tag: 800 };
+
+function bordiCella(colore, spessore) {
+  return ["top", "left", "bottom", "right"]
+    .map((lato) => colore
+      ? `<w:${lato} w:val="single" w:sz="${spessore || 6}" w:space="0" w:color="${colore}"/>`
+      : `<w:${lato} w:val="none" w:sz="0" w:space="0" w:color="auto"/>`)
+    .join("");
+}
+
+// Una cella del diagramma. L'ordine dentro <w:tcPr> e' fissato dallo schema
+// (tcW, tcBorders, shd, tcMar, vAlign): fuori posto Word lo ignora in
+// silenzio, come e' gia' successo con il salto pagina.
+function cellaDia(contenuto, larghezza, o = {}) {
+  const pad = o.pad == null ? 100 : o.pad;
+  const lat = o.padLat == null ? 150 : o.padLat;
   return (
-    `<w:tbl><w:tblPr><w:tblW w:w="6600" w:type="dxa"/><w:jc w:val="center"/>` +
-    `<w:tblBorders>${bordi}</w:tblBorders>` +
-    `<w:shd w:val="clear" w:color="auto" w:fill="${critico ? "FBEDEC" : "F1F4F0"}"/></w:tblPr>` +
-    `<w:tblGrid><w:gridCol w:w="6600"/></w:tblGrid>` +
-    `<w:tr><w:trPr><w:jc w:val="center"/></w:trPr>` +
-    `<w:tc><w:tcPr><w:tcW w:w="6600" w:type="dxa"/>` +
-    `<w:shd w:val="clear" w:color="auto" w:fill="${critico ? "FBEDEC" : "F1F4F0"}"/></w:tcPr>${dentro}</w:tc></w:tr></w:tbl>`
+    `<w:tc><w:tcPr><w:tcW w:w="${larghezza}" w:type="dxa"/>` +
+    (o.span ? `<w:gridSpan w:val="${o.span}"/>` : "") +
+    `<w:tcBorders>${bordiCella(o.bordo, o.spessore)}</w:tcBorders>` +
+    (o.sfondo ? `<w:shd w:val="clear" w:color="auto" w:fill="${o.sfondo}"/>` : "") +
+    `<w:tcMar><w:top w:w="${pad}" w:type="dxa"/><w:left w:w="${lat}" w:type="dxa"/>` +
+    `<w:bottom w:w="${pad}" w:type="dxa"/><w:right w:w="${lat}" w:type="dxa"/></w:tcMar>` +
+    `<w:vAlign w:val="center"/></w:tcPr>` +
+    (contenuto || par("", { size: 2, after: 0 })) +
+    `</w:tc>`
   );
 }
 
+// cantSplit: un riquadro non si spezza fra due pagine. Deve precedere
+// trHeight, altrimenti vale solo il secondo.
+function rigaDia(celle, o = {}) {
+  const pr = `<w:trPr><w:cantSplit/>` +
+    (o.altezza ? `<w:trHeight w:val="${o.altezza}" w:hRule="exact"/>` : "") +
+    `</w:trPr>`;
+  return `<w:tr>${pr}${celle}</w:tr>`;
+}
+
+function tabellaDia(righe) {
+  const L = [DIA.num, DIA.box, DIA.tag];
+  const senza = ["top", "left", "bottom", "right", "insideH", "insideV"]
+    .map((b) => `<w:${b} w:val="none" w:sz="0" w:space="0" w:color="auto"/>`).join("");
+  return (
+    `<w:tbl><w:tblPr><w:tblW w:w="${L.reduce((a, b) => a + b, 0)}" w:type="dxa"/>` +
+    `<w:jc w:val="center"/><w:tblBorders>${senza}</w:tblBorders>` +
+    `<w:tblLayout w:type="fixed"/></w:tblPr>` +
+    `<w:tblGrid>${L.map((w) => `<w:gridCol w:w="${w}"/>`).join("")}</w:tblGrid>` +
+    righe.join("") + `</w:tbl>`
+  );
+}
+
+// La legenda si stampa una volta sola all'inizio della sezione: ripeterla
+// sotto ogni diagramma era rumore su ogni pagina.
+export function legendaFlusso() {
+  return par("CP  punto di controllo        CCP  punto critico di controllo",
+    { size: 16, align: "center", color: "5A6B5E", maiuscoletto: true, before: 40, after: 200 });
+}
+
 // Una fase del flusso si scrive "Nome della fase" oppure, per marcarla,
-// "Nome della fase | CCP 1" — la stessa barra verticale usata altrove.
+// "Nome della fase | CCP 1" - la stessa barra verticale usata altrove.
 function leggiFase(testo, classificazione) {
   const pezzi = String(testo || "").split("|").map((x) => x.trim());
   const nome = pezzi[0];
   const dettaglio = pezzi.length > 2 ? pezzi[1] : "";
   const marcato = pezzi.length > 2 ? pezzi[2] : (pezzi.length === 2 ? pezzi[1] : "");
-  // Una fase è critica solo se lo dice il catalogo. Far ereditare la
+  // Una fase e' critica solo se lo dice il catalogo. Far ereditare la
   // classificazione del ciclo era sbagliato: dentro un ciclo classificato CCP
-  // la maggior parte delle fasi non lo è — il servizio al cliente e la
-  // dispensa a temperatura ambiente non sono punti critici — e marcarle
+  // la maggior parte delle fasi non lo e' - il servizio al cliente e la
+  // dispensa a temperatura ambiente non sono punti critici - e marcarle
   // tutte in rosso dichiara controlli che non esistono.
   const marcatore = marcato || "CP";
   return { nome, dettaglio, marcatore };
 }
 
 function diagramma(ciclo) {
-  const fuori = [];
   const fasi = (ciclo.flow || []).map((x) => leggiFase(x, ciclo.classification));
-  if (!fasi.length) return fuori;
-  fuori.push(par(`${ciclo.code} — ${ciclo.name}`, { bold: true, size: 22, align: "center", before: 200, after: 120 }));
+  if (!fasi.length) return [];
+  const cicloCritico = /CCP/i.test(ciclo.classification || "");
+  const righe = [];
+
+  // intestazione piena: codice, nome e classificazione del ciclo
+  righe.push(rigaDia(
+    cellaDia(par(`${ciclo.code}    ${ciclo.name}`, { bold: true, size: 21, color: "FFFFFF", after: 0 }),
+      DIA.num + DIA.box, { sfondo: VERDE, span: 2 }) +
+    cellaDia(par(cicloCritico ? "CCP" : "CP", { bold: true, size: 16, color: "FFFFFF", align: "center", after: 0 }),
+      DIA.tag, { sfondo: VERDE })
+  ));
+
   fasi.forEach((f, i) => {
-    fuori.push(riquadro(f.nome, f.dettaglio, f.marcatore));
-    if (i < fasi.length - 1) fuori.push(par("▼", { size: 16, align: "center", after: 0, color: "6E8B78" }));
+    const ccp = /CCP/i.test(f.marcatore || "");
+    // il tratto di collegamento: la colonna dei numeri resta colorata e
+    // tiene la linea, le altre due restano vuote
+    righe.push(rigaDia(
+      cellaDia(par("", { size: 2, after: 0 }), DIA.num, { sfondo: VERDE_CHIARO, pad: 0 }) +
+      cellaDia(par("", { size: 2, after: 0 }), DIA.box, { pad: 0 }) +
+      cellaDia(par("", { size: 2, after: 0 }), DIA.tag, { pad: 0 }),
+      { altezza: 120 }
+    ));
+    const dentro =
+      par(f.nome, { bold: true, size: 20, after: f.dettaglio ? 50 : 0 }) +
+      (f.dettaglio ? par(f.dettaglio, { size: 17, color: "4A5A50", after: 0, interlinea: 240 }) : "");
+    righe.push(rigaDia(
+      cellaDia(par(String(i + 1), { bold: true, size: 20, color: "FFFFFF", align: "center", after: 0 }),
+        DIA.num, { sfondo: ccp ? "A83A2C" : VERDE_CHIARO }) +
+      cellaDia(dentro, DIA.box,
+        { sfondo: ccp ? "FBEDEC" : "F4F7F2", bordo: ccp ? "A83A2C" : "CBD9CE", spessore: ccp ? 12 : 6 }) +
+      cellaDia(par(ccp ? f.marcatore : "CP",
+        { bold: ccp, size: 16, align: "center", after: 0, color: ccp ? "A83A2C" : "6E8B78" }), DIA.tag)
+    ));
   });
-  fuori.push(par("CP — punto di controllo     ·     CCP — punto critico di controllo",
-    { size: 16, align: "center", before: 120, after: 200, color: "5A6B5E" }));
-  return fuori;
+
+  return [tabellaDia(righe)];
 }
 
 // --- filtro sui flag dell'azienda ---------------------------------------
@@ -378,13 +446,15 @@ export function corpoManuale(dossier) {
   b.push(p("I prodotti ottenuti da impasto surgelato o parzialmente cotto sono dichiarati come tali al consumatore, come previsto dal Reg. (UE) n. 1169/2011.", { italic: true, size: 20 }));
 
   b.push(h2("5.4 Diagrammi di flusso"));
-  b.push(p("Il diagramma di flusso rappresenta le fasi che compongono ciascun ciclo, dalla materia prima al prodotto servito, e indica per ognuna se costituisce punto di controllo (CP) o punto critico di controllo (CCP)."));
-  cicliAttivi.forEach((c, i) => {
+  b.push(p("Il diagramma di flusso rappresenta le fasi che compongono ciascun ciclo, dalla materia prima al prodotto servito, e indica per ognuna se costituisce punto di controllo (CP) o punto critico di controllo (CCP). Ogni ciclo occupa una pagina: il diagramma si legge per intero e si può staccare per essere affisso nel locale di lavorazione."));
+  b.push(legendaFlusso());
+  // un diagramma per pagina. Due per pagina stavano larghi solo quando i
+  // cicli avevano poche fasi, e per tutti gli altri si spezzavano a metà.
+  cicliAttivi.forEach((c) => {
     const d = diagramma(c);
     if (!d.length) return;
+    b.push(saltoPagina());
     d.forEach((x) => b.push(x));
-    // due diagrammi per pagina: più di così si spezzano a metà
-    if (i % 2 === 1 && i < cicliAttivi.length - 1) b.push(saltoPagina());
   });
   b.push(saltoPagina());
 
@@ -407,8 +477,11 @@ export function corpoManuale(dossier) {
   b.push(p("Sono classificati come CCP soltanto i passaggi in cui la perdita di controllo non è percepibile dall'operatore e non viene corretta dalla pratica di lavoro. Le altre fasi sono punti di controllo governati da procedure e buone prassi: la deviazione è immediatamente visibile e correggibile sul momento."));
   b.push(p("Un sistema che dichiara più punti critici di quanti l'azienda sia in grado di monitorare con continuità produce schede incomplete, e una scheda in bianco documenta che il sistema non è applicato.", { italic: true }));
 
-  cicliAttivi.forEach((c) => {
+  cicliAttivi.forEach((c, i) => {
     const righe = (c.righe || []).filter((r) => vale(r, azienda));
+    // ogni ciclo da pagina nuova: la tabella dei pericoli e' larga e
+    // spezzata fra due pagine non si legge
+    if (i > 0) b.push(saltoPagina());
     b.push(h2(`${c.code} — ${c.name}`));
     b.push(par("Classificazione: " + c.classification, { bold: true, size: 20, color: /^CCP/.test(c.classification) ? "A83A2C" : VERDE_CHIARO, after: 100 }));
     if (c.intro) b.push(p(c.intro));
