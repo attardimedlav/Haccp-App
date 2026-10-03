@@ -10,7 +10,7 @@
 // non esista. Ogni ciclo, riga di analisi e procedura porta un requires_flag,
 // e se quella casella di Configurazione è spenta quel pezzo non entra.
 
-import { par, cella, tabella, riga } from "../modules/CorsoFormazione";
+import { par, cella, tabella, riga, parImmagine, RID_IMMAGINE } from "../modules/CorsoFormazione";
 import { TITOLO_PROCEDURA, testoProceduraRegistrazioni } from "./proceduraRegistrazioni";
 
 const VERDE = "1B2A22";
@@ -37,7 +37,9 @@ function scheda(righe, larghezze = [3000, 6360]) {
   return tabella(larghezze, righe.map(([k, v]) =>
     riga(
       cella(par(String(k).replace(/\|/g, "\n"), { bold: true, size: 20, after: 40 }), larghezze[0], { sfondo: "F1F4F0" }) +
-      cella(par(String(v ?? "").replace(/\|/g, "\n"), { size: 20, after: 40 }), larghezze[1])
+      // un valore puo' arrivare gia' scritto in XML - e' il caso della firma
+      // del responsabile, che e' un'immagine e non una stringa
+      cella(v && v.xml ? v.xml : par(String(v ?? "").replace(/\|/g, "\n"), { size: 20, after: 40 }), larghezze[1])
     )
   ));
 }
@@ -178,6 +180,23 @@ function diagramma(ciclo) {
   });
 
   return [tabellaDia(righe)];
+}
+
+// La firma del responsabile, quando e' stata depositata in Configurazione.
+// L'immagine la porta il pacchetto (word/media/firma.png, relazione rId30):
+// qui si scrive soltanto il riferimento, e se la firma non c'e' resta la
+// riga vuota da firmare a penna, che e' il comportamento di sempre.
+function firmaOSA(azienda) {
+  const nome = azienda.haccp_manager || "";
+  if (!azienda.haccp_signature_path) {
+    return nome + "\n\n\n____________________________________________";
+  }
+  return {
+    xml:
+      par(nome, { size: 20, after: 20 }) +
+      parImmagine(RID_IMMAGINE(0), 4.5, 1.5, { after: 20, nome: "Firma del responsabile" }) +
+      par("____________________________________________", { size: 20, after: 40 }),
+  };
 }
 
 // --- filtro sui flag dell'azienda ---------------------------------------
@@ -629,11 +648,14 @@ export function corpoManuale(dossier) {
   b.push(scheda([
     ["Revisione", `${revisione.numero || "00"} — ${data(revisione.data) || "____ / ____ / ________"}`],
     ["Luogo e data", "____________________________________________"],
-    ["L'Operatore del Settore Alimentare|(firma leggibile)", (azienda.haccp_manager || "") + "\n\n\n____________________________________________"],
+    ["L'Operatore del Settore Alimentare|(firma leggibile)", firmaOSA(azienda)],
     ["Redazione tecnica", revisione.redattoDa || azienda.consultant_name || ""],
   ]));
   b.push(par("", { after: 200 }));
-  b.push(p("La firma può essere apposta a mano sulla copia stampata, poi scansionata e caricata nel sistema, oppure in forma digitale sul file PDF.", { italic: true, size: 20 }));
+  b.push(p(azienda.haccp_signature_path
+    ? "La firma riprodotta in calce è quella depositata dall'Operatore del Settore Alimentare nel sistema e da lui apposta a questo documento al momento della generazione. Non equivale alla firma autografa né dà data certa (art. 20 D.Lgs. 82/2005): per l'una o per l'altra si stampa il documento e lo si firma a mano, oppure lo si firma digitalmente."
+    : "La firma può essere apposta a mano sulla copia stampata, poi scansionata e caricata nel sistema, oppure in forma digitale sul file PDF.",
+    { italic: true, size: 20 }));
   b.push(p("La redazione tecnica è indicata a fini di tracciabilità del documento: la responsabilità dell'adozione e dell'applicazione del piano di autocontrollo resta in capo all'Operatore del Settore Alimentare.", { italic: true, size: 20 }));
 
   return b.join("");
