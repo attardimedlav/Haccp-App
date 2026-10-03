@@ -122,21 +122,36 @@ export function statoPiano(piano, registrazioni) {
     });
 }
 
+// Soglia degli avvisi.
+//
+// Le pulizie di ogni giorno non generano avvisi: nessuno registra voce per
+// voce il passaggio sui piani di lavoro, e segnalarle riempirebbe la
+// Panoramica di righe rosse che si imparano a ignorare — che è peggio che
+// non averle. Gli avvisi restano sulle pulizie periodiche, quelle che si
+// dimenticano davvero: la cappa, i frigoriferi a fondo, il magazzino.
+// Nel manuale il piano resta stampato per intero, quotidiane comprese.
+export const SOGLIA_AVVISO_GIORNI = 7;
+
+// Le sole voci su cui ha senso avvisare, già in ritardo.
+export function daAvvisare(piano, registrazioni) {
+  return statoPiano(piano, registrazioni).filter(function (s) {
+    return Number(s.riga.frequency_days) >= SOGLIA_AVVISO_GIORNI && s.cls === "pill-alert";
+  });
+}
+
 // Riassunto per area, che è il modo in cui serve alla Panoramica: una riga
 // per area invece di dieci, con il ritardo peggiore e quante operazioni
 // sono scoperte.
 export function riassuntoPerArea(piano, registrazioni) {
-  const stati = statoPiano(piano, registrazioni);
+  const stati = daAvvisare(piano, registrazioni);
   const mappa = new Map();
   stati.forEach(function (s) {
     const area = s.riga.area;
     if (!mappa.has(area)) mappa.set(area, { area: area, totale: 0, scadute: 0, peggiore: null });
     const voce = mappa.get(area);
     voce.totale += 1;
-    if (s.cls === "pill-alert") {
-      voce.scadute += 1;
-      if (!voce.peggiore || (s.ritardo || 0) > (voce.peggiore.ritardo || 0)) voce.peggiore = s;
-    }
+    voce.scadute += 1;
+    if (!voce.peggiore || (s.ritardo || 0) > (voce.peggiore.ritardo || 0)) voce.peggiore = s;
   });
   return [...mappa.values()]
     .filter(function (v) { return v.scadute > 0; })
