@@ -178,6 +178,81 @@ function AttachmentLink({ path }) {
   );
 }
 
+// Un allegato al DVR, con accanto la sua copia firmata.
+//
+// Il documento che l'app genera e' una bozza: la si stampa, la firmano le
+// persone che devono firmarla — il RLS, gli incaricati, i lavoratori presenti,
+// il medico — e la scansione torna qui. Il cliente vede soltanto quella: la
+// bozza non firmata nelle sue mani varrebbe come prova di niente, e in
+// ispezione un documento senza firme fa piu' danno che la sua assenza.
+// Finche' la copia firmata non c'e', il cliente sa che il documento esiste ed
+// e' in lavorazione, ma non puo' scaricarlo.
+function AllegatoDvr({ item, isConsultant, companyId, onAggiorna, onElimina }) {
+  const [busy, setBusy] = useState(false);
+  const [errore, setErrore] = useState("");
+
+  const allega = async (e) => {
+    const file = e.target.files?.[0] || null;
+    setErrore("");
+    if (!file) return;
+    if (file.size > 12 * 1024 * 1024) { setErrore("File troppo grande (limite 12 MB)."); e.target.value = ""; return; }
+    setBusy(true);
+    try {
+      const path = await uploadAttachment(companyId, file);
+      await onAggiorna(item.id, { signed_attachment_path: path });
+    } catch (err) {
+      setErrore("Caricamento non riuscito: " + (err?.message || err));
+    } finally {
+      setBusy(false);
+      e.target.value = "";
+    }
+  };
+
+  return (
+    <li className="dish-row">
+      <div className="dish-top">
+        <strong>{item.title}</strong>
+        {isConsultant && (
+          <button className="icon-btn" onClick={() => onElimina(item.id)} aria-label="Elimina"><Trash2 size={14} /></button>
+        )}
+      </div>
+      <div className="traccia-meta">
+        <span className="log-time">{fmtDate(item.doc_date)}</span>
+        {!item.signed_attachment_path && <span className="pill pill-warn">in attesa della copia firmata</span>}
+      </div>
+      {item.note && <p className="pest-note">{item.note}</p>}
+
+      {isConsultant ? (
+        <>
+          <span className="none-label" style={{ marginTop: 4 }}>Bozza generata (non visibile al cliente)</span>
+          <AttachmentLink path={item.attachment_path} />
+          <span className="none-label" style={{ marginTop: 8 }}>Copia stampata e firmata</span>
+          {item.signed_attachment_path ? (
+            <div className="traccia-meta" style={{ gap: 8 }}>
+              <AttachmentLink path={item.signed_attachment_path} />
+              <button type="button" className="icon-btn" aria-label="Togli la copia firmata"
+                onClick={() => onAggiorna(item.id, { signed_attachment_path: null })}>
+                <Trash2 size={13} />
+              </button>
+            </div>
+          ) : (
+            <span className="none-label">nessuna copia firmata</span>
+          )}
+          {errore && <span className="file-error"><AlertTriangle size={13} /> {errore}</span>}
+          <label className="link-btn" style={{ cursor: "pointer", margin: "4px 0 0" }}>
+            <Paperclip size={14} /> {busy ? "Caricamento…" : (item.signed_attachment_path ? "Sostituisci la copia firmata" : "Allega firmato")}
+            <input type="file" accept=".pdf,image/*" hidden onChange={allega} disabled={busy} />
+          </label>
+        </>
+      ) : item.signed_attachment_path ? (
+        <AttachmentLink path={item.signed_attachment_path} />
+      ) : (
+        <span className="none-label">In attesa della copia firmata.</span>
+      )}
+    </li>
+  );
+}
+
 export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }) {
   const { company, consultantCompanies } = useAuth();
   // Organizzare un corso è lavoro del consulente: è lui che redige il progetto
@@ -1298,7 +1373,17 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
             <div className="empty"><p>{subTab === "dvr" ? "Nessuna versione del DVR registrata." : "Nessun allegato registrato."}</p></div>
           ) : (
             <ul className="dish-list">
-              {(subTab === "dvr" ? dvrItems : allegatiItems).map((item) => (
+              {subTab === "allegati" && allegatiItems.map((item) => (
+                <AllegatoDvr
+                  key={item.id}
+                  item={item}
+                  isConsultant={isConsultant}
+                  companyId={company?.id}
+                  onAggiorna={updateDvrDoc}
+                  onElimina={removeDvrDoc}
+                />
+              ))}
+              {subTab === "dvr" && dvrItems.map((item) => (
                 <li key={item.id} className="dish-row">
                   <div className="dish-top">
                     <strong>{item.title}</strong>
