@@ -57,6 +57,7 @@ export default function Dashboard({ goTo, openWorkSafety }) {
   const olio = useTable("frying_oil_logs", company?.id);
   const arrivi = useTable("traceability_records", company?.id);
   const manuali = useTable("haccp_manuals", company?.id);
+  const corsiHaccp = useTable("training_records", company?.id);
 
   // Tutti gli indicatori di questo blocco riguardano solo il modulo HACCP: se
   // è disattivato (azienda seguita solo per la sicurezza sul lavoro) restano
@@ -230,6 +231,36 @@ export default function Dashboard({ goTo, openWorkSafety }) {
         .filter((a) => RUOLI_CON_CORSO.includes(a.role) && (a.person_name || "").trim())
         .filter((a) => !trainings.items.some((t) => t.appointment_id === a.id))
         .map((a) => `${(a.person_name || "").trim()} (${a.role})`)
+    : [];
+
+  // Formazione degli alimentaristi. È un obbligo HACCP, distinto da quello
+  // dell'art. 37 sulla sicurezza: chi manipola alimenti deve avere l'attestato
+  // previsto dalla propria Regione, e il titolare che lavora in cucina non fa
+  // eccezione — per questo qui non si esclude nessuno. Finché la Panoramica
+  // guardava solo i corsi di sicurezza, una persona senza alimentarista non
+  // compariva da nessuna parte.
+  const corsoAlimentarista = (c) => /aliment/i.test(String(c?.course || ""));
+  const corsiDi = (e) => {
+    const k = chiave(`${e.first_name} ${e.last_name}`);
+    return corsiHaccp.items.filter((c) =>
+      (c.employee_id && c.employee_id === e.id) || chiave(c.employee_name) === k);
+  };
+
+  const senzaAlimentarista = showHaccp
+    ? employees.items.filter((e) => !corsiDi(e).some(corsoAlimentarista))
+    : [];
+
+  // Attestato scaduto: vale quello che scade più tardi, perché il rinnovo è
+  // una riga nuova accanto al primo rilascio, non una sostituzione.
+  const alimentaristaScaduto = showHaccp
+    ? employees.items
+        .map((e) => {
+          const validi = corsiDi(e).filter(corsoAlimentarista).filter((c) => c.expiry);
+          if (!validi.length) return null;
+          const ultimo = validi.reduce((m, c) => (!m || new Date(c.expiry) > new Date(m.expiry) ? c : m), null);
+          return new Date(ultimo.expiry) < new Date() ? { e, scadenza: ultimo.expiry } : null;
+        })
+        .filter(Boolean)
     : [];
 
   // Segnalazioni che nascono dalle sezioni nuove. Non sono scadenze di legge:
@@ -443,6 +474,34 @@ export default function Dashboard({ goTo, openWorkSafety }) {
               </span>
             </button>
           ))}
+          {senzaAlimentarista.length > 0 && (
+            <button className="compliance-row" onClick={() => goTo("formazione")}>
+              <AlertTriangle size={15} color="#B3432E" />
+              <GraduationCap size={15} />
+              <span className="compliance-text">
+                <strong>Formazione alimentaristi mancante</strong>
+                {" — "}
+                {senzaAlimentarista.length === 1
+                  ? `${senzaAlimentarista[0].first_name} ${senzaAlimentarista[0].last_name}`
+                  : `${senzaAlimentarista.length} persone: ` +
+                    senzaAlimentarista.map((e) => `${e.first_name} ${e.last_name}`).join(", ")}
+                {" — chi manipola alimenti deve avere l'attestato previsto dalla Regione"}
+              </span>
+            </button>
+          )}
+          {alimentaristaScaduto.length > 0 && (
+            <button className="compliance-row" onClick={() => goTo("formazione")}>
+              <AlertTriangle size={15} color="#B3432E" />
+              <GraduationCap size={15} />
+              <span className="compliance-text">
+                <strong>Attestato di alimentarista scaduto</strong>
+                {" — "}
+                {alimentaristaScaduto
+                  .map((x) => `${x.e.first_name} ${x.e.last_name} (${new Date(x.scadenza).toLocaleDateString("it-IT")})`)
+                  .join(", ")}
+              </span>
+            </button>
+          )}
           {incarichiMancanti.length > 0 && (
             <button className="compliance-row" onClick={() => goToWorkSafety("nomine")}>
               <AlertTriangle size={15} color="#B3432E" />
