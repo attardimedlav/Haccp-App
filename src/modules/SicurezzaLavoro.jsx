@@ -182,6 +182,18 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
   const { company } = useAuth();
   const { items: dvrDocs, add: addDvrDoc, remove: removeDvrDoc, update: updateDvrDoc, loading: dvrLoading } = useTable("dvr_documents", company?.id);
   // Documento aperto in firma: l'id della riga di dvr_documents.
+  // Firma raccolta sul posto (tela di firma, foglio delle firme sul PDF):
+  // spenta il 04/10/2026. Dal momento in cui i documenti escono già firmati
+  // con l'immagine del firmatario, far firmare a mano sul tablet era una
+  // seconda strada per la stessa cosa, mai usata.
+  //
+  // Il pannello NON è stato rimosso: restano il componente FirmaDocumento,
+  // `src/utils/firmaPdf.js` e la tabella document_signatures con le firme già
+  // raccolte, che devono restare verificabili. Si riaccende rimettendo questa
+  // costante a true, e serve il giorno in cui qualcuno chiederà di far
+  // sottoscrivere il DVR all'RLS in azienda: quella è una firma raccolta dalla
+  // persona, e l'immagine apposta dal consulente non la sostituisce.
+  const FIRMA_SUL_POSTO = false;
   const [firmaDvrId, setFirmaDvrId] = useState(null);
   const { items: appointments, add: addAppointment, remove: removeAppointment, update: updateAppointment, loading: appointmentsLoading } = useTable("work_safety_appointments", company?.id);
   const { items: equipmentChecks, add: addEquipmentCheck, remove: removeEquipmentCheck, loading: equipmentLoading } = useTable("equipment_checks", company?.id);
@@ -1288,7 +1300,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
                   </div>
                   {item.note && <p className="pest-note">{item.note}</p>}
                   <AttachmentLink path={item.attachment_path} />
-                  {item.attachment_path && (
+                  {FIRMA_SUL_POSTO && item.attachment_path && (
                     <button
                       type="button" className="link-btn"
                       onClick={() => setFirmaDvrId(firmaDvrId === item.id ? null : item.id)}
@@ -1296,7 +1308,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
                       <PenLine size={14} /> {firmaDvrId === item.id ? "Chiudi la firma" : "Firma il documento"}
                     </button>
                   )}
-                  {firmaDvrId === item.id && (
+                  {FIRMA_SUL_POSTO && firmaDvrId === item.id && (
                     <FirmaDocumento
                       percorso={item.attachment_path}
                       titolo={item.title}
