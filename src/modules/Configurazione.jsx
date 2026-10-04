@@ -9,6 +9,7 @@ import Attrezzature from "./Attrezzature";
 import Sanificanti from "./Sanificanti";
 import PianoPulizie from "./PianoPulizie";
 import PreparazioneManuale from "./PreparazioneManuale";
+import ArchivioFirme from "./ArchivioFirme";
 import Dipendenti from "./Dipendenti";
 import AccessoAzienda from "./AccessoAzienda";
 import { scaricaProceduraRegistrazioni } from "../utils/proceduraRegistrazioniDocx";
@@ -19,6 +20,7 @@ const SUB_TABS = [
   { id: "sanificanti", label: "Sanificanti", icon: Droplets },
   { id: "pulizie", label: "Piano pulizie", icon: SprayCan },
   { id: "preparazione", label: "Preparazione manuale", icon: ClipboardCheck },
+  { id: "firmadatore", label: "Firma datore di lavoro", icon: PenLine },
   { id: "dipendenti", label: "Dipendenti", icon: Users },
 ];
 
@@ -370,6 +372,7 @@ export default function Configurazione({ onVai }) {
       {subTab === "attrezzature" && <Attrezzature />}
       {subTab === "sanificanti" && <Sanificanti />}
       {subTab === "pulizie" && <PianoPulizie />}
+      {subTab === "firmadatore" && <ArchivioFirme ambito="azienda" />}
       {subTab === "preparazione" && (
         <PreparazioneManuale
           onVai={(dove) => {
