@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { CheckCircle2, CalendarClock, Download, Wrench, Droplets, SprayCan, Settings2, RefreshCw, Lock, Users, BookOpen, FileText, Paperclip, KeyRound, PenLine, Trash2 } from "lucide-react";
+import { CheckCircle2, CalendarClock, Download, Wrench, Droplets, SprayCan, Settings2, RefreshCw, Lock, Users, BookOpen, FileText, Paperclip, KeyRound, PenLine, Trash2, ClipboardCheck } from "lucide-react";
 import { useAuth } from "../AuthContext";
 import { downloadReminderICS } from "../hooks/useReminders";
 import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
@@ -8,6 +8,7 @@ import { getSubscriptionStatus, pillClassFor } from "../subscriptionStatus";
 import Attrezzature from "./Attrezzature";
 import Sanificanti from "./Sanificanti";
 import PianoPulizie from "./PianoPulizie";
+import PreparazioneManuale from "./PreparazioneManuale";
 import Dipendenti from "./Dipendenti";
 import AccessoAzienda from "./AccessoAzienda";
 import { scaricaProceduraRegistrazioni } from "../utils/proceduraRegistrazioniDocx";
@@ -17,6 +18,7 @@ const SUB_TABS = [
   { id: "attrezzature", label: "Attrezzature", icon: Wrench },
   { id: "sanificanti", label: "Sanificanti", icon: Droplets },
   { id: "pulizie", label: "Piano pulizie", icon: SprayCan },
+  { id: "preparazione", label: "Preparazione manuale", icon: ClipboardCheck },
   { id: "dipendenti", label: "Dipendenti", icon: Users },
 ];
 
@@ -30,7 +32,7 @@ function addOneYear(dateStr) {
   return d.toISOString().slice(0, 10);
 }
 
-export default function Configurazione() {
+export default function Configurazione({ onVai }) {
   const { company, updateCompany, error, homeCompanyId, consultantCompanies } = useAuth();
   const [name, setName] = useState("");
   const [consultantName, setConsultantName] = useState("");
@@ -368,6 +370,16 @@ export default function Configurazione() {
       {subTab === "attrezzature" && <Attrezzature />}
       {subTab === "sanificanti" && <Sanificanti />}
       {subTab === "pulizie" && <PianoPulizie />}
+      {subTab === "preparazione" && (
+        <PreparazioneManuale
+          onVai={(dove) => {
+            // Le sotto-schede si cambiano qui dentro; per le schede vere
+            // dell'app serve App, che possiede lo stato della navigazione.
+            if (dove.tipo === "sub") { setSubTab(dove.id); window.scrollTo({ top: 0, behavior: "smooth" }); }
+            else if (onVai) onVai(dove.id);
+          }}
+        />
+      )}
       {subTab === "dipendenti" && <Dipendenti />}
       {subTab === "accesso" && isConsultant && <AccessoAzienda />}
 
