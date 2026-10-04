@@ -82,15 +82,23 @@ function runImmagine(firma) {
 function impacchetta(corpo, firma) {
   const files = pacchettoDocx(corpo);
   if (!firma) return files;
-  files["word/document.xml"] = files["word/document.xml"].replace(
-    'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"',
-    'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"' +
-    ' xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"'
-  );
-  files["[Content_Types].xml"] = files["[Content_Types].xml"].replace(
-    '<Default Extension="xml" ContentType="application/xml"/>',
-    '<Default Extension="xml" ContentType="application/xml"/>\n<Default Extension="png" ContentType="image/png"/>'
-  );
+  // Il namespace del disegno lo dichiara ormai pacchettoDocx, da quando il
+  // manuale HACCP esce con la firma. Aggiungerlo di nuovo produce un attributo
+  // ripetuto sull'elemento radice: XML non valido, e Word si rifiuta di aprire
+  // il file senza spiegare perché. Si mette solo se manca.
+  if (files["word/document.xml"].indexOf("wordprocessingDrawing") < 0) {
+    files["word/document.xml"] = files["word/document.xml"].replace(
+      'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"',
+      'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"' +
+      ' xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"'
+    );
+  }
+  if (files["[Content_Types].xml"].indexOf('Extension="png"') < 0) {
+    files["[Content_Types].xml"] = files["[Content_Types].xml"].replace(
+      '<Default Extension="xml" ContentType="application/xml"/>',
+      '<Default Extension="xml" ContentType="application/xml"/>\n<Default Extension="png" ContentType="image/png"/>'
+    );
+  }
   files["word/_rels/document.xml.rels"] = files["word/_rels/document.xml.rels"].replace(
     "</Relationships>",
     '<Relationship Id="rId20" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/firma.png"/></Relationships>'
