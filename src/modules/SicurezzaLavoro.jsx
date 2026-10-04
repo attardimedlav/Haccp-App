@@ -178,7 +178,7 @@ function AttachmentLink({ path }) {
   );
 }
 
-export default function SicurezzaLavoro({ subTab, setSubTab }) {
+export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }) {
   const { company } = useAuth();
   const { items: dvrDocs, add: addDvrDoc, remove: removeDvrDoc, update: updateDvrDoc, loading: dvrLoading } = useTable("dvr_documents", company?.id);
   // Documento aperto in firma: l'id della riga di dvr_documents.
@@ -1220,7 +1220,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab }) {
         ))}
       </div>
 
-      {subTab === "organigramma" && <Organigramma />}
+      {subTab === "organigramma" && <Organigramma onVaiAiDipendenti={onVaiAiDipendenti} />}
 
       {(subTab === "dvr" || subTab === "allegati") && (
         <>

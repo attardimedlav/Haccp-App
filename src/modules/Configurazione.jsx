@@ -14,14 +14,18 @@ import Dipendenti from "./Dipendenti";
 import AccessoAzienda from "./AccessoAzienda";
 import { scaricaProceduraRegistrazioni } from "../utils/proceduraRegistrazioniDocx";
 
+// L'ordine segue quello in cui si apre un cliente nuovo: prima le credenziali
+// con cui entrerà, poi i suoi dati, poi le persone. Il resto — attrezzature,
+// sanificanti, piano pulizie — viene dopo, perché sono scelte che si fanno col
+// sopralluogo davanti. La firma del datore non è più una scheda a sé: sta in
+// Generale, accanto al responsabile HACCP, perché spesso sono la stessa persona.
 const SUB_TABS = [
   { id: "generale", label: "Generale", icon: Settings2 },
+  { id: "dipendenti", label: "Dipendenti", icon: Users },
   { id: "attrezzature", label: "Attrezzature", icon: Wrench },
   { id: "sanificanti", label: "Sanificanti", icon: Droplets },
   { id: "pulizie", label: "Piano pulizie", icon: SprayCan },
   { id: "preparazione", label: "Preparazione manuale", icon: ClipboardCheck },
-  { id: "firmadatore", label: "Firma datore di lavoro", icon: PenLine },
-  { id: "dipendenti", label: "Dipendenti", icon: Users },
 ];
 
 // Solo il consulente crea le credenziali con cui l'azienda entra nell'app.
@@ -34,7 +38,7 @@ function addOneYear(dateStr) {
   return d.toISOString().slice(0, 10);
 }
 
-export default function Configurazione({ onVai }) {
+export default function Configurazione({ onVai, subTabIniziale }) {
   const { company, updateCompany, error, homeCompanyId, consultantCompanies } = useAuth();
   const [name, setName] = useState("");
   const [consultantName, setConsultantName] = useState("");
@@ -89,7 +93,11 @@ export default function Configurazione({ onVai }) {
   const [dpaSignedAt, setDpaSignedAt] = useState("");
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [subTab, setSubTab] = useState("generale");
+  const [subTab, setSubTab] = useState(subTabIniziale || "generale");
+  // Chi arriva da un rimando — per esempio dall'organigramma — deve trovarsi
+  // già sulla scheda giusta, anche se la Configurazione era rimasta aperta
+  // altrove dalla volta prima.
+  useEffect(() => { if (subTabIniziale) setSubTab(subTabIniziale); }, [subTabIniziale]);
 
   // Solo chi entra come consulente in un'azienda cliente (non la propria) può gestire l'abbonamento.
   const canManageSubscription = !!(company && homeCompanyId && company.id !== homeCompanyId);
@@ -357,7 +365,7 @@ export default function Configurazione({ onVai }) {
       </div>
 
       <div className="config-subtabs">
-        {(isConsultant ? [...SUB_TABS, TAB_ACCESSO] : SUB_TABS).map((t) => (
+        {(isConsultant ? [TAB_ACCESSO, ...SUB_TABS] : SUB_TABS).map((t) => (
           <button
             key={t.id}
             type="button"
@@ -372,7 +380,6 @@ export default function Configurazione({ onVai }) {
       {subTab === "attrezzature" && <Attrezzature />}
       {subTab === "sanificanti" && <Sanificanti />}
       {subTab === "pulizie" && <PianoPulizie />}
-      {subTab === "firmadatore" && <ArchivioFirme ambito="azienda" />}
       {subTab === "preparazione" && (
         <PreparazioneManuale
           onVai={(dove) => {
@@ -580,6 +587,11 @@ export default function Configurazione({ onVai }) {
                   Attiva anche la sorveglianza sanitaria (visite mediche periodiche dei dipendenti)
                 </label>
               )}
+            </fieldset>
+
+            <fieldset className="config-group">
+              <legend>Firma del datore di lavoro</legend>
+              <ArchivioFirme ambito="azienda" />
             </fieldset>
 
             <fieldset className="config-group">

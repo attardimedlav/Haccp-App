@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Plus, Trash2, User, Pencil, Check, X } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
+import { dataNascitaDaCf } from "../utils/codiceFiscale";
 import { supabase } from "../supabaseClient";
 import { SECURITY_ROLE_OPTIONS } from "./Organigramma";
 import { generateNominaAttachment, findRlsName, findDatoreName } from "../utils/nominaTemplates";
@@ -197,6 +198,13 @@ export default function Dipendenti() {
   const [jobRole, setJobRole] = useState("");
   const [department, setDepartment] = useState("");
   const [hireDate, setHireDate] = useState("");
+  // Data e luogo di nascita servono agli attestati dei corsi, che si intestano
+  // "nato a … il …". La data non si chiede: sta già dentro il codice fiscale e
+  // si compila da sola quando lo si digita, così i due dati non possono
+  // discordare. Il comune invece va scritto, perché nel codice è una sigla
+  // catastale e tradurla richiederebbe la tabella di tutti i comuni.
+  const [birthDate, setBirthDate] = useState("");
+  const [birthPlace, setBirthPlace] = useState("");
   const [securityRole, setSecurityRole] = useState("Dipendente");
   const [nominaDate, setNominaDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [busy, setBusy] = useState(false);
@@ -221,6 +229,8 @@ export default function Dipendenti() {
       tax_code: taxCode ? taxCode.toUpperCase() : null,
       job_role: jobRole || null,
       department: department || null,
+      birth_date: birthDate || null,
+      birth_place: birthPlace.trim() || null,
       hire_date: hireDate || null,
       security_role: securityRole,
     });
@@ -262,13 +272,20 @@ export default function Dipendenti() {
       console.error("Notifica nuovo dipendente non inviata:", err);
     }
 
-    setFirstName(""); setLastName(""); setTaxCode(""); setJobRole(""); setDepartment(""); setHireDate(""); setSecurityRole("Dipendente");
+    setFirstName(""); setLastName(""); setTaxCode(""); setBirthDate(""); setBirthPlace(""); setJobRole(""); setDepartment(""); setHireDate(""); setSecurityRole("Dipendente");
     setNominaDate(new Date().toISOString().slice(0, 10));
     setBusy(false);
   };
 
   // Il controllo gira mentre si scrive: gli errori si vedono quando si e'
   // ancora davanti al documento da cui si sta copiando, non un mese dopo.
+  const scriviCf = (valore) => {
+    const v = valore.toUpperCase();
+    setTaxCode(v);
+    const nata = dataNascitaDaCf(v);
+    if (nata && !birthDate) setBirthDate(nata);
+  };
+
   const cfNuovo = verificaCf(taxCode, firstName, lastName);
   const cfModifica = verificaCf(eCf, eNome, eCognome);
 
@@ -333,12 +350,19 @@ export default function Dipendenti() {
           <input type="text" placeholder="Nome" required value={firstName} onChange={(e) => setFirstName(e.target.value)} className="note-input" />
           <input type="text" placeholder="Cognome" required value={lastName} onChange={(e) => setLastName(e.target.value)} className="note-input" />
           <input type="text" placeholder="Codice fiscale (opzionale)" value={taxCode}
-            onChange={(e) => setTaxCode(e.target.value.toUpperCase())} maxLength={16}
+            onChange={(e) => scriviCf(e.target.value)} maxLength={16}
             className="note-input" style={{ textTransform: "uppercase" }} />
         </div>
         {cfNuovo.livello && (
           <p className={"cf-esito cf-" + cfNuovo.livello}>{cfNuovo.messaggio}</p>
         )}
+        <div className="row-form">
+          <label className="field-label">Data di nascita
+            <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
+          </label>
+          <input type="text" placeholder="Comune di nascita" value={birthPlace}
+            onChange={(e) => setBirthPlace(e.target.value)} className="note-input" />
+        </div>
         <div className="row-form">
           <input type="text" placeholder="Mansione (opzionale)" value={jobRole} onChange={(e) => setJobRole(e.target.value)} className="note-input" />
           <input type="text" placeholder="Reparto (opzionale)" value={department} onChange={(e) => setDepartment(e.target.value)} className="note-input" />

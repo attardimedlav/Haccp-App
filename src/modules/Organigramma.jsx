@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { Plus, Trash2, UserPlus, Award, Users, Network, Stethoscope, HeartPulse, Flame, HardHat, ShieldCheck } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
-import { supabase } from "../supabaseClient";
 import { ROLE_OPTIONS, MEDICO_ROLE, expiryInfo } from "./SicurezzaLavoro";
 import { generateNominaAttachment, findRlsName, findDatoreName } from "../utils/nominaTemplates";
 
@@ -17,9 +16,9 @@ export const SECURITY_ROLE_OPTIONS = [
   "RLS",
 ];
 
-export default function Organigramma() {
+export default function Organigramma({ onVaiAiDipendenti }) {
   const { company } = useAuth();
-  const { items: employees, add: addEmployee, remove: removeEmployee, loading: employeesLoading } = useTable("employees", company?.id);
+  const { items: employees, remove: removeEmployee, loading: employeesLoading } = useTable("employees", company?.id);
   const { items: appointments, add: addAppointment } = useTable("work_safety_appointments", company?.id);
   const { items: trainings } = useTable("work_safety_trainings", company?.id);
 
@@ -31,70 +30,6 @@ export default function Organigramma() {
     const latest = withExpiry.reduce((best, t) =>
       !best || new Date(t.expiry_date) > new Date(best.expiry_date) ? t : best, null);
     return expiryInfo(latest.expiry_date);
-  };
-
-  // --- Nuova persona ---
-  const [showAddPerson, setShowAddPerson] = useState(false);
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [jobRole, setJobRole] = useState("");
-  const [department, setDepartment] = useState("");
-  const [securityRole, setSecurityRole] = useState("Dipendente");
-  const [personNominaDate, setPersonNominaDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [busyPerson, setBusyPerson] = useState(false);
-
-  const submitPerson = async (e) => {
-    e.preventDefault();
-    if (!firstName.trim() || !lastName.trim()) return;
-    setBusyPerson(true);
-    await addEmployee({
-      first_name: firstName,
-      last_name: lastName,
-      job_role: jobRole || null,
-      department: department || null,
-      security_role: securityRole,
-    });
-    if (securityRole !== "Dipendente") {
-      const nominaDateToUse = personNominaDate || new Date().toISOString().slice(0, 10);
-      // Se esiste un modello per questo ruolo (es. "RSPP Datore di Lavoro"), la
-      // nomina viene generata da sola in Word e allegata subito: non blocca il
-      // salvataggio se la generazione fallisce, in quel caso resta da allegare a mano.
-      const nomina_attachment_path = await generateNominaAttachment({
-        role: securityRole,
-        company,
-        personName: `${firstName} ${lastName}`,
-        nominaDate: nominaDateToUse,
-        rlsName: findRlsName(appointments),
-        datoreName: findDatoreName(appointments, employees),
-      });
-      await addAppointment({
-        role: securityRole,
-        person_name: `${firstName} ${lastName}`,
-        nomina_issue_date: nominaDateToUse,
-        issue_date: null,
-        validity_years: null,
-        expiry_date: null,
-        nomina_attachment_path,
-        attestato_attachment_path: null,
-        note: "",
-      });
-    }
-
-    // Avviso email al consulente: non blocca il salvataggio se fallisce, è solo un promemoria.
-    try {
-      const { data, error: fnError } = await supabase.functions.invoke("rapid-endpoint", {
-        body: { company_id: company.id, first_name: firstName, last_name: lastName, job_role: jobRole || null },
-      });
-      if (fnError) console.error("Notifica nuovo dipendente - errore dalla function:", fnError);
-      else console.log("Notifica nuovo dipendente - risposta:", data);
-    } catch (err) {
-      console.error("Notifica nuovo dipendente non inviata:", err);
-    }
-
-    setFirstName(""); setLastName(""); setJobRole(""); setDepartment(""); setSecurityRole("Dipendente");
-    setPersonNominaDate(new Date().toISOString().slice(0, 10));
-    setBusyPerson(false);
-    setShowAddPerson(false);
   };
 
   // --- Assegnazione rapida di un ruolo di sicurezza a una persona ---
@@ -300,41 +235,25 @@ export default function Organigramma() {
 
       {view === "gestione" && (
       <>
-      <button type="button" className="btn-primary" onClick={() => setShowAddPerson((v) => !v)} style={{ marginBottom: 16 }}>
-        <UserPlus size={16} /> Aggiungi persona
-      </button>
-
-      {showAddPerson && (
-        <form onSubmit={submitPerson} className="traccia-form" style={{ marginBottom: 20 }}>
-          <div className="row-form">
-            <input type="text" placeholder="Nome" required value={firstName} onChange={(e) => setFirstName(e.target.value)} className="note-input" />
-            <input type="text" placeholder="Cognome" required value={lastName} onChange={(e) => setLastName(e.target.value)} className="note-input" />
-          </div>
-          <div className="row-form">
-            <input type="text" placeholder="Mansione (opzionale)" value={jobRole} onChange={(e) => setJobRole(e.target.value)} className="note-input" />
-            <input type="text" placeholder="Reparto (opzionale)" value={department} onChange={(e) => setDepartment(e.target.value)} className="note-input" />
-          </div>
-          <label className="field-label">Ruolo di sicurezza
-            <select value={securityRole} onChange={(e) => setSecurityRole(e.target.value)}>
-              {SECURITY_ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
-            </select>
-          </label>
-          {securityRole !== "Dipendente" && (
-            <>
-              <label className="field-label">Data nomina
-                <input type="date" value={personNominaDate} onChange={(e) => setPersonNominaDate(e.target.value)} />
-              </label>
-              <p className="sub" style={{ marginTop: -6 }}>
-                Verrà creata automaticamente anche la relativa nomina in "Nomine e Attestati", con questa data
-                (utile per registrare nomine già fatte in passato, non solo quelle di oggi).
-              </p>
-            </>
-          )}
-          <button type="submit" className="btn-primary" disabled={busyPerson || (securityRole !== "Dipendente" && !personNominaDate)} style={{ alignSelf: "flex-start" }}>
-            <Plus size={16} /> Salva persona
+      {/* Le persone non si creano più da qui. L'anagrafica del personale è una
+          sola — la usano HACCP, organigramma, nomine e visite mediche — e
+          finché i posti dove inserirla erano due, con due moduli diversi, da
+          qui nascevano schede senza codice fiscale: al primo attestato l'app
+          avvisava che senza codice fiscale l'attestato non vale. Qui resta
+          quello che in un organigramma ha senso: assegnare i ruoli a chi
+          già c'è, e vedere la struttura. */}
+      <div className="nc-edit-block" style={{ marginBottom: 16 }}>
+        <p className="pest-note" style={{ margin: 0 }}>
+          Le persone si inseriscono una volta sola in Configurazione → Dipendenti, con codice
+          fiscale, dati di nascita e mansione: da lì compaiono qui e in tutte le schede che
+          chiedono un nominativo.
+        </p>
+        {onVaiAiDipendenti && (
+          <button type="button" className="btn-primary" style={{ marginTop: 10 }} onClick={onVaiAiDipendenti}>
+            <UserPlus size={16} /> Vai a Dipendenti
           </button>
-        </form>
-      )}
+        )}
+      </div>
 
       {employeesLoading ? (
         <p className="sub">Caricamento…</p>
