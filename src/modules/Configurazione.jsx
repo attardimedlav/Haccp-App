@@ -19,6 +19,12 @@ import { scaricaProceduraRegistrazioni } from "../utils/proceduraRegistrazioniDo
 // sanificanti, piano pulizie — viene dopo, perché sono scelte che si fanno col
 // sopralluogo davanti. La firma del datore non è più una scheda a sé: sta in
 // Generale, accanto al responsabile HACCP, perché spesso sono la stessa persona.
+// Le schede riservate al consulente: il piano di pulizia e la preparazione
+// del manuale sono lavoro suo — decidere le frequenze e sapere cosa manca
+// prima di generare il documento è consulenza, non compilazione. Al cliente
+// restano i dati della sua attività, le persone e le attrezzature.
+const SUB_TABS_CONSULENTE = new Set(["pulizie", "preparazione"]);
+
 const SUB_TABS = [
   { id: "generale", label: "Generale", icon: Settings2 },
   { id: "dipendenti", label: "Dipendenti", icon: Users },
@@ -98,6 +104,12 @@ export default function Configurazione({ onVai, subTabIniziale }) {
   // già sulla scheda giusta, anche se la Configurazione era rimasta aperta
   // altrove dalla volta prima.
   useEffect(() => { if (subTabIniziale) setSubTab(subTabIniziale); }, [subTabIniziale]);
+  // Rete di sicurezza: se per qualunque motivo un cliente si ritrova su una
+  // scheda riservata — un rimando, uno stato rimasto da prima — torna su
+  // Generale invece di vedere una pagina che non gli compete.
+  useEffect(() => {
+    if (!isConsultant && SUB_TABS_CONSULENTE.has(subTab)) setSubTab("generale");
+  }, [isConsultant, subTab]);
 
   // Solo chi entra come consulente in un'azienda cliente (non la propria) può gestire l'abbonamento.
   const canManageSubscription = !!(company && homeCompanyId && company.id !== homeCompanyId);
@@ -365,7 +377,10 @@ export default function Configurazione({ onVai, subTabIniziale }) {
       </div>
 
       <div className="config-subtabs">
-        {(isConsultant ? [TAB_ACCESSO, ...SUB_TABS] : SUB_TABS).map((t) => (
+        {(isConsultant
+          ? [TAB_ACCESSO, ...SUB_TABS]
+          : SUB_TABS.filter((t) => !SUB_TABS_CONSULENTE.has(t.id))
+        ).map((t) => (
           <button
             key={t.id}
             type="button"
