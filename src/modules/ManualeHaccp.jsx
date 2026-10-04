@@ -130,7 +130,14 @@ export default function ManualeHaccp() {
       // La firma depositata in Configurazione entra nel pacchetto come
       // immagine: il corpo del manuale la cita, qui si allega il file.
       const firma = await firmaDellAzienda();
-      const files = pacchettoDocx(corpoManuale(dossier), firma ? { immagini: { "firma.png": firma } } : {});
+      // aggiornaCampi scrive settings.xml con <w:updateFields>: è l'istruzione
+      // con cui Word, aprendo il file, ricalcola l'indice. L'app non impagina,
+      // quindi i numeri di pagina può metterli solo lui; senza questa riga il
+      // sommario resta vuoto finché qualcuno non preme F9, e nessuno lo preme.
+      const files = pacchettoDocx(corpoManuale(dossier), {
+        aggiornaCampi: true,
+        ...(firma ? { immagini: { "firma.png": firma } } : {}),
+      });
       const nome = `Manuale_autocontrollo_${(company?.name || "azienda").replace(/[^A-Za-z0-9]+/g, "_")}_rev_${dossier.revisione.numero}.docx`;
       if (soloProva) {
         await scaricaDocx(files, nome);
