@@ -159,12 +159,28 @@ export default function Dashboard({ goTo, openWorkSafety }) {
     safetyIssues.sort((a, b) => new Date(a.expiry) - new Date(b.expiry));
   }
 
+  // Chi è il datore di lavoro. Non basta guardare il ruolo scritto in
+  // anagrafica: spesso il titolare risulta datore soltanto dalla nomina, e
+  // allora compariva fra i lavoratori senza visita medica — un obbligo che
+  // non lo riguarda. Si guardano tutti e due, come fa la scheda dei documenti.
+  // Il confronto ignora l'ordine del nome perché sugli attestati e sulle
+  // nomine si trova sia "Bello Giuseppe" sia "Giuseppe Bello".
+  const chiave = (testo) => String(testo || "").trim().toLowerCase().split(/\s+/).sort().join(" ");
+  const nomiDatore = new Set(
+    workSafety.items
+      .filter((a) => DATORE_ROLES.includes(a.role))
+      .map((a) => chiave(a.person_name))
+  );
+  const eDatore = (e) =>
+    DATORE_ROLES.includes(e.security_role) ||
+    nomiDatore.has(chiave(`${e.first_name} ${e.last_name}`));
+
   // Lavoratori senza alcuna visita registrata: obbligo di legge per tutti
   // tranne il datore di lavoro.
   const senzaVisita =
     company?.active_work_safety && company?.active_medical_surveillance
       ? employees.items
-          .filter((e) => e.security_role !== "RSPP Datore di Lavoro" && e.security_role !== "Datore di Lavoro")
+          .filter((e) => !eDatore(e))
           .filter((e) => !medicalVisits.items.some(
             (v) => (v.employee_name || "").trim() === `${e.first_name} ${e.last_name}`.trim()
           ))
@@ -179,7 +195,7 @@ export default function Dashboard({ goTo, openWorkSafety }) {
   // formazione e' un'altra.
   const senzaFormazione = company?.active_work_safety
     ? employees.items
-        .filter((e) => !DATORE_ROLES.includes(e.security_role))
+        .filter((e) => !eDatore(e))
         .filter((e) => {
           const nome = `${e.first_name} ${e.last_name}`.trim();
           const sue = workSafety.items.filter(
@@ -187,6 +203,33 @@ export default function Dashboard({ goTo, openWorkSafety }) {
           );
           return !sue.some((a) => trainings.items.some((t) => t.appointment_id === a.id));
         })
+    : [];
+
+  // Incarichi che un'azienda con dipendenti deve avere comunque: il servizio
+  // di prevenzione e protezione, il primo soccorso e la prevenzione incendi
+  // (artt. 17, 18 e 43 del D.Lgs. 81/08). Senza questo controllo la Panoramica
+  // segnalava solo le scadenze di quello che c'era, e un incarico mai
+  // assegnato restava invisibile — che è la mancanza più grave delle due.
+  const haIncarico = (ruoli) =>
+    workSafety.items.some((a) => ruoli.includes(a.role) && (a.person_name || "").trim());
+
+  const incarichiMancanti = company?.active_work_safety
+    ? [
+        { ruolo: "Servizio di prevenzione e protezione (RSPP)", ha: haIncarico(["RSPP Datore di Lavoro", "RSPP Esterno"]) },
+        { ruolo: "Addetto al primo soccorso", ha: haIncarico(["Addetto al Primo Soccorso"]) },
+        { ruolo: "Addetto antincendio", ha: haIncarico(["Addetto Antincendio"]) },
+      ].filter((x) => !x.ha).map((x) => x.ruolo)
+    : [];
+
+  // Incarico assegnato ma corso mai svolto. L'RSPP esterno resta fuori: è un
+  // professionista con requisiti propri, e l'azienda non ne conserva gli
+  // attestati come fa per i suoi addetti.
+  const RUOLI_CON_CORSO = ["RSPP Datore di Lavoro", "Addetto al Primo Soccorso", "Addetto Antincendio"];
+  const incarichiSenzaCorso = company?.active_work_safety
+    ? workSafety.items
+        .filter((a) => RUOLI_CON_CORSO.includes(a.role) && (a.person_name || "").trim())
+        .filter((a) => !trainings.items.some((t) => t.appointment_id === a.id))
+        .map((a) => `${(a.person_name || "").trim()} (${a.role})`)
     : [];
 
   // Segnalazioni che nascono dalle sezioni nuove. Non sono scadenze di legge:
@@ -400,6 +443,29 @@ export default function Dashboard({ goTo, openWorkSafety }) {
               </span>
             </button>
           ))}
+          {incarichiMancanti.length > 0 && (
+            <button className="compliance-row" onClick={() => goToWorkSafety("nomine")}>
+              <AlertTriangle size={15} color="#B3432E" />
+              <HardHat size={15} />
+              <span className="compliance-text">
+                <strong>Incarichi di sicurezza non assegnati</strong>
+                {" — "}
+                {incarichiMancanti.join(", ")}
+                {" — vanno nominati e formati prima dell'inizio dell'attività"}
+              </span>
+            </button>
+          )}
+          {incarichiSenzaCorso.length > 0 && (
+            <button className="compliance-row" onClick={() => goToWorkSafety("nomine")}>
+              <AlertTriangle size={15} color="#B3432E" />
+              <GraduationCap size={15} />
+              <span className="compliance-text">
+                <strong>Incarichi senza il corso previsto</strong>
+                {" — "}
+                {incarichiSenzaCorso.join(", ")}
+              </span>
+            </button>
+          )}
           {senzaVisita.length > 0 && (
             <button className="compliance-row" onClick={() => goToWorkSafety("visitemediche")}>
               <AlertTriangle size={15} color="#B3432E" />
