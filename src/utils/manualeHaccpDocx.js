@@ -12,6 +12,7 @@
 
 import { par, cella, tabella, riga, parImmagine, RID_IMMAGINE } from "../modules/CorsoFormazione";
 import { TITOLO_PROCEDURA, testoProceduraRegistrazioni } from "./proceduraRegistrazioni";
+import { etichettaFrequenza } from "./pianoPulizie";
 
 const VERDE = "1B2A22";
 const VERDE_CHIARO = "2F6F4E";
@@ -221,6 +222,9 @@ export function controlli(dossier) {
   if (!registrazione) avvisi.push("Manca la registrazione sanitaria: il manuale cita numero, data e autorità competente.");
   if (impianti.length === 0) avvisi.push("Nessun impianto a temperatura controllata censito: il CCP 1 dichiarerebbe un monitoraggio senza apparecchi su cui farlo.");
   if (sanificanti.length === 0) avvisi.push("Nessun prodotto di sanificazione registrato: il piano di pulizia rimanda a schede tecniche che non risultano.");
+  if ((dossier.piano || []).filter((r) => r.active !== false).length === 0) {
+    avvisi.push("Il programma di pulizia è vuoto: il manuale non potrà stampare frequenze, e la scheda Sanificazione resterà senza righe da spuntare. Si compila in Configurazione → Piano pulizie.");
+  }
   if (cicli.length === 0) avvisi.push("Il catalogo dei cicli è vuoto per questo settore.");
   if (procedure.length === 0) avvisi.push("Il catalogo delle procedure è vuoto per questo settore.");
   return avvisi;
@@ -236,6 +240,8 @@ export function corpoManuale(dossier) {
     revisione = {},
     cicli = [],
     procedure = [],
+    piano = [],
+    sanificanti = [],
   } = dossier;
 
   const inApp = azienda.haccp_records_mode !== "cartaceo";
@@ -475,6 +481,53 @@ export function corpoManuale(dossier) {
     b.push(saltoPagina());
     d.forEach((x) => b.push(x));
   });
+  b.push(saltoPagina());
+
+  // 5.5 - Il programma di pulizia.
+  //
+  // Queste righe sono le stesse che l'azienda spunta nella scheda
+  // Sanificazione e sulle quali nascono gli avvisi: il manuale le stampa, non
+  // le riscrive. Finche' la frequenza stava soltanto nel testo del manuale,
+  // nessun avviso poteva nascere da li' - una frase non si confronta con una
+  // data - e documento e app raccontavano due storie diverse.
+  const pianoAttivo = piano
+    .filter((r) => r.active !== false)
+    .filter((r) => vale(r, azienda))
+    .sort((a, b2) => (a.sort_order || 0) - (b2.sort_order || 0));
+
+  b.push(h2("5.5 Programma di pulizia e sanificazione"));
+  if (pianoAttivo.length === 0) {
+    b.push(p("Il programma di pulizia non risulta ancora definito nel sistema di gestione dell'azienda. Fino alla sua compilazione valgono le modalità descritte nella procedura di pulizia e sanificazione del capitolo 8."));
+  } else {
+    b.push(p(`Il programma che segue elenca, per ciascun punto di intervento, l'operazione prevista e la frequenza con cui va eseguita. ${inApp
+      ? "È lo stesso programma che l'applicativo gestionale presenta all'operatore nella scheda di sanificazione: ogni intervento eseguito vi è spuntato con la data, il nome di chi lo ha svolto e il prodotto impiegato, e il sistema segnala le operazioni non eseguite entro la frequenza stabilita."
+      : "Le esecuzioni si registrano sul modulo di pulizia e sanificazione allegato al presente manuale."} Una modifica del programma comporta la revisione di questa sezione.`));
+    b.push(griglia(
+      ["Area", "Operazione", "Frequenza", "Prodotto impiegato", "A cura di"],
+      pianoAttivo.map((r) => [
+        r.area || "",
+        r.operation || "",
+        etichettaFrequenza(r.frequency_days),
+        r.product || "secondo la procedura",
+        r.responsible || "Personale addetto",
+      ]),
+      [1500, 2900, 1500, 1900, 1560]
+    ));
+    const conMetodo = pianoAttivo.filter((r) => r.method);
+    if (conMetodo.length) {
+      b.push(par("", { after: 140 }));
+      b.push(p("Modalità di esecuzione specifiche:"));
+      conMetodo.forEach((r) => b.push(punto(`${r.operation} — ${r.method}`)));
+    }
+    b.push(par("", { after: 140 }));
+    b.push(p("I prodotti impiegati sono quelli elencati fra i sanificanti dell'azienda, utilizzati alle diluizioni e con i tempi di contatto indicati nelle rispettive schede tecniche, conservate in sede e a disposizione dell'Autorità competente. Le superfici a contatto con gli alimenti sono risciacquate con acqua potabile dopo l'impiego del disinfettante.", { size: 20 }));
+    if (sanificanti.length) {
+      b.push(par("", { after: 120 }));
+      b.push(griglia(["Prodotto", "Impiego"],
+        sanificanti.map((x) => [x.name || "", x.usage || x.note || "Pulizia e sanificazione delle superfici"]),
+        [3400, 5960]));
+    }
+  }
   b.push(saltoPagina());
 
   // ---------------- 6. pericoli ----------------
