@@ -1,5 +1,6 @@
 import JSZip from "jszip";
 import { uploadAttachment } from "../hooks/useAttachment";
+import { supabase } from "../supabaseClient";
 
 // Modelli Word disponibili per la generazione automatica della nomina, per
 // ruolo di sicurezza. Il file deve trovarsi in "public/templates/" (servito
@@ -46,6 +47,112 @@ function formatDateIt(isoDate) {
   if (parts.length !== 3) return isoDate;
   const [y, m, d] = parts;
   return `${d}/${m}/${y}`;
+}
+
+
+// --- firma del datore di lavoro -------------------------------------------
+//
+// I modelli portano il segnaposto [FIRMA DATORE DI LAVORO] nel punto in cui
+// la firma va apposta, sopra la riga di sottoscrizione. Se l'azienda ha una
+// firma attiva in archivio, quel segnaposto diventa l'immagine; altrimenti
+// sparisce e resta la riga vuota da firmare a penna, che è il comportamento
+// di sempre.
+//
+// Non si appone mai la firma di un lavoratore: in archivio quelle firme non
+// si caricano affatto, e qui si cerca soltanto il datore di lavoro.
+
+const SEGNAPOSTO_FIRMA = "[FIRMA DATORE DI LAVORO]";
+const FIRMA_CM = { larghezza: 4.5, altezza: 1.5 };
+
+async function firmaDatore(companyId) {
+  try {
+    const { data } = await supabase
+      .from("signature_images")
+      .select("id, file_path, person_name")
+      .eq("scope", "azienda")
+      .eq("company_id", companyId)
+      .eq("person_role", "Datore di lavoro")
+      .eq("active", true)
+      .limit(1);
+    const riga = (data || [])[0];
+    if (!riga?.file_path) return null;
+    const scarico = await supabase.storage.from("attachments").download(riga.file_path);
+    if (scarico.error || !scarico.data) return null;
+    return { ...riga, byte: new Uint8Array(await scarico.data.arrayBuffer()) };
+  } catch (err) {
+    console.error("Firma del datore non recuperata:", err);
+    return null;
+  }
+}
+
+// Il primo identificativo di relazione libero nel modello: i modelli veri
+// hanno già i loro (stili, tema, note), e riusarne uno romperebbe il file.
+function rIdLibero(relsXml) {
+  const usati = [...relsXml.matchAll(/Id="rId(\d+)"/g)].map((m) => Number(m[1]));
+  return "rId" + (Math.max(0, ...usati) + 1);
+}
+
+function disegnoFirma(rId) {
+  const cx = Math.round(FIRMA_CM.larghezza * 360000);
+  const cy = Math.round(FIRMA_CM.altezza * 360000);
+  return (
+    `<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">` +
+    `<wp:extent cx="${cx}" cy="${cy}"/><wp:effectExtent l="0" t="0" r="0" b="0"/>` +
+    `<wp:docPr id="${900 + Math.floor(Math.random() * 90)}" name="Firma del datore di lavoro"/>` +
+    `<wp:cNvGraphicFramePr><a:graphicFrameLocks xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" noChangeAspect="1"/></wp:cNvGraphicFramePr>` +
+    `<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">` +
+    `<a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">` +
+    `<pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">` +
+    `<pic:nvPicPr><pic:cNvPr id="0" name="firma.png"/><pic:cNvPicPr/></pic:nvPicPr>` +
+    `<pic:blipFill><a:blip r:embed="${rId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +
+    `<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm>` +
+    `<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>` +
+    `</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>`
+  );
+}
+
+// Il segnaposto vive dentro un <w:t>, quindi non si può sostituire la parola
+// con un'immagine: verrebbe un run annidato dentro il testo, che Word ignora
+// in silenzio — è l'errore che ha fatto uscire la prima nomina senza firma.
+// Si sostituisce l'intero run che lo contiene, o l'intero paragrafo quando la
+// firma non c'è e la riga va tolta.
+function sostituisciRun(xml, segnaposto, nuovoRun) {
+  const i = xml.indexOf(segnaposto);
+  if (i < 0) return xml;
+  const inizio = xml.lastIndexOf("<w:r>", i);
+  const fine = xml.indexOf("</w:r>", i);
+  if (inizio < 0 || fine < 0) return xml.split(segnaposto).join("");
+  return xml.slice(0, inizio) + nuovoRun + xml.slice(fine + 6);
+}
+
+function togliParagrafo(xml, segnaposto) {
+  const i = xml.indexOf(segnaposto);
+  if (i < 0) return xml;
+  const inizio = xml.lastIndexOf("<w:p>", i);
+  const fine = xml.indexOf("</w:p>", i);
+  if (inizio < 0 || fine < 0) return xml.split(segnaposto).join("");
+  return xml.slice(0, inizio) + xml.slice(fine + 6);
+}
+
+// Mette la firma nel pacchetto e restituisce l'XML con il segnaposto
+// sostituito. Il file dell'immagine, la relazione e il tipo di contenuto
+// devono esserci tutti e tre: se ne manca uno Word apre il documento e al
+// posto della firma mostra una croce rossa.
+async function applicaFirma(zip, xml, firma) {
+  const relsPath = "word/_rels/document.xml.rels";
+  const rels = await zip.file(relsPath).async("string");
+  const rId = rIdLibero(rels);
+
+  zip.file("word/media/firma-datore.png", firma.byte);
+  zip.file(relsPath, rels.replace("</Relationships>",
+    `<Relationship Id="${rId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/firma-datore.png"/></Relationships>`));
+
+  const ctPath = "[Content_Types].xml";
+  const ct = await zip.file(ctPath).async("string");
+  if (ct.indexOf('Extension="png"') < 0) {
+    zip.file(ctPath, ct.replace("</Types>", '<Default Extension="png" ContentType="image/png"/></Types>'));
+  }
+  return sostituisciRun(xml, SEGNAPOSTO_FIRMA, disegnoFirma(rId));
 }
 
 // Genera automaticamente il documento di nomina Word per il ruolo indicato
@@ -97,6 +204,10 @@ export async function generateNominaAttachment({ role, company, personName, nomi
       xml = xml.split(placeholder).join(value);
     }
 
+    const firma = await firmaDatore(company.id);
+    if (firma) xml = await applicaFirma(zip, xml, firma);
+    else xml = togliParagrafo(xml, SEGNAPOSTO_FIRMA);
+
     zip.file(docXmlPath, xml);
     const blob = await zip.generateAsync({
       type: "blob",
@@ -109,7 +220,26 @@ export async function generateNominaAttachment({ role, company, personName, nomi
       type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     });
 
-    return await uploadAttachment(company.id, file);
+    const path = await uploadAttachment(company.id, file);
+
+    // Il registro delle apposizioni: è quello che permette di rispondere, anche
+    // fra tre anni, alla domanda "chi ha messo questa firma su questo foglio".
+    if (firma && path) {
+      try {
+        await supabase.from("signature_applications").insert({
+          signature_id: firma.id,
+          company_id: company.id,
+          document_kind: "nomina",
+          document_ref: fileName,
+          user_agent: typeof navigator === "undefined" ? null : navigator.userAgent,
+        });
+      } catch (err) {
+        // la registrazione non deve impedire la consegna del documento
+        console.error("Apposizione non registrata:", err);
+      }
+    }
+
+    return path;
   } catch (err) {
     console.error("Generazione automatica della nomina non riuscita:", err);
     return null;
