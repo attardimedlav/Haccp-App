@@ -52,6 +52,7 @@ export default function Configurazione() {
   const [hasBlastChiller, setHasBlastChiller] = useState(false);
   const [hasIceMachine, setHasIceMachine] = useState(false);
   const [hasFryer, setHasFryer] = useState(false);
+  const [hasHood, setHasHood] = useState(true);
   const [iceMachineDays, setIceMachineDays] = useState("30");
   const [manualSource, setManualSource] = useState("app");
   const [manualPath, setManualPath] = useState("");
@@ -115,6 +116,7 @@ export default function Configurazione() {
       setHasBlastChiller(!!company.has_blast_chiller);
       setHasIceMachine(!!company.has_ice_machine);
       setHasFryer(!!company.has_fryer);
+      setHasHood(company.has_hood !== false);
       setIceMachineDays(String(company.ice_machine_cleaning_days || 30));
       setManualSource(company.haccp_manual_source === "esterno" ? "esterno" : "app");
       setManualPath(company.haccp_manual_path || "");
@@ -165,6 +167,7 @@ export default function Configurazione() {
     has_blast_chiller: hasBlastChiller,
     has_ice_machine: hasIceMachine,
     has_fryer: hasFryer,
+    has_hood: hasHood,
     ice_machine_cleaning_days: Math.max(1, parseInt(iceMachineDays, 10) || 30),
     haccp_manual_source: manualSource,
     haccp_manual_path: manualPath || null,
@@ -437,6 +440,10 @@ export default function Configurazione() {
                     <label className="checkbox-row" style={{ marginTop: 8 }}>
                       <input type="checkbox" checked={hasFryer} disabled={!isConsultant} onChange={(e) => setHasFryer(e.target.checked)} />
                       L'attività ha una friggitrice (registro dei cambi olio)
+                    </label>
+                    <label className="checkbox-row" style={{ marginTop: 8 }}>
+                      <input type="checkbox" checked={hasHood} disabled={!isConsultant} onChange={(e) => setHasHood(e.target.checked)} />
+                      L'attività ha una cappa aspirante (pulizia delle superfici e dei filtri nel piano pulizie)
                     </label>
                     {hasIceMachine && (
                       <label className="field-label" style={{ marginTop: 8, marginLeft: 26, display: "flex", alignItems: "center", gap: 8, flexDirection: "row" }}>

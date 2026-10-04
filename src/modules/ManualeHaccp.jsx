@@ -61,10 +61,11 @@ export default function ManualeHaccp() {
   // sanificanti e i due cataloghi del consulente.
   const raccogliDossier = async () => {
     const settore = company?.haccp_sector || "bar_ristorazione";
-    const [reg, unita, san, cicli, proc] = await Promise.all([
+    const [reg, unita, san, pulizie, cicli, proc] = await Promise.all([
       supabase.from("health_registrations").select("*").eq("company_id", company.id).order("created_at", { ascending: false }).limit(1),
       supabase.from("temperature_units").select("*").eq("company_id", company.id).order("label"),
       supabase.from("sanitizers").select("*").eq("company_id", company.id),
+      supabase.from("cleaning_plan").select("*").eq("company_id", company.id).order("sort_order"),
       supabase.from("cycle_templates").select("*").eq("sector", settore).eq("active", true).order("sort_order"),
       supabase.from("procedure_templates").select("*").eq("sector", settore).eq("active", true).order("sort_order"),
     ]);
@@ -83,6 +84,7 @@ export default function ManualeHaccp() {
       registrazione: (reg.data || [])[0] || null,
       impianti: unita.data || [],
       sanificanti: san.data || [],
+      piano: pulizie.data || [],
       cicli: listaCicli.map((c) => ({ ...c, righe: righe.filter((r) => r.cycle_template_id === c.id) })),
       procedure: proc.data || [],
       revisione: {
