@@ -1,7 +1,8 @@
 import React, { useState } from "react";
-import { FileDown, Award, AlertTriangle, X, CheckCircle2, Trash2 } from "lucide-react";
+import { FileDown, Award, AlertTriangle, X, CheckCircle2, Trash2, Paperclip, ExternalLink } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
+import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
 import {
   par, cella, tabella, riga, dataBreve,
   pacchettoDocx, scaricaDocx, fileRegistro,
@@ -180,6 +181,73 @@ function corpoVerbale(d) {
 const SERIF = "Cambria";
 const BLU = "1F3864";
 
+// I quattro documenti del corso, con accanto la copia firmata.
+//
+// Quelli generati dall'app sono bozze: valgono quando qualcuno li firma. Si
+// stampano, si fanno firmare, si scansionano e la scansione torna qui — così
+// in ispezione il fascicolo del corso è completo in un posto solo, invece di
+// essere metà in Cardine e metà nella cartella di chi ha scansionato.
+function DocumentoCorso({ etichetta, conteggio, onScarica, tipo, corsoId, companyId, allegati, onCambiato }) {
+  const [busy, setBusy] = React.useState(false);
+  const [errore, setErrore] = React.useState("");
+  const miei = allegati.filter((a) => a.kind === tipo);
+
+  const allega = async (e) => {
+    const f = e.target.files?.[0] || null;
+    setErrore("");
+    if (!f) return;
+    if (f.size > 12 * 1024 * 1024) { setErrore("File troppo grande (limite 12 MB)."); e.target.value = ""; return; }
+    setBusy(true);
+    try {
+      const file_path = await uploadAttachment(companyId, f);
+      await onCambiato("aggiungi", { course_id: corsoId, kind: tipo, file_path, file_name: f.name });
+    } catch (err) {
+      setErrore("Caricamento non riuscito: " + err.message);
+    } finally {
+      setBusy(false);
+      e.target.value = "";
+    }
+  };
+
+  const apri = async (a) => {
+    const url = await getAttachmentUrl(a.file_path);
+    if (url) window.open(url, "_blank", "noopener");
+  };
+
+  return (
+    <li className="dish-row">
+      <div className="dish-top" style={{ marginBottom: 6 }}>
+        <strong>{etichetta}{conteggio != null ? ` (${conteggio})` : ""}</strong>
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <button type="button" className="link-btn" onClick={onScarica}>
+            <FileDown size={14} /> Scarica
+          </button>
+          <label className="link-btn" style={{ cursor: "pointer", margin: 0 }}>
+            <Paperclip size={14} /> {busy ? "Caricamento…" : "Allega firmato"}
+            <input type="file" accept=".pdf,image/*" hidden onChange={allega} disabled={busy || !corsoId} />
+          </label>
+        </div>
+      </div>
+      {errore && <span className="file-error"><AlertTriangle size={13} /> {errore}</span>}
+      {miei.length === 0 ? (
+        <span className="none-label">nessuna copia firmata</span>
+      ) : (
+        miei.map((a) => (
+          <div key={a.id} className="traccia-meta" style={{ gap: 8 }}>
+            <button type="button" className="link-btn" onClick={() => apri(a)}>
+              <ExternalLink size={13} /> {a.file_name || "copia firmata"}
+            </button>
+            <button type="button" className="icon-btn" aria-label="Togli l'allegato"
+              onClick={() => onCambiato("togli", a)}>
+              <Trash2 size={13} />
+            </button>
+          </div>
+        ))
+      )}
+    </li>
+  );
+}
+
 function corpoAttestati(d) {
   const p = [];
   const anno = String(d.dataVerifica || "").slice(0, 4) || new Date().getFullYear();
@@ -306,6 +374,9 @@ function SchedaCorso({ corso, sessioni, partecipanti, formazioneRole, onChiudi, 
   const { update: aggiornaCorso, remove: rimuoviCorso } = useTable("training_courses", company?.id);
   const { update: aggiornaPartecipante } = useTable("training_course_participants", company?.id);
   const { update: aggiornaSessione, reload: reloadSessioni } = useTable("training_course_sessions", company?.id);
+  const {
+    items: allegatiCorso, add: aggiungiAllegato, remove: togliAllegato,
+  } = useTable("training_course_files", company?.id);
 
   const oreCorso = Number(corso.total_hours) || sessioni.reduce((n, s) => n + (Number(s.hours) || 0), 0);
   const date = sessioni.map((s) => s.session_date).filter(Boolean).sort();
@@ -471,6 +542,11 @@ function SchedaCorso({ corso, sessioni, partecipanti, formazioneRole, onChiudi, 
 
   const scaricaProgetto = () => scaricaDocx(pacchettoDocx(corpoProgetto(datiDoc())), nomeFile("Progetto_formativo"));
   const scaricaVerbale = () => scaricaDocx(pacchettoDocx(corpoVerbale(datiDoc())), nomeFile("Verbale_verifica_finale"));
+  const cambiaAllegato = async (azione, dato) => {
+    if (azione === "aggiungi") await aggiungiAllegato(dato);
+    else await togliAllegato(dato.id);
+  };
+
   const scaricaAttestati = () => {
     if (idonei.length === 0) { setErrore("Nessun partecipante idoneo: non ci sono attestati da rilasciare."); return; }
     setErrore("");
@@ -672,12 +748,30 @@ function SchedaCorso({ corso, sessioni, partecipanti, formazioneRole, onChiudi, 
       {salvataggio && <p className="corso-esito">{salvataggio}</p>}
 
       <p className="corso-sezione">Documenti</p>
-      <div className="row-form" style={{ marginTop: 0 }}>
-        <button type="button" className="link-btn" onClick={scaricaProgetto}><FileDown size={14} /> Progetto formativo</button>
-        <button type="button" className="link-btn" onClick={scaricaIlRegistro}><FileDown size={14} /> Registro presenze</button>
-        <button type="button" className="link-btn" onClick={scaricaVerbale}><FileDown size={14} /> Verbale di verifica finale</button>
-        <button type="button" className="link-btn" onClick={scaricaAttestati}><FileDown size={14} /> Attestati ({idonei.length})</button>
-      </div>
+      <p className="sub" style={{ margin: "0 0 10px" }}>
+        I documenti si scaricano, si stampano e si fanno firmare: la copia firmata si allega qui
+        accanto, così il fascicolo del corso resta completo in un posto solo.
+      </p>
+      <ul className="dish-list">
+        {[
+          { etichetta: "Progetto formativo", tipo: "progetto", onScarica: scaricaProgetto },
+          { etichetta: "Registro presenze", tipo: "registro", onScarica: scaricaIlRegistro },
+          { etichetta: "Verbale di verifica finale", tipo: "verbale", onScarica: scaricaVerbale },
+          { etichetta: "Attestati", tipo: "attestati", onScarica: scaricaAttestati, conteggio: idonei.length },
+        ].map((d) => (
+          <DocumentoCorso
+            key={d.tipo}
+            etichetta={d.etichetta}
+            conteggio={d.conteggio}
+            tipo={d.tipo}
+            onScarica={d.onScarica}
+            corsoId={corso?.id}
+            companyId={company?.id}
+            allegati={allegatiCorso.filter((a) => a.course_id === corso?.id)}
+            onCambiato={cambiaAllegato}
+          />
+        ))}
+      </ul>
 
       {errore && <p className="corso-avviso"><AlertTriangle size={14} /> {errore}</p>}
       {fatto && <p className="corso-esito"><CheckCircle2 size={14} /> {fatto}</p>}
