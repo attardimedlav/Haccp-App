@@ -104,12 +104,6 @@ export default function Configurazione({ onVai, subTabIniziale }) {
   // già sulla scheda giusta, anche se la Configurazione era rimasta aperta
   // altrove dalla volta prima.
   useEffect(() => { if (subTabIniziale) setSubTab(subTabIniziale); }, [subTabIniziale]);
-  // Rete di sicurezza: se per qualunque motivo un cliente si ritrova su una
-  // scheda riservata — un rimando, uno stato rimasto da prima — torna su
-  // Generale invece di vedere una pagina che non gli compete.
-  useEffect(() => {
-    if (!isConsultant && SUB_TABS_CONSULENTE.has(subTab)) setSubTab("generale");
-  }, [isConsultant, subTab]);
 
   // Solo chi entra come consulente in un'azienda cliente (non la propria) può gestire l'abbonamento.
   const canManageSubscription = !!(company && homeCompanyId && company.id !== homeCompanyId);
@@ -118,6 +112,18 @@ export default function Configurazione({ onVai, subTabIniziale }) {
   // consulente, anche sulla propria azienda (serve per provarli): sono moduli
   // che richiedono un'impostazione fatta da chi conosce l'attivita'.
   const isConsultant = (consultantCompanies || []).length > 0;
+
+  // Rete di sicurezza: se per qualunque motivo un cliente si ritrova su una
+  // scheda riservata — un rimando, uno stato rimasto da prima — torna su
+  // Generale invece di vedere una pagina che non gli compete.
+  //
+  // Sta QUI e non accanto agli altri effetti perché legge isConsultant: un
+  // useEffect che nomina una costante dichiarata più sotto non è un dettaglio
+  // di stile, è un errore che blocca il disegno dell'intera pagina — pagina
+  // bianca, senza messaggi.
+  useEffect(() => {
+    if (!isConsultant && SUB_TABS_CONSULENTE.has(subTab)) setSubTab("generale");
+  }, [isConsultant, subTab]);
 
   useEffect(() => {
     if (company) {
