@@ -102,7 +102,12 @@ export default function ArchivioFirme({ ambito = "consulente" }) {
       const { data: utente } = await supabase.auth.getUser();
       const uid = utente?.user?.id;
       const slug = nome.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-      const path = `firme/${uid}/${slug}-${Date.now()}.png`;
+      // L'ordine delle cartelle non è un dettaglio: le policy già in uso sul
+      // bucket convertono la PRIMA cartella in uuid, aspettandosi il
+      // company_id. Con "firme" davanti Postgres si ferma sulla conversione
+      // prima di valutare la regola nuova. Con l'id utente davanti il cast
+      // riesce, quella regola semplicemente non concede, e concede la nostra.
+      const path = `${uid}/firme/${slug}-${Date.now()}.png`;
       const up = await supabase.storage.from("attachments").upload(path, nuova.file);
       if (up.error) throw up.error;
 
