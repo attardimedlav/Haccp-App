@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Thermometer, SprayCan, Bug, ChevronRight, ChevronDown, LogOut, ShieldCheck, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen, Snowflake, HardHat, FileText, Paperclip, Award, Wrench, Stethoscope, Network, UtensilsCrossed, GlassWater, Menu, X, Filter, FlaskConical, ChefHat, Flame, Truck, BookOpen, LayoutDashboard, Layers } from "lucide-react";
+import { Thermometer, SprayCan, Bug, ChevronRight, ChevronDown, LogOut, ShieldCheck, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen, Snowflake, HardHat, FileText, Paperclip, Award, Wrench, Stethoscope, Network, UtensilsCrossed, GlassWater, Menu, X, Filter, FlaskConical, ChefHat, Flame, Truck, BookOpen, LayoutDashboard, Layers , PenLine } from "lucide-react";
 import { AuthProvider, useAuth } from "./AuthContext";
 import { useTable, EVENTO_SCRITTURA } from "./hooks/useTable";
 import Login from "./Login";
@@ -27,6 +27,7 @@ import OlioFrittura from "./modules/OlioFrittura";
 import Fornitori from "./modules/Fornitori";
 import ManualeHaccp from "./modules/ManualeHaccp";
 import CatalogoCicli from "./modules/CatalogoCicli";
+import ArchivioFirme from "./modules/ArchivioFirme";
 import Manutenzione from "./modules/Manutenzione";
 import AcquaFiltrata from "./modules/AcquaFiltrata";
 import ControlliAnalitici from "./modules/ControlliAnalitici";
@@ -285,6 +286,13 @@ function Shell() {
             <Layers size={16} /> Catalogo cicli
           </button>
         )}
+        {/* L'archivio delle firme è del consulente come il catalogo: le firme
+            di chi redige valgono su tutte le aziende seguite. */}
+        {hasMultipleClients && (
+          <button className={"nav-item" + (tab === "firme" ? " active" : "")} onClick={() => setTab("firme")}>
+            <PenLine size={16} /> Firme
+          </button>
+        )}
         {/* La Panoramica raccoglie le scadenze di tutti i moduli attivi, HACCP
             e sicurezza sul lavoro: sta fuori dai gruppi, come voce di primo
             livello, perché non appartiene a nessuno dei due. */}
@@ -420,6 +428,7 @@ function Shell() {
         {tab === "fornitori" && <Fornitori />}
         {tab === "manuale" && <ManualeHaccp />}
         {tab === "catalogo" && <CatalogoCicli />}
+        {tab === "firme" && <ArchivioFirme ambito="consulente" />}
         {tab === "registrazione" && <RegistrazioneSanitaria />}
         {tab === "nonconformita" && <NonConformita />}
         {tab === "acquepotabili" && <AcquePotabili />}
