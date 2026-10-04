@@ -1383,7 +1383,13 @@ export default function DocumentiSicurezza({
               ...ARGOMENTI_36.filter((_, i) => f.argomenti36[i]),
               ...f.altro36.split("\n").map((s) => s.trim()).filter(Boolean),
             ],
-          }), "Verbale_Informazione_art36")}>
+          }), "Verbale_Informazione_art36", [],
+            // Il verbale dell'art. 36 non nomina nessuno, quindi non lasciava
+            // traccia da nessuna parte: usciva dalla stampante e finiva fuori
+            // da Cardine. Come il verbale della riunione periodica e quello di
+            // sopralluogo, va archiviato fra gli allegati al DVR, che e' dove
+            // in ispezione si va a cercare la prova dell'avvenuta informazione.
+            { allegato: { titolo: "Verbale di informazione ai lavoratori (art. 36)", data: f.date.art36 } })}>
           <FileDown size={15} /> Verbale art. 36
         </button>
       </div>
