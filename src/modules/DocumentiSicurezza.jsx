@@ -938,6 +938,10 @@ export default function DocumentiSicurezza({
       const nomeFile = `${nome}_${pulisciNomeFile(company?.name)}.docx`;
       const firma = opzioni.conFirma ? await firmaMedico() : null;
       if (firma) firma.chiave = "medico";
+      // Il corpo arriva SEMPRE come funzione, mai già costruito: viene scritto
+      // qui dentro, dopo che la firma del datore è stata caricata. Passandolo
+      // già pronto — com'era per sette pulsanti su dieci — il testo nasceva
+      // prima della firma e la riga restava vuota, senza errori.
       const datore = await firmaDatore();
       // Prima di costruire il corpo: è lì che i disegni citano l'identificativo.
       [firma, datore].filter(Boolean).forEach((f, i) => {
@@ -1182,7 +1186,7 @@ export default function DocumentiSicurezza({
               <input type="date" value={f.date.rsppDl} onChange={(e) => setData("rsppDl", e.target.value)} />
             </label>
             <button type="button" className="btn-primary"
-              onClick={() => scarica(corpoRsppDatore({ ...base, data: f.date.rsppDl }), "RSPP_Datore_di_Lavoro",
+              onClick={() => scarica(() => corpoRsppDatore({ ...base, data: f.date.rsppDl }), "RSPP_Datore_di_Lavoro",
                 [{ persona: f.datore, ruolo: RSPP_DL_ROLE, data: f.date.rsppDl }])}>
               <FileDown size={15} /> RSPP datore di lavoro
             </button>
@@ -1194,7 +1198,7 @@ export default function DocumentiSicurezza({
               <input type="date" value={f.date.rsppExt} onChange={(e) => setData("rsppExt", e.target.value)} />
             </label>
             <button type="button" className="btn-primary" disabled={!f.rsppNome.trim()}
-              onClick={() => scarica(corpoRsppEsterno({ ...base, ...f, data: f.date.rsppExt }), "Designazione_RSPP_Esterno",
+              onClick={() => scarica(() => corpoRsppEsterno({ ...base, ...f, data: f.date.rsppExt }), "Designazione_RSPP_Esterno",
                 [{ persona: f.rsppNome, ruolo: RSPP_EXT_ROLE, data: f.date.rsppExt }])}>
               <FileDown size={15} /> Designazione RSPP esterno
             </button>
@@ -1251,7 +1255,7 @@ export default function DocumentiSicurezza({
                 onChange={(e) => setData("designazione", e.target.value)} />
             </label>
             <button type="button" className="btn-primary"
-              onClick={() => scarica(corpoDesignazione({ ...base, data: f.date.designazione, designati: designati() }), "Designazione_Incaricati_Emergenza",
+              onClick={() => scarica(() => corpoDesignazione({ ...base, data: f.date.designazione, designati: designati() }), "Designazione_Incaricati_Emergenza",
                 designati().flatMap((p) => [
                   ...(p.antincendio ? [{ persona: p.nome, ruolo: ANTINCENDIO_ROLE, data: f.date.designazione }] : []),
                   ...(p.primo ? [{ persona: p.nome, ruolo: PRIMO_ROLE, data: f.date.designazione }] : []),
@@ -1267,7 +1271,7 @@ export default function DocumentiSicurezza({
                 onChange={(e) => setData("svolgAnt", e.target.value)} />
             </label>
             <button type="button" className="btn-secondary"
-              onClick={() => scarica(corpoSvolgimento({ ...base, data: f.date.svolgAnt }, "antincendio"), "Svolgimento_Diretto_Antincendio",
+              onClick={() => scarica(() => corpoSvolgimento({ ...base, data: f.date.svolgAnt }, "antincendio"), "Svolgimento_Diretto_Antincendio",
                 [{ persona: f.datore, ruolo: ANTINCENDIO_ROLE, data: f.date.svolgAnt }])}>
               <FileDown size={15} /> Svolgimento diretto — antincendio
             </button>
@@ -1280,7 +1284,7 @@ export default function DocumentiSicurezza({
                 onChange={(e) => setData("svolgPs", e.target.value)} />
             </label>
             <button type="button" className="btn-secondary"
-              onClick={() => scarica(corpoSvolgimento({ ...base, data: f.date.svolgPs }, "primosoccorso"), "Svolgimento_Diretto_Primo_Soccorso",
+              onClick={() => scarica(() => corpoSvolgimento({ ...base, data: f.date.svolgPs }, "primosoccorso"), "Svolgimento_Diretto_Primo_Soccorso",
                 [{ persona: f.datore, ruolo: PRIMO_ROLE, data: f.date.svolgPs }])}>
               <FileDown size={15} /> Svolgimento diretto — primo soccorso
             </button>
@@ -1343,7 +1347,7 @@ export default function DocumentiSicurezza({
         </label>
         <button type="button" className="btn-primary"
           disabled={f.modoRls !== "rlst" && !f.rlsNome}
-          onClick={() => scarica(corpoRls({ ...base, data: f.date.rls, modo: f.modoRls, presenti: presentiScelti }), "Verbale_RLS",
+          onClick={() => scarica(() => corpoRls({ ...base, data: f.date.rls, modo: f.modoRls, presenti: presentiScelti }), "Verbale_RLS",
             f.modoRls === "rlst" ? [] : [{ persona: f.rlsNome, ruolo: RLS_ROLE, data: f.date.rls }])}>
           <FileDown size={15} /> Verbale RLS
         </button>
@@ -1371,7 +1375,7 @@ export default function DocumentiSicurezza({
           <input type="date" value={f.date.art36} onChange={(e) => setData("art36", e.target.value)} />
         </label>
         <button type="button" className="btn-primary"
-          onClick={() => scarica(corpoArt36({
+          onClick={() => scarica(() => corpoArt36({
             ...base,
             data: f.date.art36,
             presenti: presentiScelti,
