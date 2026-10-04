@@ -67,7 +67,11 @@ function scheda(voci, larghezze) {
 
 const vuote = (n, c) => Array.from({ length: n }, () => Array.from({ length: c }, () => " "));
 
-export function corpoModuli(azienda = {}, impianti = []) {
+// Il piano di pulizia e le postazioni di monitoraggio arrivano da fuori: i
+// moduli di carta sono la copia su foglio di quello che l'app sorveglia, non
+// un secondo elenco scritto qui dentro. Se l'azienda non li ha ancora
+// compilati restano gli elenchi generali, che è meglio di un foglio vuoto.
+export function corpoModuli(azienda = {}, impianti = [], piano = [], postazioni = []) {
   const responsabile = azienda.haccp_manager || "____________________";
   const capo = (t) => [titolo(t), sottoTitolo(azienda, responsabile)];
   const frigo = !!azienda.has_fryer;
@@ -182,6 +186,37 @@ export function corpoModuli(azienda = {}, impianti = []) {
     ghiaccio ? ["Macchina del ghiaccio: sanificazione", 1] : null,
   ].filter(Boolean);
 
+  // Le fasce sono quelle della scheda Sanificazione: a fine turno si fa il
+  // giro delle quotidiane, il lunedì quello delle settimanali.
+  const FASCE_M04 = [
+    { titolo: "OGNI GIORNO", test: (g) => g === 1 },
+    { titolo: "OGNI SETTIMANA", test: (g) => g > 1 && g <= 14 },
+    { titolo: "OGNI MESE", test: (g) => g > 14 && g <= 90 },
+    { titolo: "PIÙ VOLTE L'ANNO", test: (g) => g > 90 },
+    { titolo: "QUANDO OCCORRE", test: (g) => !g || g <= 0 },
+  ];
+  const pianoAttivo = (piano || [])
+    .filter((r) => r.active !== false)
+    .filter((r) => !r.requires_flag || azienda[r.requires_flag])
+    .sort((a, c) => (a.sort_order || 0) - (c.sort_order || 0));
+
+  let VOCI;
+  if (pianoAttivo.length) {
+    VOCI = [];
+    FASCE_M04.forEach((f) => {
+      const righe = pianoAttivo.filter((r) => f.test(Number(r.frequency_days)));
+      if (!righe.length) return;
+      VOCI.push([f.titolo, null, ""]);
+      righe.forEach((r) => VOCI.push([
+        r.operation + (r.area ? "  (" + r.area + ")" : ""),
+        1,
+        r.product || "",
+      ]));
+    });
+  } else {
+    VOCI = PULIZIE.map(([voce, tipo]) => [voce, tipo, ""]);
+  }
+
   const COLS_M04 = [4200, 1700, ...Array(31).fill(261)];
   const larghezzaTotale = COLS_M04.reduce((a, c) => a + c, 0);
   const capoM04 = riga(
@@ -190,7 +225,7 @@ export function corpoModuli(azienda = {}, impianti = []) {
     GIORNI.map((g) => cella(par(g, { bold: true, size: 13, after: 20, align: "center" }), 261, { sfondo: INTESTA })).join(""),
     { intestazione: true },
   );
-  const righeM04 = PULIZIE.map(([voce, tipo]) => {
+  const righeM04 = VOCI.map(([voce, tipo, prodotto]) => {
     if (tipo === null) {
       // riga di sezione: una sola cella larga quanto la tabella
       return riga(
@@ -202,7 +237,7 @@ export function corpoModuli(azienda = {}, impianti = []) {
     }
     return riga(
       cella(par(voce, { size: 14, after: 10 }), COLS_M04[0]) +
-      cella(par(" ", { size: 14, after: 10 }), COLS_M04[1]) +
+      cella(par(prodotto || " ", { size: 13, after: 10 }), COLS_M04[1]) +
       GIORNI.map(() => cella(par(" ", { size: 14, after: 10 }), 261)).join(""),
       { altezza: 280 },
     );
@@ -210,7 +245,9 @@ export function corpoModuli(azienda = {}, impianti = []) {
 
   b.push(...capo("M04 — CALENDARIO DELLE PULIZIE"));
   b.push(testo("Mese ____________________     Anno 20______", { bold: true, after: 90 }));
-  b.push(nota("Una scheda per mese: barrare la casella del giorno in cui l'intervento è stato eseguito."));
+  b.push(nota(pianoAttivo.length
+    ? "Una scheda per mese: barrare la casella del giorno in cui l'intervento è stato eseguito. Le voci e le frequenze sono quelle del programma di pulizia dell'azienda, le stesse che il manuale riporta nella sezione 5.5."
+    : "Una scheda per mese: barrare la casella del giorno in cui l'intervento è stato eseguito."));
   b.push(tabella(COLS_M04, [capoM04, ...righeM04]));
   b.push(nota("Concentrazioni e tempi di contatto: seguire le schede tecniche dei prodotti. Gli interventi non previsti in elenco si annotano sul retro del foglio."));
 
@@ -262,7 +299,25 @@ export function corpoModuli(azienda = {}, impianti = []) {
   // ---------------- M09 ----------------
   b.push(...capo("M09 — MONITORAGGIO INSETTI E RODITORI"));
   b.push(nota("Ispezione settimanale a cura del responsabile del piano di autocontrollo. Barrare ciò che si rileva e indicare il livello di presenza."));
-  b.push(griglia(["DATA", "ALATI", "STRISCIANTI", "RODITORI", "LIVELLO DI PRESENZA", "AMBIENTE INTERESSATO", "FIRMA"], vuote(18, 7), [1100, 900, 1200, 1000, 2000, 2160, 1000], { altezza: 460 }));
+  const posAttive = (postazioni || []).filter((p) => p.active !== false)
+    .sort((a, c) => String(a.code).localeCompare(String(c.code), "it", { numeric: true }));
+  if (posAttive.length) {
+    // Una riga per postazione: così il foglio dice anche quali esche NON sono
+    // state controllate, che è la domanda che arriva in ispezione.
+    const COLS_M09 = [900, 2860, 1120, 1120, 1120, 1120, 1120];
+    b.push(griglia(
+      ["N.", "TIPO E COLLOCAZIONE", "data ___/___", "data ___/___", "data ___/___", "data ___/___", "data ___/___"],
+      posAttive.map((p) => [
+        p.code || "",
+        [p.kind, p.placement, p.indoor ? "interna" : "esterna"].filter(Boolean).join(" — "),
+        " ", " ", " ", " ", " ",
+      ]),
+      COLS_M09, { altezza: 400 }
+    ));
+    b.push(nota("Per ogni postazione: A assente · T tracce · C catture · M esca mancante o danneggiata. Il giro si considera eseguito quando tutte le postazioni risultano controllate."));
+  } else {
+    b.push(griglia(["DATA", "ALATI", "STRISCIANTI", "RODITORI", "LIVELLO DI PRESENZA", "AMBIENTE INTERESSATO", "FIRMA"], vuote(18, 7), [1100, 900, 1200, 1000, 2000, 2160, 1000], { altezza: 460 }));
+  }
   b.push(nota("Livello di presenza: assente · bassa · media · alta. Da «media» in su il responsabile ricorre a ditta specializzata per l'intervento di disinfestazione o derattizzazione, seguito dalla sanificazione dei locali; l'intervento e il suo esito si registrano su questa stessa scheda e il rapporto della ditta si conserva agli atti."));
   b.push(saltoPagina());
 
@@ -303,8 +358,8 @@ export function corpoModuli(azienda = {}, impianti = []) {
   return b;
 }
 
-export async function scaricaModuliRegistrazione(azienda = {}, impianti = []) {
-  const files = pacchettoDocx(corpoModuli(azienda, impianti), { conPiePagina: false });
+export async function scaricaModuliRegistrazione(azienda = {}, impianti = [], piano = [], postazioni = []) {
+  const files = pacchettoDocx(corpoModuli(azienda, impianti, piano, postazioni), { conPiePagina: false });
   const nome = `Moduli_registrazione_${(azienda.name || "azienda").replace(/[^A-Za-z0-9]+/g, "_")}.docx`;
   await scaricaDocx(files, nome);
 }
