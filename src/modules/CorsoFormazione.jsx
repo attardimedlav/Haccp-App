@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Plus, Trash2, FileDown, Save, X, AlertTriangle } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
+import { spazioFirma, preparaFirme, liberaFirme, aggiungiFirme } from "../utils/firmeDocx";
 
 // Costruzione del registro presenze in formato Word (.docx).
 //
@@ -193,8 +194,12 @@ function corpoRegistro(dati) {
       ));
 
     p.push(tabella(COL, [intest, ...corpo]));
-    p.push(par(`Firma del docente (${s.docente || "—"}):  ______________________________`,
-      { size: 18, before: 200 }));
+    // La firma del docente arriva dall'archivio se il nome scritto nella
+    // giornata coincide con quello di una firma in archivio; altrimenti resta
+    // la riga da firmare a penna.
+    p.push(par(`Firma del docente (${s.docente || "—"}):`, { size: 18, before: 200 }));
+    p.push(spazioFirma(s.docente,
+      par("______________________________", { size: 18 }), { before: 40 }));
   });
 
   // --- chiusura
@@ -208,10 +213,12 @@ function corpoRegistro(dati) {
     riga(
       cella(par("Il responsabile del progetto formativo", { bold: true, size: 18 }) +
             par(dati.responsabileProgetto || "", { size: 18, before: 40 }) +
-            par("", { after: 400 }) + par("____________________________", { size: 18 }), 5050) +
+            spazioFirma(dati.responsabileProgetto,
+              par("", { after: 400 }) + par("____________________________", { size: 18 })), 5050) +
       cella(par("Il legale rappresentante", { bold: true, size: 18 }) +
             par(dati.legaleRappresentante || "", { size: 18, before: 40 }) +
-            par("", { after: 400 }) + par("____________________________", { size: 18 }), 5050)
+            spazioFirma(dati.legaleRappresentante,
+              par("", { after: 400 }) + par("____________________________", { size: 18 })), 5050)
     ),
   ]));
   p.push(par(`Luogo e data:  ${dati.sede || "____________________"},  ____ / ____ / ________`,
@@ -371,8 +378,11 @@ export function parImmagine(rId, larghezzaCm, altezzaCm, o = {}) {
     immagineInline(rId, larghezzaCm, altezzaCm, o.nome || "immagine") + `</w:p>`;
 }
 
+// Le firme si aggiungono DOPO aver costruito il corpo: e' il corpo che,
+// disegnando, dice quali firme servono davvero. Perche' ce ne sia qualcuna da
+// disegnare, chi chiama deve aver chiamato prima preparaFirme().
 export function fileRegistro(dati) {
-  return pacchettoDocx(corpoRegistro(dati));
+  return aggiungiFirme(pacchettoDocx(corpoRegistro(dati)));
 }
 
 export async function scaricaDocx(files, nomeFile) {
@@ -682,10 +692,15 @@ export default function CorsoFormazione({ righeFormazione, employees, onChiudi }
     if (problema) { setErrore(problema); return; }
     setErrore(""); setEsito("");
     try {
+      await preparaFirme(company?.id);
       await scaricaRegistro(datiDocumento(),
         `Registro_presenze_${(company?.name || "corso").replace(/[^a-zA-Z0-9]+/g, "_")}.docx`);
     } catch (e) {
       setErrore("Non sono riuscito a generare il registro: " + (e?.message || e));
+    } finally {
+      // Sempre, anche se la generazione fallisce: una firma rimasta in memoria
+      // finirebbe nel documento successivo, che puo' essere di un'altra azienda.
+      liberaFirme();
     }
   };
 

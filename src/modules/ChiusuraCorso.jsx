@@ -8,6 +8,7 @@ import {
   pacchettoDocx, scaricaDocx, fileRegistro,
   BLOCCHI, blocco,
 } from "./CorsoFormazione";
+import { spazioFirma, preparaFirme, liberaFirme, aggiungiFirme } from "../utils/firmeDocx";
 
 // Scheda di un corso gia' registrato: da qui escono i quattro documenti che
 // l'Accordo Stato-Regioni 17/04/2025 richiede a chi organizza formazione, e
@@ -110,7 +111,8 @@ function corpoProgetto(d) {
     { size: 19, before: 400 }));
   p.push(par("Il responsabile del progetto formativo", { bold: true, size: 18, before: 300 }));
   p.push(par(d.responsabileProgetto || "", { size: 18 }));
-  p.push(par("____________________________", { size: 18, before: 300 }));
+  p.push(spazioFirma(d.responsabileProgetto,
+    par("____________________________", { size: 18, before: 300 }), { before: 160 }));
   return p.join("");
 }
 
@@ -165,10 +167,12 @@ function corpoVerbale(d) {
     riga(
       cella(par("Il responsabile del progetto formativo", { bold: true, size: 18 }) +
             par(d.responsabileProgetto || "", { size: 18, before: 40 }) +
-            par("", { after: 400 }) + par("____________________________", { size: 18 }), 5050) +
+            spazioFirma(d.responsabileProgetto,
+              par("", { after: 400 }) + par("____________________________", { size: 18 })), 5050) +
       cella(par("Il docente", { bold: true, size: 18 }) +
             par(d.docenti || "", { size: 18, before: 40 }) +
-            par("", { after: 400 }) + par("____________________________", { size: 18 }), 5050)
+            spazioFirma(d.docenti,
+              par("", { after: 400 }) + par("____________________________", { size: 18 })), 5050)
     ),
   ]));
   return p.join("");
@@ -315,10 +319,14 @@ function corpoAttestati(d) {
     p.push(par("", { after: 1500 }));
     p.push(tabella([5050, 5050], [
       riga(
-        cella(par("_____________________________", { size: 18, align: "center", color: "888888", after: 60 }) +
+        cella(spazioFirma(d.organizzatore || d.azienda,
+                par("_____________________________", { size: 18, align: "center", color: "888888", after: 60 }),
+                { align: "center", after: 60 }) +
               par("Il Soggetto Organizzatore", { bold: true, size: 17, align: "center", after: 20 }) +
               par(d.organizzatore || d.azienda, { size: 16, align: "center", color: "6E7C73" }), 5050) +
-        cella(par("_____________________________", { size: 18, align: "center", color: "888888", after: 60 }) +
+        cella(spazioFirma(d.responsabileProgetto,
+                par("_____________________________", { size: 18, align: "center", color: "888888", after: 60 }),
+                { align: "center", after: 60 }) +
               par("Il Responsabile del Progetto Formativo", { bold: true, size: 17, align: "center", after: 20 }) +
               par(d.responsabileProgetto || "", { size: 16, align: "center", color: "6E7C73" }), 5050)
       ),
@@ -358,7 +366,8 @@ function corpoAttestati(d) {
       { italic: true, size: 17, color: "6E7C73", before: 180, after: 30 }));
     p.push(par("Modalita' di verifica:  test finale e colloquio, con esito documentato a verbale.",
       { italic: true, size: 17, color: "6E7C73", after: 320 }));
-    p.push(par("_____________________________", { size: 18, color: "888888", after: 60 }));
+    p.push(spazioFirma(d.responsabileProgetto,
+      par("_____________________________", { size: 18, color: "888888", after: 60 }), { after: 60 }));
     p.push(par("Il Responsabile del Progetto Formativo", { bold: true, size: 17, after: 20 }));
     p.push(par(d.responsabileProgetto || "", { size: 16, color: "6E7C73" }));
   });
@@ -540,8 +549,24 @@ function SchedaCorso({ corso, sessioni, partecipanti, formazioneRole, onChiudi, 
   const nomeFile = (che) =>
     `${che}_${(corso.title || "corso").replace(/[^a-zA-Z0-9]+/g, "_").slice(0, 40)}.docx`;
 
-  const scaricaProgetto = () => scaricaDocx(pacchettoDocx(corpoProgetto(datiDoc())), nomeFile("Progetto_formativo"));
-  const scaricaVerbale = () => scaricaDocx(pacchettoDocx(corpoVerbale(datiDoc())), nomeFile("Verbale_verifica_finale"));
+  // Ogni documento si genera cosi': prima si leggono dall'archivio le firme
+  // utilizzabili per questa azienda, poi si costruisce il corpo (che disegna
+  // quelle che trova), poi si impacchetta. L'elenco si svuota sempre alla
+  // fine: una firma rimasta in memoria finirebbe nel documento successivo,
+  // che puo' essere di un'altra azienda.
+  const conFirme = async (costruisci, nome) => {
+    try {
+      await preparaFirme(company?.id);
+      return await scaricaDocx(costruisci(), nome);
+    } finally {
+      liberaFirme();
+    }
+  };
+
+  const scaricaProgetto = () => conFirme(
+    () => aggiungiFirme(pacchettoDocx(corpoProgetto(datiDoc()))), nomeFile("Progetto_formativo"));
+  const scaricaVerbale = () => conFirme(
+    () => aggiungiFirme(pacchettoDocx(corpoVerbale(datiDoc()))), nomeFile("Verbale_verifica_finale"));
   const cambiaAllegato = async (azione, dato) => {
     if (azione === "aggiungi") await aggiungiAllegato(dato);
     else await togliAllegato(dato.id);
@@ -550,11 +575,11 @@ function SchedaCorso({ corso, sessioni, partecipanti, formazioneRole, onChiudi, 
   const scaricaAttestati = () => {
     if (idonei.length === 0) { setErrore("Nessun partecipante idoneo: non ci sono attestati da rilasciare."); return; }
     setErrore("");
-    return scaricaDocx(
-      pacchettoDocx(corpoAttestati(datiDoc(idonei)), { conPiePagina: false, cornice: true }),
+    return conFirme(
+      () => aggiungiFirme(pacchettoDocx(corpoAttestati(datiDoc(idonei)), { conPiePagina: false, cornice: true })),
       nomeFile("Attestati"));
   };
-  const scaricaIlRegistro = () => scaricaDocx(fileRegistro({
+  const scaricaIlRegistro = () => conFirme(() => fileRegistro({
     organizzatore: corso.organizer || company?.name || "",
     titolo: (corso.title || "").toUpperCase(),
     classeRischio: corso.risk_class, oreTotali: oreCorso,
