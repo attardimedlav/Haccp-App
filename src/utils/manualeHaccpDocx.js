@@ -31,6 +31,21 @@ const h2 = (t) => par(t, { stile: "Heading2", bold: true, size: 26, color: VERDE
 const h3 = (t) => par(t, { bold: true, size: 23, color: VERDE_CHIARO, before: 180, after: 90 });
 const p = (t, o = {}) => par(t, { size: 22, align: "both", after: 120, interlinea: 264, ...o });
 const punto = (t) => par("•  " + t, { size: 22, align: "both", after: 80, interlinea: 264 });
+// La periodicità dei controlli analitici si scrive in mesi, ma in un manuale
+// si legge a parole: è così che la trova scritta chi la confronta con i
+// referti di laboratorio.
+const periodicita = (mesi) => {
+  const n = Number(mesi) || 0;
+  if (n === 1) return "Mensile";
+  if (n === 3) return "Trimestrale";
+  if (n === 6) return "Semestrale";
+  if (n === 12) return "Annuale";
+  if (n === 24) return "Biennale";
+  if (n === 36) return "Triennale";
+  if (n <= 0) return "Secondo necessità";
+  return "Ogni " + n + " mesi";
+};
+
 const saltoPagina = () => par("", { saltoPagina: true, after: 0 });
 
 // tabella a due colonne, la prima in grassetto su fondo chiaro
@@ -225,6 +240,9 @@ export function controlli(dossier) {
   if ((dossier.piano || []).filter((r) => r.active !== false).length === 0) {
     avvisi.push("Il programma di pulizia è vuoto: il manuale non potrà stampare frequenze, e la scheda Sanificazione resterà senza righe da spuntare. Si compila in Configurazione → Piano pulizie.");
   }
+  if ((dossier.analisi || []).filter((r) => r.active !== false).length === 0) {
+    avvisi.push("Nessun controllo analitico programmato: il capitolo 9 resterebbe senza il programma dell'azienda. Si compila nella scheda Controlli analitici.");
+  }
   if (cicli.length === 0) avvisi.push("Il catalogo dei cicli è vuoto per questo settore.");
   if (procedure.length === 0) avvisi.push("Il catalogo delle procedure è vuoto per questo settore.");
   return avvisi;
@@ -242,6 +260,7 @@ export function corpoManuale(dossier) {
     procedure = [],
     piano = [],
     sanificanti = [],
+    analisi = [],
   } = dossier;
 
   const inApp = azienda.haccp_records_mode !== "cartaceo";
@@ -619,10 +638,38 @@ export function corpoManuale(dossier) {
   // ---------------- 9. controlli analitici ----------------
   b.push(h1("9. Programmazione dei controlli analitici"));
   b.push(p("Le verifiche analitiche integrano il monitoraggio quotidiano e servono a dimostrare l'efficacia del sistema. Le analisi sono eseguite presso laboratori accreditati e i referti sono conservati agli atti."));
-  b.push(griglia(["Oggetto del controllo", "Frequenza", "Finalità"], [
-    ["Tamponi ambientali su superfici, piani di lavoro e utensili", "Biennale", "Verifica dell'efficacia del piano di pulizia e sanificazione"],
-    ["Acqua destinata al consumo umano", "Un campionamento all'anno, alternando il punto di prelievo", "Verifica dei parametri del D.Lgs. 18/2023"],
-  ], [3000, 2200, 4160]));
+
+  // Il programma è quello che l'azienda ha davvero deciso e che l'app
+  // sorveglia, non un elenco scritto una volta nel codice: un manuale che
+  // promette tamponi biennali a chi non li ha mai programmati dichiara un
+  // controllo che nessuno farà, ed è la promessa a vuoto che in ispezione
+  // pesa più della sua assenza.
+  const analisiAttive = analisi
+    .filter((r) => r.active !== false)
+    .filter((r) => vale(r, azienda));
+
+  if (analisiAttive.length === 0) {
+    b.push(p("Il programma dei controlli analitici è definito dal responsabile del piano di autocontrollo con il laboratorio incaricato, in funzione delle lavorazioni svolte e degli esiti del monitoraggio, e viene riportato in questa sezione alla prima revisione utile.", { italic: true }));
+  } else {
+    b.push(griglia(["Oggetto del controllo", "Matrice", "Parametri ricercati", "Punto di prelievo", "Frequenza"],
+      analisiAttive.map((r) => [
+        r.label || "",
+        r.matrix || "",
+        r.parameters || "secondo il piano concordato con il laboratorio",
+        r.sampling_point || "—",
+        periodicita(r.frequency_months),
+      ]),
+      [2100, 1500, 2600, 1700, 1460]));
+    const conNota = analisiAttive.filter((r) => r.note);
+    if (conNota.length) {
+      b.push(par("", { after: 140 }));
+      conNota.forEach((r) => b.push(punto(`${r.label} — ${r.note}`)));
+    }
+    b.push(par("", { after: 140 }));
+    b.push(p(inApp
+      ? "Scadenze e referti sono gestiti nell'applicativo gestionale, che segnala il controllo in avvicinamento e conserva il referto di laboratorio insieme alla data di prelievo."
+      : "Le date di prelievo e i referti sono conservati in sede, allegati al presente manuale."));
+  }
   b.push(par("", { after: 160 }));
   b.push(p("In caso di esito non conforme si applicano le azioni correttive previste dalla fase o dalla procedura interessata, si ripete il campionamento dopo l'intervento e si registra l'esito fra le non conformità."));
 
