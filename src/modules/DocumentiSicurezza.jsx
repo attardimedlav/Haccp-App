@@ -3,6 +3,7 @@ import { FileDown, AlertTriangle } from "lucide-react";
 import { useAuth } from "../AuthContext";
 import { par, tabella, riga, cella, pacchettoDocx } from "./CorsoFormazione";
 import { uploadAttachment } from "../hooks/useAttachment";
+import { supabase } from "../supabaseClient";
 
 // Documenti accessori al DVR.
 //
@@ -61,6 +62,7 @@ async function caricaFirma(url) {
 
 function runImmagine(firma) {
   if (!firma) return "";
+  const rId = firma.rId || "rId40";
   return (
     `<w:p><w:pPr><w:spacing w:before="120" w:after="0"/><w:jc w:val="center"/></w:pPr>` +
     `<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">` +
@@ -69,7 +71,7 @@ function runImmagine(firma) {
     `<a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">` +
     `<pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">` +
     `<pic:nvPicPr><pic:cNvPr id="7" name="firma.png"/><pic:cNvPicPr/></pic:nvPicPr>` +
-    `<pic:blipFill><a:blip r:embed="rId20"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +
+    `<pic:blipFill><a:blip r:embed="${rId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>` +
     `<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${firma.cx}" cy="${firma.cy}"/></a:xfrm>` +
     `<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>` +
     `</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`
@@ -79,9 +81,14 @@ function runImmagine(firma) {
 // Aggiunge l'immagine al pacchetto .docx prodotto da pacchettoDocx: la parte
 // binaria, la relazione rId20 e il tipo di contenuto per le PNG, piu' il
 // namespace del disegno sull'elemento radice, che pacchettoDocx non dichiara.
-function impacchetta(corpo, firma) {
+function impacchetta(corpo, firme) {
   const files = pacchettoDocx(corpo);
-  if (!firma) return files;
+  // Le immagini sono diventate due — il timbro del medico e la firma del
+  // datore di lavoro — quindi ognuna porta il proprio identificativo e il
+  // proprio file. Gli identificativi partono da rId40 per stare lontani da
+  // quelli che pacchettoDocx usa per stili, piè di pagina e impostazioni.
+  const elenco = (Array.isArray(firme) ? firme : [firme]).filter(Boolean);
+  if (elenco.length === 0) return files;
   // Il namespace del disegno lo dichiara ormai pacchettoDocx, da quando il
   // manuale HACCP esce con la firma. Aggiungerlo di nuovo produce un attributo
   // ripetuto sull'elemento radice: XML non valido, e Word si rifiuta di aprire
@@ -99,11 +106,18 @@ function impacchetta(corpo, firma) {
       '<Default Extension="xml" ContentType="application/xml"/>\n<Default Extension="png" ContentType="image/png"/>'
     );
   }
-  files["word/_rels/document.xml.rels"] = files["word/_rels/document.xml.rels"].replace(
-    "</Relationships>",
-    '<Relationship Id="rId20" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/firma.png"/></Relationships>'
-  );
-  files["word/media/firma.png"] = { base64: firma.base64 };
+  let rels = "";
+  elenco.forEach((f, i) => {
+    // Gli identificativi sono già stati assegnati prima di costruire il corpo:
+    // il disegno li scrive dentro il documento, quindi devono esistere prima,
+    // altrimenti le due firme puntano allo stesso file.
+    f.rId = f.rId || "rId" + (40 + i);
+    f.nomeFile = f.nomeFile || "firma-" + (f.chiave || i) + ".png";
+    rels += `<Relationship Id="${f.rId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/${f.nomeFile}"/>`;
+    files["word/media/" + f.nomeFile] = { base64: f.base64 };
+  });
+  files["word/_rels/document.xml.rels"] = files["word/_rels/document.xml.rels"]
+    .replace("</Relationships>", rels + "</Relationships>");
   return files;
 }
 
@@ -198,6 +212,14 @@ function sezione(t) {
   return par(t, { bold: true, size: 20, before: 200, after: 100 });
 }
 
+// La firma del datore di lavoro vale per TUTTI i documenti che lui sottoscrive,
+// e in questa scheda sono una dozzina. Invece di passarla a ogni corpo — e
+// dimenticarsene in quelli nuovi — la si tiene qui durante la generazione:
+// firmeAffiancate riconosce la colonna del datore dall'etichetta e la applica
+// da sola. Fuori dalla generazione resta nulla, così nessun documento la porta
+// per sbaglio.
+let firmaDatoreCorrente = null;
+
 function firmeAffiancate(sinistra, destra, o = {}) {
   const L = [4800, 4800];
   // Etichetta e spazio della firma stanno nella stessa cella di una riga sola,
@@ -205,6 +227,9 @@ function firmeAffiancate(sinistra, destra, o = {}) {
   // il documento esce con i nomi su un foglio e le firme su quello successivo.
   const colonna = (etichetta, immagine) => {
     if (!etichetta) return par("", {});
+    if (!immagine && firmaDatoreCorrente && /^Il Datore di Lavoro/.test(etichetta)) {
+      immagine = firmaDatoreCorrente;
+    }
     return (
       par(etichetta, { align: "center", bold: true, size: 18, before: 300 }) +
       (immagine
@@ -755,6 +780,46 @@ export default function DocumentiSicurezza({
   const [registra, setRegistra] = useState(true);
   // La firma si scarica una volta sola per sessione: e' un file statico.
   const firmaRef = useRef(undefined);
+  // Firma del datore di lavoro: sta nell'archivio delle firme, legata a questa
+  // azienda e attiva solo se è stata registrata l'autorizzazione ad apporla.
+  const firmaDatoreRef = useRef(undefined);
+  const firmaDatore = async () => {
+    if (firmaDatoreRef.current !== undefined) return firmaDatoreRef.current;
+    firmaDatoreRef.current = null;
+    try {
+      const { data } = await supabase
+        .from("signature_images")
+        .select("id, file_path")
+        .eq("scope", "azienda")
+        .eq("company_id", company?.id)
+        .eq("person_role", "Datore di lavoro")
+        .eq("active", true)
+        .limit(1);
+      const riga = (data || [])[0];
+      if (!riga?.file_path) return null;
+      const scarico = await supabase.storage.from("attachments").download(riga.file_path);
+      if (scarico.error || !scarico.data) return null;
+      const bytes = new Uint8Array(await scarico.data.arrayBuffer());
+      if (bytes.length < 24) return null;
+      const px = (i) => (bytes[i] << 24) | (bytes[i + 1] << 16) | (bytes[i + 2] << 8) | bytes[i + 3];
+      const larghezza = px(16);
+      const altezza = px(20);
+      if (!larghezza || !altezza) return null;
+      let binario = "";
+      for (let i = 0; i < bytes.length; i += 1) binario += String.fromCharCode(bytes[i]);
+      firmaDatoreRef.current = {
+        chiave: "datore",
+        id: riga.id,
+        base64: btoa(binario),
+        cx: LARGHEZZA_FIRMA_EMU,
+        cy: Math.round((LARGHEZZA_FIRMA_EMU * altezza) / larghezza),
+      };
+    } catch (e) {
+      firmaDatoreRef.current = null;
+    }
+    return firmaDatoreRef.current;
+  };
+
   const firmaMedico = async () => {
     if (firmaRef.current === undefined) firmaRef.current = await caricaFirma(FIRMA_MEDICO);
     return firmaRef.current;
@@ -872,8 +937,35 @@ export default function DocumentiSicurezza({
     try {
       const nomeFile = `${nome}_${pulisciNomeFile(company?.name)}.docx`;
       const firma = opzioni.conFirma ? await firmaMedico() : null;
-      const blob = await costruisciDocx(impacchetta(typeof corpo === "function" ? corpo(firma) : corpo, firma));
+      if (firma) firma.chiave = "medico";
+      const datore = await firmaDatore();
+      // Prima di costruire il corpo: è lì che i disegni citano l'identificativo.
+      [firma, datore].filter(Boolean).forEach((f, i) => {
+        f.rId = "rId" + (40 + i);
+        f.nomeFile = "firma-" + (f.chiave || i) + ".png";
+      });
+      firmaDatoreCorrente = datore;
+      let blob;
+      try {
+        blob = await costruisciDocx(impacchetta(typeof corpo === "function" ? corpo(firma) : corpo, [firma, datore]));
+      } finally {
+        firmaDatoreCorrente = null;
+      }
       scaricaBlob(blob, nomeFile);
+
+      if (datore) {
+        try {
+          await supabase.from("signature_applications").insert({
+            signature_id: datore.id,
+            company_id: company.id,
+            document_kind: "documento_sicurezza",
+            document_ref: nomeFile,
+            user_agent: typeof navigator === "undefined" ? null : navigator.userAgent,
+          });
+        } catch (e) {
+          // la registrazione non deve impedire la consegna del documento
+        }
+      }
 
       const allegato = opzioni.allegato;
       if (!registra || (!nomine.length && !allegato)) return;
