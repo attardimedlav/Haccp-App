@@ -426,7 +426,7 @@ function Shell() {
       {tab === "acquafiltrata" && <AcquaFiltrata />}
       {tab === "controllianalitici" && <ControlliAnalitici />}
         {tab === "documenti" && <Documenti />}
-        {tab === "config" && <Configurazione />}
+        {tab === "config" && <Configurazione onVai={setTab} />}
         {tab === "clienti" && <MieiClienti goTo={setTab} />}
       </main>
     </div>
