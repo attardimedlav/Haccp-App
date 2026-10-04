@@ -8,7 +8,7 @@ import {
   pacchettoDocx, scaricaDocx, fileRegistro,
   BLOCCHI, blocco,
 } from "./CorsoFormazione";
-import { spazioFirma, preparaFirme, liberaFirme, aggiungiFirme } from "../utils/firmeDocx";
+import { spazioFirma, preparaFirme, liberaFirme, aggiungiFirme, chiaveNome } from "../utils/firmeDocx";
 
 // Scheda di un corso gia' registrato: da qui escono i quattro documenti che
 // l'Accordo Stato-Regioni 17/04/2025 richiede a chi organizza formazione, e
@@ -19,6 +19,17 @@ import { spazioFirma, preparaFirme, liberaFirme, aggiungiFirme } from "../utils/
 // diritto all'attestato, quindi non deve nemmeno finire fra le nomine.
 
 const SOGLIA = 0.9;
+
+// Il nome di una persona ritrovato dentro il nome di un file: serve a capire a
+// chi appartiene ogni PDF allegato quando se ne allega uno per lavoratore.
+// "Attestato_Bello_Giuseppe (5).pdf" contiene "bello" e "giuseppe", e tanto
+// basta; accenti, titoli e ordine non contano.
+function fileIntestatoA(nomeFile, persona) {
+  const dentro = chiaveNome(nomeFile).split(" ").filter(Boolean);
+  const cercate = chiaveNome(persona).split(" ").filter(Boolean);
+  if (cercate.length === 0 || dentro.length === 0) return false;
+  return cercate.every((p) => dentro.includes(p));
+}
 const VALIDITA_ANNI = 5;
 
 function piuAnni(iso, anni) {
@@ -260,7 +271,10 @@ function corpoAttestati(d) {
   });
 
   d.partecipanti.forEach((x, i) => {
-    const numero = `${String(i + 1).padStart(2, "0")}/${anno}`;
+    // Il numero arriva da fuori quando l'attestato si genera da solo, uno per
+    // lavoratore: altrimenti ogni file ripartirebbe da 01 e tre lavoratori
+    // avrebbero tre attestati numero 01.
+    const numero = x.numero || `${String(i + 1).padStart(2, "0")}/${anno}`;
 
     // Il salto pagina sta su un paragrafo, non sulla tabella: una tabella non
     // porta pageBreakBefore, e senza questa riga il secondo attestato
@@ -379,7 +393,10 @@ function corpoAttestati(d) {
 function SchedaCorso({ corso, sessioni, partecipanti, formazioneRole, onChiudi, onAggiornato }) {
   const { company } = useAuth();
   const { items: nomine, add: addNomina, remove: rimuoviNomina, reload: reloadNomine } = useTable("work_safety_appointments", company?.id);
-  const { items: attestati, add: addAttestato, remove: rimuoviAttestato, reload: reloadAttestati } = useTable("work_safety_trainings", company?.id);
+  const {
+    items: attestati, add: addAttestato, update: aggiornaAttestato,
+    remove: rimuoviAttestato, reload: reloadAttestati,
+  } = useTable("work_safety_trainings", company?.id);
   const { update: aggiornaCorso, remove: rimuoviCorso } = useTable("training_courses", company?.id);
   const { update: aggiornaPartecipante } = useTable("training_course_participants", company?.id);
   const { update: aggiornaSessione, reload: reloadSessioni } = useTable("training_course_sessions", company?.id);
@@ -518,7 +535,13 @@ function SchedaCorso({ corso, sessioni, partecipanti, formazioneRole, onChiudi, 
     };
   });
 
-  const idonei = calcolati.filter((x) => x.esito === "Idoneo");
+  // Il numero dell'attestato e' la posizione fra gli idonei: si decide qui, una
+  // volta sola, perche' lo stesso numero deve comparire sul documento, nella
+  // scheda del partecipante e nel nome del file in archivio.
+  const annoAttestati = String(dataVerifica || dataFine || "").slice(0, 4) || String(new Date().getFullYear());
+  const idonei = calcolati
+    .filter((x) => x.esito === "Idoneo")
+    .map((x, i) => ({ ...x, numeroAttestato: `${String(i + 1).padStart(2, "0")}/${annoAttestati}` }));
   const scadenza = piuAnni(dataVerifica || dataFine, VALIDITA_ANNI);
 
   const datiDoc = (elenco) => ({
@@ -542,6 +565,7 @@ function SchedaCorso({ corso, sessioni, partecipanti, formazioneRole, onChiudi, 
     partecipanti: (elenco || calcolati).map((x) => ({
       nome: x.person_name, codiceFiscale: x.tax_code, mansione: x.job_role,
       oreFrequentate: x.frequentate, percentuale: x.percentuale, esito: x.esito,
+      numero: x.numeroAttestato,
     })),
     moduli: sessioni.map((s) => ({ modulo: s.module_title, ore: s.hours, argomenti: s.topics })),
   });
@@ -567,9 +591,88 @@ function SchedaCorso({ corso, sessioni, partecipanti, formazioneRole, onChiudi, 
     () => aggiungiFirme(pacchettoDocx(corpoProgetto(datiDoc()))), nomeFile("Progetto_formativo"));
   const scaricaVerbale = () => conFirme(
     () => aggiungiFirme(pacchettoDocx(corpoVerbale(datiDoc()))), nomeFile("Verbale_verifica_finale"));
+  // La copia firmata degli attestati non appartiene solo al fascicolo del
+  // corso: e' il documento del singolo lavoratore, e in ispezione lo si cerca
+  // accanto al suo nome in Nomine e attestati, non dentro il corso. Quando la
+  // si allega qui, quindi, si attacca anche all'attestato di ciascun
+  // partecipante. Il file e' uno solo per tutti — e' cosi' che esce dalla
+  // stampante — e lo stesso file vale per ognuno di loro.
+  // L'attestato gia' registrato di un lavoratore, se c'e'.
+  const attestatoDi = (x) => {
+    const nome = (x.person_name || "").trim();
+    const n = nomine.find((a) => a.role === formazioneRole && (a.person_name || "").trim() === nome);
+    if (!n) return null;
+    return attestati.find((t) => t.appointment_id === n.id && t.issue_date === corso.final_test_date) || null;
+  };
+
+  const pdfAttestati = () =>
+    allegatiCorso.filter((a) => a.course_id === corso?.id && a.kind === "attestati");
+
+  // A quale lavoratore appartiene ciascun file allegato.
+  //
+  // Due casi, perche' due sono i modi in cui l'attestato esce dalla stampante:
+  // un unico PDF con dentro tutti gli attestati del corso, e allora quel file
+  // vale per ognuno; oppure un PDF per lavoratore, e allora si riconosce dal
+  // nome del file. Se i file sono piu' di uno e il nome non dice a chi
+  // appartengono, si lascia stare: attaccare il documento di un altro al
+  // fascicolo di un lavoratore e' peggio che non attaccarne nessuno.
+  const fileDi = (x, elenco) => {
+    const suo = elenco.find((f) => fileIntestatoA(f.file_name || "", x.person_name));
+    if (suo) return suo;
+    return elenco.length === 1 ? elenco[0] : null;
+  };
+
+  // Il collegamento vero e proprio: ogni attestato registrato prende il PDF
+  // che gli spetta. Si rifa' da capo ogni volta, cosi' correggere un allegato
+  // sbagliato e' questione di sostituire il file e premere di nuovo.
+  const [collegando, setCollegando] = useState(false);
+  const collegaAttestati = async () => {
+    const elenco = pdfAttestati();
+    if (elenco.length === 0) {
+      setErrore("Prima allega qui sopra il PDF degli attestati."); return;
+    }
+    setCollegando(true); setErrore(""); setFatto("");
+    let collegati = 0;
+    const senza = [];
+    for (const x of idonei) {
+      const t = attestatoDi(x);
+      if (!t) continue;
+      const f = fileDi(x, elenco);
+      if (!f) { senza.push(x.person_name); continue; }
+      await aggiornaAttestato(t.id, { attachment_path: f.file_path });
+      collegati++;
+    }
+    await reloadAttestati();
+    setCollegando(false);
+    setFatto(`Collegati ${collegati} attestati in Nomine e attestati.` +
+      (senza.length ? ` Senza documento: ${senza.join(", ")} — il nome del file non li nomina.` : ""));
+    if (onAggiornato) onAggiornato();
+  };
+
   const cambiaAllegato = async (azione, dato) => {
-    if (azione === "aggiungi") await aggiungiAllegato(dato);
-    else await togliAllegato(dato.id);
+    if (azione === "aggiungi") {
+      await aggiungiAllegato(dato);
+      // Allegare il PDF degli attestati e' il gesto che dice "questi sono i
+      // documenti buoni": il collegamento ai lavoratori parte da solo.
+      if (dato.kind === "attestati" && attestatiDelCorso.length > 0) {
+        const elenco = [...pdfAttestati(), dato];
+        for (const x of idonei) {
+          const t = attestatoDi(x);
+          const f = t && fileDi(x, elenco);
+          if (f) await aggiornaAttestato(t.id, { attachment_path: f.file_path });
+        }
+        await reloadAttestati();
+      }
+    } else {
+      await togliAllegato(dato.id);
+      if (dato.kind === "attestati") {
+        // Si stacca solo da chi puntava proprio a questo file.
+        for (const t of attestatiDelCorso) {
+          if (t.attachment_path === dato.file_path) await aggiornaAttestato(t.id, { attachment_path: null });
+        }
+        await reloadAttestati();
+      }
+    }
   };
 
   const scaricaAttestati = () => {
@@ -626,7 +729,9 @@ function SchedaCorso({ corso, sessioni, partecipanti, formazioneRole, onChiudi, 
         issue_date: dataVerifica,
         validity_years: VALIDITA_ANNI,
         expiry_date: scadenza,
-        attachment_path: null,
+        // Se il PDF degli attestati e' gia' stato allegato al corso, l'attestato
+        // del lavoratore nasce gia' con il suo documento attaccato.
+        attachment_path: fileDi(x, pdfAttestati())?.file_path || null,
         note: `${corso.title} - ${oreCorso} ore - corso organizzato dall'azienda`,
       });
       if (ok) {
@@ -634,7 +739,7 @@ function SchedaCorso({ corso, sessioni, partecipanti, formazioneRole, onChiudi, 
         // Il numero dell'attestato e' lo stesso stampato sul documento: si
         // salva perche' un attestato senza un numero rintracciabile agli atti
         // non si puo' ritrovare quando qualcuno lo esibisce.
-        const numero = `${String(idonei.indexOf(x) + 1).padStart(2, "0")}/${String(dataVerifica).slice(0, 4)}`;
+        const numero = x.numeroAttestato;
         await aggiornaPartecipante(x.id, {
           hours_attended: x.frequentate,
           outcome: x.esito,
@@ -653,7 +758,7 @@ function SchedaCorso({ corso, sessioni, partecipanti, formazioneRole, onChiudi, 
       final_test_date: dataVerifica,
       final_test_note: note,
     });
-    await reloadNomine();
+    await Promise.all([reloadNomine(), reloadAttestati()]);
     setBusy(false);
     setConferma(false);
     setFatto(`Registrati ${creati} attestati. Il quadro della formazione è aggiornato.`);
@@ -800,6 +905,20 @@ function SchedaCorso({ corso, sessioni, partecipanti, formazioneRole, onChiudi, 
 
       {errore && <p className="corso-avviso"><AlertTriangle size={14} /> {errore}</p>}
       {fatto && <p className="corso-esito"><CheckCircle2 size={14} /> {fatto}</p>}
+
+      {concluso && attestatiDelCorso.length > 0 && (
+        <>
+          <p className="corso-sezione">Attestati in Nomine e attestati</p>
+          <p className="sub" style={{ margin: "0 0 10px" }}>
+            Il PDF allegato qui sopra alla riga <strong>Attestati</strong> compare accanto al nome
+            di ogni idoneo in Nomine e attestati. Un unico PDF con tutti dentro vale per tutti;
+            se ne alleghi uno per lavoratore, ciascuno va a chi è nominato nel nome del file.
+          </p>
+          <button type="button" className="link-btn" onClick={collegaAttestati} disabled={collegando}>
+            <Award size={14} /> {collegando ? "Collegamento…" : "Collega gli attestati ai lavoratori"}
+          </button>
+        </>
+      )}
 
       {!concluso && (
         <>
