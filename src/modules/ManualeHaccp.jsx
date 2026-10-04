@@ -37,6 +37,10 @@ export default function ManualeHaccp() {
   const { items, add, remove, loading } = useTable("haccp_manuals", company?.id);
   // Gli impianti censiti servono ai moduli cartacei: una scheda M01 per ciascuno.
   const { items: impianti } = useTable("temperature_units", company?.id);
+  // Il piano di pulizia e le postazioni servono ai moduli di carta: le schede
+  // stampate devono avere le stesse righe di quelle dell'app.
+  const { items: pianoPulizie } = useTable("cleaning_plan", company?.id);
+  const { items: postazioni } = useTable("pest_stations", company?.id);
   const [moduliInCorso, setModuliInCorso] = useState(false);
 
   // Il manuale lo carica il consulente. Il cliente lo vede e lo scarica.
@@ -257,7 +261,7 @@ export default function ManualeHaccp() {
           type="button" className="btn-primary" disabled={moduliInCorso}
           onClick={async () => {
             setModuliInCorso(true);
-            try { await scaricaModuliRegistrazione(company || {}, impianti || []); }
+            try { await scaricaModuliRegistrazione(company || {}, impianti || [], pianoPulizie || [], postazioni || []); }
             catch (e) { setError("Moduli non generati: " + e.message); }
             finally { setModuliInCorso(false); }
           }}
