@@ -72,6 +72,43 @@ export function useTable(tableName, companyId) {
 
   useEffect(() => { reload(); }, [reload]);
 
+  // Rilettura automatica, per due motivi diversi.
+  //
+  // Il primo: la stessa tabella è letta da più schede dell'app, ognuna con la
+  // sua copia. Finora chi scriveva annunciava la scrittura ma nessuno
+  // ascoltava, tranne la riga in cima alla pagina: così una persona aggiunta
+  // in Configurazione compariva nell'organigramma solo riaprendolo. Adesso
+  // ogni copia della stessa tabella si rilegge da sola.
+  //
+  // Il secondo: l'app resta aperta per ore su una scheda sola. Quando si torna
+  // dopo aver lavorato altrove — o dopo che l'ha usata il cliente dal suo
+  // accesso — i dati a schermo possono essere di stamattina. Al ritorno sulla
+  // finestra si rilegge, ma non più di una volta al minuto, per non
+  // interrogare il database a ogni passaggio di finestra.
+  useEffect(() => {
+    if (!companyId || typeof window === "undefined") return;
+    let ultima = Date.now();
+
+    const suScrittura = (e) => {
+      if (e?.detail?.tableName === tableName) { ultima = Date.now(); reload(); }
+    };
+    const suRitorno = () => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - ultima < 60000) return;
+      ultima = Date.now();
+      reload();
+    };
+
+    window.addEventListener(EVENTO_SCRITTURA, suScrittura);
+    document.addEventListener("visibilitychange", suRitorno);
+    window.addEventListener("focus", suRitorno);
+    return () => {
+      window.removeEventListener(EVENTO_SCRITTURA, suScrittura);
+      document.removeEventListener("visibilitychange", suRitorno);
+      window.removeEventListener("focus", suRitorno);
+    };
+  }, [tableName, companyId, reload]);
+
   // Ritorna la riga appena creata (non solo true): serve a chi deve
   // agganciare subito qualcos'altro al record, per esempio un corso di
   // formazione alla nomina appena registrata. In caso di errore torna false.
