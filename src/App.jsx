@@ -146,6 +146,10 @@ function Shell() {
   const isViewingClient = homeCompanyId && company && company.id !== homeCompanyId;
   const hasMultipleClients = consultantCompanies.length > 0;
   const [tab, setTab] = useState("dashboard");
+  // Quale sotto-scheda di Configurazione aprire: serve ai rimandi, come quello
+  // dall'organigramma all'anagrafica del personale.
+  const [configSubTab, setConfigSubTab] = useState("generale");
+  const vaiAConfig = (sub) => { setConfigSubTab(sub); setTab("config"); };
   const [workSafetySubTab, setWorkSafetySubTab] = useState("organigramma");
   const [workSafetyExpanded, setWorkSafetyExpanded] = useState(false);
   // L'autocontrollo alimentare sta in un gruppo a fisarmonica come la sicurezza
@@ -415,7 +419,7 @@ function Shell() {
         {tab === "dashboard" && <Dashboard goTo={setTab} openWorkSafety={openWorkSafety} />}
         {tab === "temperature" && <Temperature />}
         {tab === "abbattimento" && <AbbattimentoPesce />}
-        {tab === "sicurezzalavoro" && <SicurezzaLavoro subTab={workSafetySubTab} setSubTab={setWorkSafetySubTab} />}
+        {tab === "sicurezzalavoro" && <SicurezzaLavoro subTab={workSafetySubTab} setSubTab={setWorkSafetySubTab} onVaiAiDipendenti={() => vaiAConfig("dipendenti")} />}
         {tab === "sanificazione" && <Sanificazione />}
         {tab === "infestanti" && <Infestanti />}
         {tab === "allergeni" && <Allergeni />}
@@ -435,7 +439,7 @@ function Shell() {
       {tab === "acquafiltrata" && <AcquaFiltrata />}
       {tab === "controllianalitici" && <ControlliAnalitici />}
         {tab === "documenti" && <Documenti />}
-        {tab === "config" && <Configurazione onVai={setTab} />}
+        {tab === "config" && <Configurazione onVai={setTab} subTabIniziale={configSubTab} />}
         {tab === "clienti" && <MieiClienti goTo={setTab} />}
       </main>
     </div>
