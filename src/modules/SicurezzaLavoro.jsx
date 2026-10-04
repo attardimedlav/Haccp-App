@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Award, HardHat, Wrench, Stethoscope, Network, Pencil, X, Check, ShieldAlert, GraduationCap, FileSignature, Wand2, PenLine } from "lucide-react";
+import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Award, HardHat, Wrench, Stethoscope, Network, Pencil, X, Check, ShieldAlert, GraduationCap, FileSignature, Wand2, PenLine, Lock } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
@@ -179,7 +179,12 @@ function AttachmentLink({ path }) {
 }
 
 export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }) {
-  const { company } = useAuth();
+  const { company, consultantCompanies } = useAuth();
+  // Organizzare un corso è lavoro del consulente: è lui che redige il progetto
+  // formativo, mette il docente e firma gli attestati. Al cliente la scheda
+  // resta visibile — i corsi fatti li deve poter esibire — ma il pulsante per
+  // crearne uno no.
+  const isConsultant = (consultantCompanies || []).length > 0;
   const { items: dvrDocs, add: addDvrDoc, remove: removeDvrDoc, update: updateDvrDoc, loading: dvrLoading } = useTable("dvr_documents", company?.id);
   // Documento aperto in firma: l'id della riga di dvr_documents.
   // Firma raccolta sul posto (tela di firma, foglio delle firme sul PDF):
@@ -1228,7 +1233,11 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
               designazioni e verbali generati dall'app si registrano da soli fra
               gli allegati al DVR e fra le nomine. Tenerli in una scheda a parte
               costringeva a cercarli altrove rispetto a dove atterrano. */}
-          {subTab === "allegati" && (
+          {/* Preparare nomine, designazioni e verbali è lavoro del consulente:
+              li redige lui, li firma e se ne assume la responsabilità tecnica.
+              Al cliente la scheda resta, perché i documenti già fatti li deve
+              poter consultare ed esibire, ma non il pulsante per crearne. */}
+          {subTab === "allegati" && isConsultant && (
             <>
               <div className="quadro-azione" style={{ marginTop: 4 }}>
                 <button type="button" className="btn-primary" onClick={() => setDocumentiAperti(!documentiAperti)}>
@@ -1617,16 +1626,23 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
             </div>
           </div>
 
-          <div className="quadro-azione" style={{ marginTop: 4 }}>
-            <button type="button" className="btn-primary" onClick={() => setCorsoAperto(!corsoAperto)}>
-              <Plus size={15} /> {corsoAperto ? "Chiudi" : "Organizza un nuovo corso"}
-            </button>
-            <span className="sub">
-              Chi non ha mai fatto il corso o ce l'ha scaduto è già spuntato.
-            </span>
-          </div>
+          {isConsultant ? (
+            <div className="quadro-azione" style={{ marginTop: 4 }}>
+              <button type="button" className="btn-primary" onClick={() => setCorsoAperto(!corsoAperto)}>
+                <Plus size={15} /> {corsoAperto ? "Chiudi" : "Organizza un nuovo corso"}
+              </button>
+              <span className="sub">
+                Chi non ha mai fatto il corso o ce l'ha scaduto è già spuntato.
+              </span>
+            </div>
+          ) : (
+            <p className="sub" style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+              <Lock size={13} /> I corsi li organizza il consulente: qui trovi quelli già svolti, con i
+              documenti e gli attestati.
+            </p>
+          )}
 
-          {corsoAperto && (
+          {isConsultant && corsoAperto && (
             <CorsoFormazione
               righeFormazione={quadroRigheFormazione()}
               employees={employees}
