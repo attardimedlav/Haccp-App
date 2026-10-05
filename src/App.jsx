@@ -78,7 +78,7 @@ const WORK_SAFETY_SUB_ITEMS = [
   { id: "organigramma", label: "Organigramma", icon: Network },
   { id: "dvr", label: "DVR", icon: FileText },
   { id: "allegati", label: "Allegati al DVR", icon: Paperclip },
-  { id: "nomine", label: "Nomine e Attestati", icon: Award },
+  { id: "nomine", label: "Attestati", icon: Award },
   { id: "attrezzature", label: "Attrezzature", icon: Wrench, requires: "active_equipment_checks" },
   { id: "visitemediche", label: "Visite Mediche", icon: Stethoscope, requires: "active_medical_surveillance" },
   { id: "conformita", label: "Conformità", icon: ShieldAlert },
@@ -356,7 +356,7 @@ function Shell() {
                 {visibleWorkSafetyItems.map((t) => (
                   <button
                     key={t.id}
-                    className={"nav-subitem" + (tab === "sicurezzalavoro" && workSafetySubTab === t.id ? " active" : "")}
+                    className={"nav-subitem" + (tab === "sicurezzalavoro" && (workSafetySubTab === t.id || (t.id === "allegati" && workSafetySubTab === "nominedoc")) ? " active" : "")}
                     onClick={() => openWorkSafety(t.id)}
                   >
                     <t.icon size={14} />

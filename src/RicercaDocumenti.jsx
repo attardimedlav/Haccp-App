@@ -96,7 +96,7 @@ function Risultati({ query, goTo, openWorkSafety, onClose }) {
         titolo: n.person_name || "(senza nome)",
         sotto: [n.role, n.nomina_issue_date ? "nomina del " + fmtDate(n.nomina_issue_date) : ""].filter(Boolean).join(" · "),
         path: n.nomina_attachment_path,
-        vai: () => openWorkSafety("nomine"),
+        vai: () => openWorkSafety("nominedoc"),
       }));
     if (nom.length) out.push({ id: "nomine", label: "Nomine", icon: Award, righe: nom });
 
