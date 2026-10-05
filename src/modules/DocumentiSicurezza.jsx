@@ -844,7 +844,20 @@ export default function DocumentiSicurezza({
     const empDatore = employees.find((e) => DATORE_ROLES.includes(e.security_role));
     const datore = nominaDatore?.person_name || (empDatore ? nomeCompleto(empDatore) : "");
     const rls = appointments.find((a) => a.role === RLS_ROLE);
-    const lavoratori = employees.filter((e) => !DATORE_ROLES.includes(e.security_role));
+    // Il datore di lavoro non è un lavoratore (art. 2 c. 1 lett. a): non va
+    // nell'elenco del verbale art. 36 né in quello del RLS, e non conta per le
+    // soglie dell'Allegato 2. Prima lo si riconosceva solo dal ruolo in
+    // anagrafica; così BELLO GIUSEPPE, che ha la nomina RSPP Datore ma in
+    // anagrafica un altro ruolo, finiva fra i lavoratori informati. Ora basta
+    // una delle tre: ruolo in anagrafica, nomina da datore, nome uguale a
+    // quello del datore indicato nel pannello (in qualunque ordine).
+    const chiaveNome = (n) => (n || "").toUpperCase().replace(/[^A-ZÀ-Ü' ]/g, " ").split(/\s+/).filter(Boolean).sort().join(" ");
+    const nomiDatore = new Set([
+      datore,
+      ...appointments.filter((a) => DATORE_ROLES.includes(a.role)).map((a) => a.person_name),
+    ].map(chiaveNome).filter(Boolean));
+    const lavoratori = employees.filter((e) =>
+      !DATORE_ROLES.includes(e.security_role) && !nomiDatore.has(chiaveNome(nomeCompleto(e))));
     const conRuolo = (ruolo) => lavoratori.filter((e) => haRuolo(e, ruolo)).map(nomeCompleto);
     const ant = conRuolo(ANTINCENDIO_ROLE);
     const ps = conRuolo(PRIMO_ROLE);
