@@ -570,3 +570,29 @@ nav { display: flex; flex-direction: column; gap: 2px; }
 .sola-lettura .print-btn { display: inline-flex !important; }
 .radio-row { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: #3C4A42; padding: 6px 0; }
 .radio-row input { margin-top: 3px; }
+
+/* ---- Icone dei corsi (scheda Attestati e Allegati al DVR → Nomine) ---- */
+.corso-ico { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 8px; flex: none; vertical-align: middle; }
+.corso-ico-sm { width: 24px; height: 24px; border-radius: 7px; }
+.corso-ico-rspp { background: #E3F0EB; color: #1F6B57; }
+.corso-ico-medico { background: #E6F0EA; color: #2F6F4E; }
+.corso-ico-rls { background: #EEE6F5; color: #6A3E8E; }
+.corso-ico-preposto { background: #E4ECF6; color: #1F4E8C; }
+.corso-ico-soccorso { background: #F8E5E3; color: #A3342A; }
+.corso-ico-antincendio { background: #FBEBDD; color: #C2610F; }
+.corso-ico-dpi { background: #F2ECDD; color: #6B5A2E; }
+.corso-ico-formazione { background: #E1F0F2; color: #2E6F7C; }
+.corso-ico-altro { background: #ECEFEA; color: #6E7C73; }
+.corso-ico-dot { position: absolute; right: -3px; bottom: -3px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid #fff; }
+.corso-ico-dot-inline { position: static; display: inline-block; width: 9px; height: 9px; border: none; margin: 0 3px 0 8px; vertical-align: middle; }
+.corso-ico-dot-ok { background: #2F8F5B; }
+.corso-ico-dot-warn { background: #D69E2E; }
+.corso-ico-dot-alert { background: #C0392B; }
+.corso-ico-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.appt-role { display: flex; align-items: center; gap: 8px; }
+.corso-ico-titolo { display: inline-flex; align-items: center; gap: 8px; }
+.corso-legenda { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 0 0 14px; padding: 10px 12px; background: #fff; border: 1px solid #E4E9E1; border-radius: 8px; font-size: 12px; color: #4C5A52; }
+.corso-legenda-voce { display: inline-flex; align-items: center; gap: 6px; }
+.corso-legenda-stati { margin-left: auto; gap: 0; }
+@media (max-width: 640px) { .corso-legenda-stati { margin-left: 0; } }
+@media print { .corso-ico, .corso-ico-dot { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
