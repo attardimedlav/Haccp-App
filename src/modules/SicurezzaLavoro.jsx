@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Award, HardHat, Wrench, Stethoscope, Network, Pencil, X, Check, ShieldAlert, GraduationCap, FileSignature, Wand2, PenLine, Lock } from "lucide-react";
+import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Award, HardHat, Wrench, Stethoscope, Network, Pencil, X, Check, ShieldAlert, GraduationCap, FileSignature, Wand2, PenLine, Lock, ShieldCheck, Users, Eye, HeartPulse, Flame } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
@@ -146,6 +146,38 @@ const NOMINE_SUB_TAB = { id: "nomine", label: "Attestati", icon: Award };
 
 const EQUIPMENT_SUB_TAB = { id: "attrezzature", label: "Attrezzature", icon: Wrench };
 const MEDICAL_SUB_TAB = { id: "visitemediche", label: "Visite Mediche", icon: Stethoscope };
+
+// Un'icona e un colore per ogni tipo di incarico, così nella scheda Attestati
+// si riconosce il corso a colpo d'occhio prima ancora di leggerne il nome.
+// Solo icone già usate altrove nell'app: la versione di lucide-react del repo
+// le ha di sicuro. I colori ricalcano quelli dei riquadri dell'organigramma.
+export const CORSO_ICONE = {
+  "RSPP Datore di Lavoro": { icon: ShieldCheck, tone: "rspp", label: "RSPP" },
+  "RSPP Esterno": { icon: ShieldCheck, tone: "rspp", label: "RSPP" },
+  "RLS": { icon: Users, tone: "rls", label: "RLS" },
+  "Preposto": { icon: Eye, tone: "preposto", label: "Preposto" },
+  "Addetto al Primo Soccorso": { icon: HeartPulse, tone: "soccorso", label: "Primo soccorso" },
+  "Addetto Antincendio": { icon: Flame, tone: "antincendio", label: "Antincendio" },
+  "Nomina Medico Competente": { icon: Stethoscope, tone: "medico", label: "Medico competente" },
+  "Consegna DPI": { icon: HardHat, tone: "dpi", label: "DPI" },
+  "Formazione Generale e Specifica Lavoratori": { icon: GraduationCap, tone: "formazione", label: "Formazione lavoratori" },
+};
+const CORSO_ICONA_ALTRO = { icon: Award, tone: "altro", label: "Altro" };
+export const iconaCorso = (role) => CORSO_ICONE[role] || CORSO_ICONA_ALTRO;
+
+// stato: "pill-ok" | "pill-warn" | "pill-alert" | null — il pallino in basso
+// a destra dice se la formazione di quell'incarico è valida, in scadenza o
+// scaduta/mancante.
+export function CorsoIcona({ role, size = 16, stato, title }) {
+  const { icon: Icona, tone, label } = iconaCorso(role);
+  const pallino = stato === "pill-ok" ? "ok" : stato === "pill-warn" ? "warn" : stato === "pill-alert" ? "alert" : null;
+  return (
+    <span className={`corso-ico corso-ico-${tone}` + (size <= 14 ? " corso-ico-sm" : "")} title={title || label} aria-label={title || label}>
+      <Icona size={size} strokeWidth={2.2} />
+      {pallino && <span className={`corso-ico-dot corso-ico-dot-${pallino}`} />}
+    </span>
+  );
+}
 
 function fmtDate(d) {
   if (!d) return "";
@@ -792,7 +824,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
               <li key={item.id} className={"dish-row" + (!isEditing && !item.nomina_attachment_path ? " row-warn" : "")}>
                 <div className="dish-top">
                   <div>
-                    <strong>{item.role}</strong>
+                    <strong className="corso-ico-titolo"><CorsoIcona role={item.role} /> {item.role}</strong>
                     <span className="lot-tag">{(item.person_name || "").trim() || "Senza nominativo"}</span>
                   </div>
                   {!isEditing && (
@@ -1616,6 +1648,20 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
 
           {addingFor === "" && appointmentForm(null)}
 
+          <div className="corso-legenda">
+            {[...new Map(Object.values(CORSO_ICONE).filter((c) => c.tone !== "medico").map((c) => [c.tone, c])).values()].map((c) => (
+              <span key={c.tone} className="corso-legenda-voce">
+                <span className={`corso-ico corso-ico-sm corso-ico-${c.tone}`}><c.icon size={13} strokeWidth={2.2} /></span>
+                {c.label}
+              </span>
+            ))}
+            <span className="corso-legenda-voce corso-legenda-stati">
+              <span className="corso-ico-dot corso-ico-dot-ok corso-ico-dot-inline" /> valido
+              <span className="corso-ico-dot corso-ico-dot-warn corso-ico-dot-inline" /> in scadenza
+              <span className="corso-ico-dot corso-ico-dot-alert corso-ico-dot-inline" /> scaduto o mancante
+            </span>
+          </div>
+
           {appointmentsLoading ? (
             <p className="sub">Caricamento…</p>
           ) : appointmentGroups.length === 0 ? (
@@ -1630,6 +1676,18 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
                       <span className="lot-tag">
                         {group.items.length} {group.items.length === 1 ? "incarico" : "incarichi"}
                       </span>
+                      <div className="corso-ico-row">
+                        {group.items.map((a) => {
+                          const st = appointmentStatus(a.id);
+                          const ultimo = latestTraining(a.id);
+                          const stato = st ? st.cls : "pill-alert";
+                          const quando = !ultimo ? "nessun corso registrato"
+                            : stato === "pill-alert" ? "scaduto il " + fmtDate(ultimo.expiry_date)
+                            : stato === "pill-warn" ? "in scadenza il " + fmtDate(ultimo.expiry_date)
+                            : "valido fino al " + fmtDate(ultimo.expiry_date);
+                          return <CorsoIcona key={a.id} role={a.role} size={14} stato={stato} title={`${a.role} — ${quando}`} />;
+                        })}
+                      </div>
                     </div>
                     <button
                       type="button"
@@ -1652,7 +1710,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
                       return (
                         <li key={item.id} className={"appt-item" + (!isEditing && info?.cls === "pill-alert" ? " row-warn" : "")}>
                           <div className="appt-top">
-                            <p className="appt-role">{item.role}</p>
+                            <p className="appt-role"><CorsoIcona role={item.role} /> {item.role}</p>
                             {!isEditing && (
                               <div>
                                 <button className="icon-btn" onClick={() => startEditAppointment(item)} aria-label="Modifica"><Pencil size={14} /></button>
