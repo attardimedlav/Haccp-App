@@ -8,13 +8,14 @@ import { supabase } from "../supabaseClient";
 const FUNZIONE_LETTURA = "clever-responder";
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
 
-// La dichiarazione del fornitore non ha una scadenza di legge: il termine è la
-// regola di buona prassi che l'azienda si dà per riverificare la qualifica.
-const VALIDITA = [
-  { mesi: 12, label: "12 mesi" },
-  { mesi: 24, label: "24 mesi" },
-  { mesi: 36, label: "36 mesi" },
-];
+// Dal 05/10/2026 le dichiarazioni dei fornitori non scadono più nell'app.
+// Né la dichiarazione del fornitore né quella di conformità MOCA (Reg. CE
+// 1935/2004 art. 16) hanno una scadenza di legge: restano valide finché non
+// cambiano prodotto, materiale, processo produttivo o norme di riferimento, e
+// allora il fornitore ne rilascia una nuova. Una data di riverifica inventata
+// faceva diventare "da riverificare" documenti in regola. Le colonne
+// declaration_months e declaration_expiry restano nel database ma l'app non
+// le legge più; quando arriva un documento nuovo si usa "Sostituisci".
 
 function fileInBase64(file) {
   return new Promise((resolve, reject) => {
@@ -66,7 +67,6 @@ export default function Fornitori() {
   const [goods, setGoods] = useState("");
   const [declType, setDeclType] = useState("");
   const [declDate, setDeclDate] = useState("");
-  const [declMonths, setDeclMonths] = useState(12);
   const [moca, setMoca] = useState(false);
   const [notes, setNotes] = useState("");
   const [file, setFile] = useState(null);
@@ -77,6 +77,46 @@ export default function Fornitori() {
   const [mostraInattivi, setMostraInattivi] = useState(false);
 
   const [watchId, setWatchId] = useState(null);
+
+  // Sostituzione della dichiarazione: il fornitore ne manda una nuova perché è
+  // cambiato qualcosa. Si carica il file e la data; la vecchia resta nello
+  // storage ma la scheda punta alla nuova.
+  const [sostId, setSostId] = useState(null);
+  const [sostFile, setSostFile] = useState(null);
+  const [sostDate, setSostDate] = useState("");
+  const [sostType, setSostType] = useState("");
+  const [sostMoca, setSostMoca] = useState(false);
+  const [sostBusy, setSostBusy] = useState(false);
+  const [sostError, setSostError] = useState("");
+  const apriSostituzione = (item) => {
+    setSostId(item.id);
+    setSostFile(null);
+    setSostDate(new Date().toISOString().slice(0, 10));
+    setSostType(item.declaration_type || "");
+    setSostMoca(!!item.moca_declaration);
+    setSostError("");
+  };
+  const salvaSostituzione = async (item) => {
+    if (!sostFile && !sostDate) { setSostError("Allega il documento nuovo o indica almeno la data."); return; }
+    if (sostFile && sostFile.size > MAX_FILE_BYTES) { setSostError("File troppo grande (limite 8 MB)."); return; }
+    setSostBusy(true);
+    setSostError("");
+    try {
+      const nuovo = sostFile ? await uploadAttachment(company.id, sostFile) : item.attachment_path;
+      await update(item.id, {
+        attachment_path: nuovo,
+        declaration_date: sostDate || null,
+        declaration_type: sostType,
+        moca_declaration: sostMoca,
+        self_control_declaration: true,
+      });
+      setSostId(null);
+    } catch (err) {
+      setSostError("Errore durante il salvataggio: " + err.message);
+    } finally {
+      setSostBusy(false);
+    }
+  };
   const [watchReason, setWatchReason] = useState("");
 
   // La dichiarazione è il documento che qualifica il fornitore: si carica e
@@ -124,14 +164,13 @@ export default function Fornitori() {
         supplied_goods: goods,
         declaration_type: declType,
         declaration_date: declDate || null,
-        declaration_months: declMonths,
         self_control_declaration: !!declDate || !!attachment_path,
         moca_declaration: moca,
         notes,
         attachment_path,
       });
       setName(""); setVat(""); setAddress(""); setContact(""); setGoods("");
-      setDeclType(""); setDeclDate(""); setDeclMonths(12); setMoca(false);
+      setDeclType(""); setDeclDate(""); setMoca(false);
       setNotes(""); setFile(null); setLetto(false);
       const input = document.getElementById("fornitore-file-input");
       if (input) input.value = "";
@@ -157,10 +196,8 @@ export default function Fornitori() {
   };
   const chiudiSorveglianza = async (id) => update(id, { reinforced_watch: false });
 
-  const oggi = new Date().toISOString().slice(0, 10);
   const statoDichiarazione = (item) => {
     if (!item.declaration_date && !item.attachment_path) return "mancante";
-    if (item.declaration_expiry && item.declaration_expiry < oggi) return "scaduta";
     return "valida";
   };
 
@@ -210,15 +247,11 @@ export default function Fornitori() {
           <label className="field-label">Data del documento
             <input type="date" value={declDate} onChange={(e) => setDeclDate(e.target.value)} />
           </label>
-          <label className="field-label">Da riverificare entro
-            <select value={declMonths} onChange={(e) => setDeclMonths(Number(e.target.value))}>
-              {VALIDITA.map((v) => <option key={v.mesi} value={v.mesi}>{v.label}</option>)}
-            </select>
-          </label>
         </div>
         <p className="range-hint">
-          La dichiarazione non ha una scadenza di legge: il termine è la periodicità con cui l'azienda decide di
-          riverificare la qualifica del fornitore.
+          La dichiarazione del fornitore e quella di conformità MOCA non hanno scadenza: restano valide finché non
+          cambiano il prodotto, il materiale, il processo o le norme. Quando il fornitore ne manda una nuova, usa
+          «Sostituisci la dichiarazione».
         </p>
 
         <div className="row-form">
@@ -257,7 +290,6 @@ export default function Fornitori() {
                     <strong>{item.name}</strong>
                     {stato === "valida" && <span className="lot-tag">qualificato</span>}
                     {stato === "mancante" && <span className="lot-tag" style={{ background: "#FBEEEC", color: "#B3432E" }}>dichiarazione mancante</span>}
-                    {stato === "scaduta" && <span className="lot-tag" style={{ background: "#FBEEEC", color: "#B3432E" }}>da riverificare</span>}
                     {item.reinforced_watch && <span className="lot-tag" style={{ background: "#FBEEEC", color: "#B3432E" }}>sorveglianza rinforzata</span>}
                     {item.active === false && <span className="lot-tag">sospeso</span>}
                   </div>
@@ -274,16 +306,39 @@ export default function Fornitori() {
                       {item.declaration_type || "Dichiarazione"} del {fmt(item.declaration_date)}
                     </span>
                   )}
-                  {item.declaration_expiry && (
-                    <span className="doc-type-tag" style={stato === "scaduta" ? { background: "#FBEEEC", color: "#B3432E" } : undefined}>
-                      <CalendarClock size={11} style={{ verticalAlign: -1, marginRight: 4 }} />
-                      da riverificare entro {fmt(item.declaration_expiry)}
-                    </span>
-                  )}
                 </div>
                 {item.address && <p className="pest-note">{item.address}</p>}
                 {item.notes && <p className="pest-note">{item.notes}</p>}
                 <AttachmentLink path={item.attachment_path} />
+
+                {sostId === item.id ? (
+                  <div className="nc-edit-block">
+                    <label className="file-drop" htmlFor={`sost-file-${item.id}`}>
+                      <Paperclip size={15} />
+                      <span>{sostFile ? sostFile.name : "Allega la dichiarazione nuova (PDF o foto)"}</span>
+                      <input id={`sost-file-${item.id}`} type="file" accept=".pdf,image/*" onChange={(e) => setSostFile(e.target.files?.[0] || null)} hidden />
+                    </label>
+                    <div className="row-form" style={{ margin: "8px 0" }}>
+                      <input type="text" placeholder="Tipo di documento" value={sostType} onChange={(e) => setSostType(e.target.value)} className="note-input" />
+                      <label className="field-label">Data del documento
+                        <input type="date" value={sostDate} onChange={(e) => setSostDate(e.target.value)} />
+                      </label>
+                    </div>
+                    <label className="checkbox-row">
+                      <input type="checkbox" checked={sostMoca} onChange={(e) => setSostMoca(e.target.checked)} />
+                      Comprende la dichiarazione di conformità MOCA
+                    </label>
+                    {sostError && <span className="file-error"><AlertTriangle size={13} /> {sostError}</span>}
+                    <div className="row-form" style={{ margin: "8px 0" }}>
+                      <button className="btn-primary" onClick={() => salvaSostituzione(item)} disabled={sostBusy}><Check size={14} /> {sostBusy ? "Salvataggio…" : "Salva"}</button>
+                      <button className="icon-btn" onClick={() => setSostId(null)} aria-label="Annulla"><X size={14} /></button>
+                    </div>
+                  </div>
+                ) : (
+                  <button type="button" className="link-btn" onClick={() => apriSostituzione(item)}>
+                    <FileText size={13} /> {item.attachment_path || item.declaration_date ? "Sostituisci la dichiarazione" : "Carica la dichiarazione"}
+                  </button>
+                )}
 
                 {item.reinforced_watch ? (
                   <div className="nc-resolved">

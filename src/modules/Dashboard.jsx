@@ -367,16 +367,16 @@ export default function Dashboard({ goTo, openWorkSafety }) {
         dettaglio: `${m.equipment} — ${m.intervention_type}, prevista entro il ${new Date(m.next_due).toLocaleDateString("it-IT")}`,
       }));
 
-    // fornitori attivi senza dichiarazione, o con dichiarazione da riverificare
+    // fornitori attivi senza dichiarazione. Dal 05/10/2026 la dichiarazione non
+    // scade più (vale finché non cambia qualcosa): si segnala solo se manca.
     fornitori.items
       .filter((fo) => fo.active !== false)
       .forEach((fo) => {
         const senza = !fo.declaration_date && !fo.attachment_path;
-        const scaduta = fo.declaration_expiry && fo.declaration_expiry < oggi;
-        if (!senza && !scaduta) return;
+        if (!senza) return;
         haccpIssues.push({
           key: "forn-" + fo.id, tab: "fornitori", icon: Truck,
-          titolo: senza ? "Fornitore senza dichiarazione" : "Dichiarazione del fornitore da riverificare",
+          titolo: "Fornitore senza dichiarazione",
           dettaglio: fo.name + (fo.supplied_goods ? " — " + fo.supplied_goods : ""),
         });
       });
