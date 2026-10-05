@@ -88,7 +88,7 @@ export default function Organigramma({ onVaiAiDipendenti }) {
 
   // I nominativi di un ruolo si prendono sia dalle nomine registrate sia dal
   // ruolo di sicurezza in anagrafica: così una persona compare anche se la sua
-  // nomina non è ancora stata protocollata in "Nomine e Attestati".
+  // nomina non è ancora stata registrata fra gli incarichi.
   const namesFor = (roles) => {
     const wanted = new Set(Array.isArray(roles) ? roles : [roles]);
     const fromAppointments = appointments
@@ -136,9 +136,9 @@ export default function Organigramma({ onVaiAiDipendenti }) {
         <div>
           <h2>Organigramma</h2>
           <p className="sub">
-            Punto di partenza per una nuova azienda: inserisci qui tutte le persone e assegna subito i loro ruoli di sicurezza
-            (RSPP, RLS, addetti...). Ogni assegnazione compare automaticamente anche in "Nomine e Attestati" — è la stessa
-            informazione, solo vista per persona invece che in ordine cronologico.
+            Punto di partenza per una nuova azienda: qui si assegnano i ruoli di sicurezza (RSPP, RLS, addetti...) alle
+            persone inserite in Configurazione → Dipendenti. Ogni assegnazione compare da sola in "Allegati al DVR → Nomine",
+            dove si allega il documento, e in "Attestati", dove si registrano i corsi.
           </p>
         </div>
       </div>
@@ -298,7 +298,7 @@ export default function Organigramma({ onVaiAiDipendenti }) {
                         <input type="date" value={assignIssueDate} onChange={(e) => setAssignIssueDate(e.target.value)} />
                       </label>
                     </div>
-                    <p className="sub" style={{ margin: "6px 0" }}>Il corso di formazione (con la sua scadenza) si aggiunge poi da "Nomine e Attestati".</p>
+                    <p className="sub" style={{ margin: "6px 0" }}>Il corso di formazione (con la sua scadenza) si aggiunge poi da "Attestati".</p>
                     <div className="row-form" style={{ margin: "8px 0" }}>
                       <button type="button" className="btn-primary" onClick={() => submitAssign(emp)} disabled={assignBusy || !assignIssueDate}>
                         <Plus size={14} /> Assegna

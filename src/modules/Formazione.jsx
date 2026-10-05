@@ -135,7 +135,7 @@ export default function Formazione() {
       if (data?.errore) throw new Error(data.errore);
 
       // La function risponde con un elenco: qui interessa il primo attestato,
-      // il caricamento in blocco di più partecipanti si fa da Nomine e Attestati.
+      // il caricamento in blocco di più partecipanti si fa da Attestati.
       const primo = Array.isArray(data?.attestati) ? (data.attestati[0] || {}) : data;
       const quanti = Array.isArray(data?.attestati) ? data.attestati.length : 1;
 
@@ -157,7 +157,7 @@ export default function Formazione() {
       const letti = [persona && "nominativo", primo?.corso && "corso", primo?.data_rilascio && "data"].filter(Boolean);
       setLetto(letti.length ? `Letto dall'attestato: ${letti.join(", ")}. Controlla prima di salvare.` : "");
       if (quanti > 1) {
-        setError(`Nel file ci sono ${quanti} attestati: qui si registra il primo. Per caricarli tutti insieme usa Sicurezza sul lavoro → Nomine e Attestati.`);
+        setError(`Nel file ci sono ${quanti} attestati: qui si registra il primo. Per caricarli tutti insieme usa Sicurezza sul lavoro → Attestati.`);
       }
       if (!persona || !primo?.corso) {
         setError("Dall'attestato non è stato letto tutto: completa a mano quello che manca.");

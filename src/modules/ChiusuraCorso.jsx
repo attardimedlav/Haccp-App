@@ -593,7 +593,7 @@ function SchedaCorso({ corso, sessioni, partecipanti, formazioneRole, onChiudi, 
     () => aggiungiFirme(pacchettoDocx(corpoVerbale(datiDoc()))), nomeFile("Verbale_verifica_finale"));
   // La copia firmata degli attestati non appartiene solo al fascicolo del
   // corso: e' il documento del singolo lavoratore, e in ispezione lo si cerca
-  // accanto al suo nome in Nomine e attestati, non dentro il corso. Quando la
+  // accanto al suo nome in Attestati, non dentro il corso. Quando la
   // si allega qui, quindi, si attacca anche all'attestato di ciascun
   // partecipante. Il file e' uno solo per tutti — e' cosi' che esce dalla
   // stampante — e lo stesso file vale per ognuno di loro.
@@ -644,7 +644,7 @@ function SchedaCorso({ corso, sessioni, partecipanti, formazioneRole, onChiudi, 
     }
     await reloadAttestati();
     setCollegando(false);
-    setFatto(`Collegati ${collegati} attestati in Nomine e attestati.` +
+    setFatto(`Collegati ${collegati} attestati in Attestati.` +
       (senza.length ? ` Senza documento: ${senza.join(", ")} — il nome del file non li nomina.` : ""));
     if (onAggiornato) onAggiornato();
   };
@@ -908,10 +908,10 @@ function SchedaCorso({ corso, sessioni, partecipanti, formazioneRole, onChiudi, 
 
       {concluso && attestatiDelCorso.length > 0 && (
         <>
-          <p className="corso-sezione">Attestati in Nomine e attestati</p>
+          <p className="corso-sezione">Attestati in Attestati</p>
           <p className="sub" style={{ margin: "0 0 10px" }}>
             Il PDF allegato qui sopra alla riga <strong>Attestati</strong> compare accanto al nome
-            di ogni idoneo in Nomine e attestati. Un unico PDF con tutti dentro vale per tutti;
+            di ogni idoneo in Attestati. Un unico PDF con tutti dentro vale per tutti;
             se ne alleghi uno per lavoratore, ciascuno va a chi è nominato nel nome del file.
           </p>
           <button type="button" className="link-btn" onClick={collegaAttestati} disabled={collegando}>
@@ -966,7 +966,7 @@ function SchedaCorso({ corso, sessioni, partecipanti, formazioneRole, onChiudi, 
             <>
               <p style={{ margin: "10px 0 6px" }}>
                 Questo corso ha già registrato <strong>{attestatiDelCorso.length}</strong>{" "}
-                {attestatiDelCorso.length === 1 ? "attestato" : "attestati"} in Nomine e Attestati.
+                {attestatiDelCorso.length === 1 ? "attestato" : "attestati"} in Attestati.
                 Quelli non se ne vanno da soli.
               </p>
               <label className="corso-check" style={{ display: "inline-flex" }}>
@@ -976,7 +976,7 @@ function SchedaCorso({ corso, sessioni, partecipanti, formazioneRole, onChiudi, 
               </label>
               {!togliAttestati && (
                 <p className="sub" style={{ margin: "8px 0 0" }}>
-                  Gli attestati resteranno in Nomine e Attestati senza più un corso alle spalle:
+                  Gli attestati resteranno in Attestati senza più un corso alle spalle:
                   tienili solo se la formazione è stata fatta davvero.
                 </p>
               )}

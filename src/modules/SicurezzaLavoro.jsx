@@ -138,7 +138,11 @@ const DVR_SUB_TABS = [
 // nell'ordine di lavoro si eroga la formazione e poi si registra l'attestato,
 // non il contrario.
 const CORSI_SUB_TAB = { id: "corsi", label: "Corsi", icon: GraduationCap };
-const NOMINE_SUB_TAB = { id: "nomine", label: "Nomine e Attestati", icon: Award };
+// Dal 05/10/2026 questa scheda tiene solo la formazione: incarichi, attestati
+// e quadro. I documenti di nomina stanno in Allegati al DVR → Nomine, accanto
+// a "Prepara un documento" che li genera. L'id resta "nomine" perché lo usano
+// Panoramica e ricerca per arrivarci.
+const NOMINE_SUB_TAB = { id: "nomine", label: "Attestati", icon: Award };
 
 const EQUIPMENT_SUB_TAB = { id: "attrezzature", label: "Attrezzature", icon: Wrench };
 const MEDICAL_SUB_TAB = { id: "visitemediche", label: "Visite Mediche", icon: Stethoscope };
@@ -551,7 +555,13 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
 
   const submitAppointment = async (e) => {
     e.preventDefault();
-    if (!personName.trim() || (!nominaIssueDate && !issueDate)) return;
+    if (!personName.trim()) return;
+    // La nomina non si compila più da qui: senza un dato del corso la scheda
+    // nascerebbe vuota. Un incarico senza corso si assegna dall'Organigramma.
+    if (!nominaIssueDate && !issueDate && !expiryDate && !apptAttestatoFile) {
+      setApptError("Inserisci almeno la data del corso, la scadenza o l'attestato.");
+      return;
+    }
     setApptBusy(true);
     setApptError("");
     try {
@@ -751,6 +761,83 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
       .sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name, "it"));
   })();
 
+  // --- Allegati al DVR → Nomine (dal 05/10/2026) ---
+  // Una riga per incarico, con il suo documento di nomina. La formazione
+  // lavoratori non è una nomina e resta fuori; il medico competente invece
+  // entra, perché la sua è una nomina vera e propria.
+  const nomineDocumenti = appointments
+    .filter((a) => a.role !== FORMAZIONE_ROLE)
+    .map((a) => ({ ...a, rank: a.role === MEDICO_ROLE ? 0.5 : (a.role in ROLE_RANK ? ROLE_RANK[a.role] : 6) }))
+    .sort((a, b) => a.rank - b.rank
+      || (a.role || "").localeCompare(b.role || "", "it")
+      || (a.person_name || "").localeCompare(b.person_name || "", "it"));
+  const nomineSenzaDocumento = nomineDocumenti.filter((a) => !a.nomina_attachment_path).length;
+
+  const elencoNomine = () => (
+    <>
+      <p className="sub" style={{ margin: "4px 0 12px" }}>
+        Un documento per ogni incarico. Un incarico nuovo si assegna dall'<strong>Organigramma</strong>,
+        oppure nasce da solo con <strong>Prepara un documento</strong>; i corsi e le scadenze stanno
+        nella scheda <strong>Attestati</strong>.
+      </p>
+      {appointmentsLoading ? (
+        <p className="sub">Caricamento…</p>
+      ) : nomineDocumenti.length === 0 ? (
+        <div className="empty"><p>Nessuna nomina registrata.</p></div>
+      ) : (
+        <ul className="dish-list">
+          {nomineDocumenti.map((item) => {
+            const isEditing = editingApptId === item.id;
+            return (
+              <li key={item.id} className={"dish-row" + (!isEditing && !item.nomina_attachment_path ? " row-warn" : "")}>
+                <div className="dish-top">
+                  <div>
+                    <strong>{item.role}</strong>
+                    <span className="lot-tag">{(item.person_name || "").trim() || "Senza nominativo"}</span>
+                  </div>
+                  {!isEditing && (
+                    <button className="icon-btn" onClick={() => startEditAppointment(item)} aria-label="Modifica"><Pencil size={14} /></button>
+                  )}
+                </div>
+                {isEditing ? (
+                  <div className="nc-edit-block">
+                    <label className="field-label">Data nomina
+                      <input type="date" value={editNominaIssueDate} onChange={(e) => setEditNominaIssueDate(e.target.value)} />
+                    </label>
+                    <label className="file-drop" htmlFor={`edit-nomina-${item.id}`} style={{ marginTop: 8 }}>
+                      <Paperclip size={15} />
+                      <span>{editNominaFile ? editNominaFile.name : (item.nomina_attachment_path ? "Sostituisci il documento di nomina" : "Allega la nomina (PDF o immagine)")}</span>
+                      <input id={`edit-nomina-${item.id}`} type="file" accept=".pdf,image/*" onChange={(e) => setEditNominaFile(e.target.files?.[0] || null)} hidden />
+                    </label>
+                    <input type="text" placeholder="Nota (opzionale)" value={editNote} onChange={(e) => setEditNote(e.target.value)} className="full-input" style={{ marginTop: 8 }} />
+                    {editError && <span className="file-error"><AlertTriangle size={13} /> {editError}</span>}
+                    <div className="row-form" style={{ margin: "10px 0 0" }}>
+                      <button type="button" className="btn-primary" onClick={() => saveEditAppointment(item)} disabled={editBusy}>
+                        <Check size={14} /> Salva
+                      </button>
+                      <button type="button" className="icon-btn" onClick={cancelEditAppointment} aria-label="Annulla"><X size={14} /> Annulla</button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="traccia-meta">
+                      {item.nomina_issue_date
+                        ? <span className="doc-type-tag">Nomina del {fmtDate(item.nomina_issue_date)}</span>
+                        : <span className="pill pill-warn">Data della nomina mancante</span>}
+                      {!item.nomina_attachment_path && <span className="pill pill-warn">Documento non allegato</span>}
+                    </div>
+                    {item.note && <p className="pest-note">{item.note}</p>}
+                    {item.nomina_attachment_path && <AttachmentLink path={item.nomina_attachment_path} />}
+                  </>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </>
+  );
+
   // Quadro della formazione: la stessa grafica dell'organigramma da esporre,
   // ma a uso interno, con dentro le scadenze. Serve a riassumere in una sola
   // immagine chi è coperto, chi sta per scadere e chi non ha mai fatto il
@@ -891,19 +978,6 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
       </label>
 
       <fieldset className="config-group">
-        <legend>Nomina</legend>
-        <div className="row-form" style={{ margin: "0 0 8px" }}>
-          <label className="field-label">Data nomina
-            <input type="date" value={nominaIssueDate} onChange={(e) => setNominaIssueDate(e.target.value)} />
-          </label>
-        </div>
-        <label className="file-drop" htmlFor="nomine-nomina-file-input">
-          <Paperclip size={15} /><span>{apptNominaFile ? apptNominaFile.name : "Allega nomina (PDF o immagine)"}</span>
-          <input id="nomine-nomina-file-input" type="file" accept=".pdf,image/*" onChange={onApptNominaFileChange} hidden />
-        </label>
-      </fieldset>
-
-      <fieldset className="config-group">
         <legend>Corso di formazione</legend>
         <div className="row-form" style={{ margin: "0 0 8px" }}>
           <label className="field-label">Data corso
@@ -954,7 +1028,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
         )}
       </fieldset>
 
-      <p className="sub" style={{ marginTop: -6 }}>Compila almeno una delle due date (nomina o corso) per registrare la scheda — l'altra puoi aggiungerla in un secondo momento con "Modifica".</p>
+      <p className="sub" style={{ marginTop: -6 }}>Compila almeno la data del corso, la scadenza o l'attestato. Data e documento della nomina si registrano in Allegati al DVR → Nomine.</p>
       <input type="text" placeholder="Nota (opzionale)" value={apptNote} onChange={(e) => setApptNote(e.target.value)} className="full-input" />
       {apptError && <span className="file-error"><AlertTriangle size={13} /> {apptError}</span>}
       <div className="row-form" style={{ margin: "4px 0 0" }}>
@@ -1292,7 +1366,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
           <button
             key={t.id}
             type="button"
-            className={"config-subtab" + (subTab === t.id ? " active" : "")}
+            className={"config-subtab" + (subTab === t.id || (t.id === "allegati" && subTab === "nominedoc") ? " active" : "")}
             onClick={() => setSubTab(t.id)}
           >
             <t.icon size={15} /> {t.label}
@@ -1302,8 +1376,31 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
 
       {subTab === "organigramma" && <Organigramma onVaiAiDipendenti={onVaiAiDipendenti} />}
 
-      {(subTab === "dvr" || subTab === "allegati") && (
+      {(subTab === "dvr" || subTab === "allegati" || subTab === "nominedoc") && (
         <>
+          {/* Allegati al DVR ha due linguette: i documenti caricati e le nomine.
+              Le nomine sono le stesse righe degli incarichi (work_safety_appointments):
+              qui se ne vede e se ne cura solo il documento, la formazione resta
+              nella scheda Attestati. */}
+          {(subTab === "allegati" || subTab === "nominedoc") && (
+            <div className="config-subtabs">
+              <button
+                type="button"
+                className={"config-subtab" + (subTab === "allegati" ? " active" : "")}
+                onClick={() => setSubTab("allegati")}
+              >
+                <Paperclip size={15} /> Allegati
+              </button>
+              <button
+                type="button"
+                className={"config-subtab" + (subTab === "nominedoc" ? " active" : "")}
+                onClick={() => setSubTab("nominedoc")}
+              >
+                <FileSignature size={15} /> Nomine
+                {nomineSenzaDocumento > 0 && <span className="pill pill-warn" style={{ marginLeft: 6 }}>{nomineSenzaDocumento} senza documento</span>}
+              </button>
+            </div>
+          )}
           {/* I documenti accessori si preparano qui, dove poi finiscono: nomine,
               designazioni e verbali generati dall'app si registrano da soli fra
               gli allegati al DVR e fra le nomine. Tenerli in una scheda a parte
@@ -1312,7 +1409,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
               li redige lui, li firma e se ne assume la responsabilità tecnica.
               Al cliente la scheda resta, perché i documenti già fatti li deve
               poter consultare ed esibire, ma non il pulsante per crearne. */}
-          {subTab === "allegati" && isConsultant && (
+          {(subTab === "allegati" || subTab === "nominedoc") && isConsultant && (
             <>
               <div className="quadro-azione" style={{ marginTop: 4 }}>
                 <button type="button" className="btn-primary" onClick={() => setDocumentiAperti(!documentiAperti)}>
@@ -1334,6 +1431,9 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
             </>
           )}
 
+          {subTab === "nominedoc" && elencoNomine()}
+
+          {subTab !== "nominedoc" && (<>
           <form onSubmit={submitDoc(subTab === "dvr" ? "dvr" : "allegato")} className="traccia-form">
             {subTab === "allegati" && (
               <select
@@ -1417,6 +1517,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
               ))}
             </ul>
           )}
+          </>)}
         </>
       )}
 
@@ -1510,7 +1611,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
             onClick={() => (addingFor === "" ? setAddingFor(null) : openAddFor(""))}
             style={{ marginBottom: 16 }}
           >
-            <Plus size={16} /> Nuova nomina o attestato
+            <Plus size={16} /> Nuovo incarico o attestato
           </button>
 
           {addingFor === "" && appointmentForm(null)}
@@ -1518,7 +1619,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
           {appointmentsLoading ? (
             <p className="sub">Caricamento…</p>
           ) : appointmentGroups.length === 0 ? (
-            <div className="empty"><p>Nessuna nomina o attestato registrato.</p></div>
+            <div className="empty"><p>Nessun incarico o attestato registrato.</p></div>
           ) : (
             <ul className="dish-list">
               {appointmentGroups.map((group) => (
@@ -1562,21 +1663,8 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
 
                           {isEditing ? (
                             <div className="nc-edit-block">
-                              {/* Per la formazione lavoratori non c'è nessuna nomina da
-                                  datare o allegare: si modifica solo la nota. */}
-                              {!isFormazione && (
-                                <fieldset className="config-group">
-                                  <legend>Nomina</legend>
-                                  <label className="field-label">Data nomina
-                                    <input type="date" value={editNominaIssueDate} onChange={(e) => setEditNominaIssueDate(e.target.value)} />
-                                  </label>
-                                  <label className="file-drop" htmlFor={`edit-nomina-${item.id}`} style={{ marginTop: 8 }}>
-                                    <Paperclip size={15} />
-                                    <span>{editNominaFile ? editNominaFile.name : (item.nomina_attachment_path ? "Sostituisci nomina allegata" : "Allega nomina (PDF o immagine)")}</span>
-                                    <input id={`edit-nomina-${item.id}`} type="file" accept=".pdf,image/*" onChange={(e) => setEditNominaFile(e.target.files?.[0] || null)} hidden />
-                                  </label>
-                                </fieldset>
-                              )}
+                              {/* Qui si corregge solo la nota: data e documento della
+                                  nomina si curano in Allegati al DVR → Nomine. */}
                               <input type="text" placeholder="Nota (opzionale)" value={editNote} onChange={(e) => setEditNote(e.target.value)} className="full-input" />
                               {editError && <span className="file-error"><AlertTriangle size={13} /> {editError}</span>}
                               <div className="row-form" style={{ margin: "10px 0 0" }}>
@@ -1589,7 +1677,6 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
                           ) : (
                             <>
                               <div className="traccia-meta">
-                                {!isFormazione && item.nomina_issue_date && <span className="doc-type-tag">Nomina del {fmtDate(item.nomina_issue_date)}</span>}
                                 {/* La nomina non scade: resta valida finché non viene
                                     revocata. Quello che scade è la formazione, e questa
                                     pill riassume la scadenza dell'attestato più recente.
@@ -1606,12 +1693,6 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
                                 })()}
                               </div>
                               {item.note && <p className="pest-note">{item.note}</p>}
-                              {!isFormazione && (
-                                <div style={{ margin: "6px 0 10px" }}>
-                                  <span className="appt-section-label">Nomina</span>
-                                  <AttachmentLink path={item.nomina_attachment_path} />
-                                </div>
-                              )}
                             </>
                           )}
 

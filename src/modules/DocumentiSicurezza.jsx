@@ -1013,7 +1013,7 @@ export default function DocumentiSicurezza({
       const parti = [];
       if (creati.length) parti.push(`nuove nomine: ${creati.join(", ")}`);
       if (aggiornati.length) parti.push(`nomine aggiornate con il documento: ${aggiornati.join(", ")}`);
-      if (parti.length) setFatto(`Registrato in Cardine — ${parti.join("; ")}. Lo trovi in Nomine e Attestati e nell'organigramma.`);
+      if (parti.length) setFatto(`Registrato in Cardine — ${parti.join("; ")}. Lo trovi in Allegati al DVR → Nomine e nell'organigramma.`);
     } catch (e) {
       setErrore("Non è stato possibile generare il documento: " + (e?.message || e));
     }
@@ -1079,7 +1079,7 @@ export default function DocumentiSicurezza({
         <input type="checkbox" checked={registra} onChange={() => setRegistra(!registra)} />
         <span className="corso-nome">
           Registra le nomine in Cardine quando genero il documento — la persona compare
-          nell'organigramma e in "Nomine e Attestati", con il documento allegato
+          nell'organigramma e in "Allegati al DVR → Nomine", con il documento allegato
         </span>
       </label>
 

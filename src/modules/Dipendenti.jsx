@@ -381,7 +381,7 @@ export default function Dipendenti() {
               <input type="date" value={nominaDate} onChange={(e) => setNominaDate(e.target.value)} />
             </label>
             <p className="sub" style={{ marginTop: -6 }}>
-              Verrà creata automaticamente anche la relativa nomina in "Sicurezza sul lavoro → Nomine e Attestati", con questa data
+              Verrà creata automaticamente anche la relativa nomina in "Sicurezza sul lavoro → Allegati al DVR → Nomine", con questa data
               (utile per registrare nomine già fatte in passato, non solo quelle di oggi).
             </p>
           </>
