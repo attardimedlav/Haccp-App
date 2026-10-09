@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Building2, ArrowRight, User, FileWarning, Plus, AlertTriangle, X } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Building2, ArrowRight, User, FileWarning, Plus, AlertTriangle, X, Gauge } from "lucide-react";
 import { useAuth } from "../AuthContext";
 import { supabase } from "../supabaseClient";
 import { getSubscriptionStatus, pillClassFor } from "../subscriptionStatus";
@@ -21,6 +21,102 @@ const CAMPI_VUOTI = {
   active_haccp: true, active_work_safety: true,
   active_equipment_checks: true, active_medical_surveillance: true,
 };
+
+// Quanto costa la lettura automatica dei documenti, azienda per azienda.
+//
+// Il numero esisteva gia' — ogni lettura scrive in ai_usage il costo
+// congelato — ma viveva soltanto nell'editor SQL. Un costo che per vederlo
+// bisogna scrivere una query nei fatti non lo guarda nessuno, e questo e'
+// invece il numero che dice se l'abbonamento che si chiede a un cliente
+// regge. Qui sta accanto all'elenco dei clienti, che e' dove si ragiona di
+// clienti.
+//
+// Sono dollari, perche' in dollari e' il listino del modello: convertirli in
+// euro con un cambio inventato sarebbe un numero finto.
+function ConsumiLettura() {
+  const [giorni, setGiorni] = useState(30);
+  const [righe, setRighe] = useState(null);
+  const [errore, setErrore] = useState("");
+
+  useEffect(() => {
+    let vivo = true;
+    setRighe(null); setErrore("");
+    supabase.rpc("consumi_ai", { p_giorni: giorni }).then(({ data, error }) => {
+      if (!vivo) return;
+      if (error) { setErrore(error.message); setRighe([]); return; }
+      setRighe(data || []);
+    });
+    return () => { vivo = false; };
+  }, [giorni]);
+
+  const perAzienda = [];
+  (righe || []).forEach((r) => {
+    let a = perAzienda.find((x) => x.id === r.company_id);
+    if (!a) { a = { id: r.company_id, nome: r.azienda, letture: 0, dollari: 0, tipi: [] }; perAzienda.push(a); }
+    a.letture += Number(r.letture) || 0;
+    a.dollari += Number(r.dollari) || 0;
+    a.tipi.push({ tipo: r.tipo, letture: Number(r.letture) || 0, dollari: Number(r.dollari) || 0 });
+  });
+  perAzienda.sort((a, b) => b.dollari - a.dollari);
+  const totale = perAzienda.reduce((n, a) => n + a.dollari, 0);
+  const letture = perAzienda.reduce((n, a) => n + a.letture, 0);
+  const soldi = (n) => "$ " + n.toFixed(2);
+
+  return (
+    <div className="panel" style={{ marginTop: 20 }}>
+      <div className="panel-head">
+        <div>
+          <h3 style={{ margin: "0 0 6px" }}><Gauge size={16} /> Lettura automatica dei documenti</h3>
+          <p className="sub" style={{ margin: 0 }}>
+            Quanto costa a te far leggere all'intelligenza artificiale le foto e i PDF che i clienti
+            caricano. Il costo e' quello del momento della lettura, non ricalcolato a posteriori.
+          </p>
+        </div>
+      </div>
+
+      <div className="row-form" style={{ marginTop: 10 }}>
+        {[[30, "30 giorni"], [90, "3 mesi"], [365, "12 mesi"]].map(([g, etichetta]) => (
+          <button key={g} type="button"
+            className={giorni === g ? "btn-primary" : "link-btn"}
+            onClick={() => setGiorni(g)}>{etichetta}</button>
+        ))}
+      </div>
+
+      {errore && <p className="corso-avviso"><AlertTriangle size={14} /> {errore}</p>}
+
+      {righe === null ? (
+        <p className="sub">Calcolo…</p>
+      ) : perAzienda.length === 0 ? (
+        <div className="empty"><p>Nessuna lettura nel periodo scelto.</p></div>
+      ) : (
+        <>
+          <p style={{ margin: "10px 0 4px", fontWeight: 600 }}>
+            {soldi(totale)} in tutto — {letture} {letture === 1 ? "lettura" : "letture"},
+            {" "}{soldi(letture ? totale / letture : 0)} in media
+          </p>
+          <ul className="dish-list">
+            {perAzienda.map((a) => (
+              <li key={a.id} className="dish-row">
+                <div className="dish-top" style={{ marginBottom: 4 }}>
+                  <strong>{a.nome}</strong>
+                  <span>{soldi(a.dollari)}</span>
+                </div>
+                <div className="traccia-meta">
+                  <span className="doc-type-tag">{a.letture} {a.letture === 1 ? "lettura" : "letture"}</span>
+                  {a.tipi.sort((x, y) => y.dollari - x.dollari).map((t) => (
+                    <span key={t.tipo} className="doc-type-tag">
+                      {t.tipo}: {t.letture} · {soldi(t.dollari)}
+                    </span>
+                  ))}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </div>
+  );
+}
 
 export default function MieiClienti({ goTo }) {
   const { company, homeCompanyId, homeCompanyName, consultantCompanies, switchCompany, reloadClienti } = useAuth();
@@ -208,6 +304,8 @@ export default function MieiClienti({ goTo }) {
           <div className="empty"><p>Non hai ancora clienti collegati al tuo account consulente.</p></div>
         )}
       </ul>
+
+      <ConsumiLettura />
     </div>
   );
 }
