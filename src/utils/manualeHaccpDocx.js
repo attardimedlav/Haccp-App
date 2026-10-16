@@ -478,8 +478,13 @@ export function corpoManuale(dossier) {
   b.push(h2("5.3 Materie prime e destinazione d'uso"));
   b.push(griglia(["Gruppo", "Conservazione"], [
     ["Sfarinati e prodotti secchi", "Dispensa asciutta e fresca, su scaffalature sollevate da terra e distanziate dalle pareti"],
-    ["Prodotti deperibili refrigerati", "Refrigerazione a 0/+4 °C, nel rispetto dell'etichetta del produttore"],
-    ["Prodotti surgelati", "Congelatore a temperatura non superiore a −18 °C"],
+    // Le temperature non si scrivono qui. Questa tabella dice che cosa va
+    // tenuto al freddo; A QUALE freddo lo dicono gli impianti dell'azienda, nel
+    // prospetto qui sotto, che l'app sorveglia davvero. Scrivere "0/+4 °C" in
+    // un manuale di un'azienda che ha la cella impostata a +2/+6 significa
+    // dichiarare un limite che nessuno controlla.
+    ["Prodotti deperibili refrigerati", "Refrigerazione negli impianti dell'azienda, entro i limiti indicati nel prospetto delle temperature e nel rispetto dell'etichetta del produttore"],
+    ["Prodotti surgelati", "Congelatore ai limiti indicati nel prospetto delle temperature, comunque non superiori a −18 °C"],
     ["Prodotti pronti acquistati da terzi", "Secondo le indicazioni del fornitore; i freschi sono venduti in giornata"],
     ["Conserve e prodotti in barattolo", "Ambiente; dopo l'apertura travaso in contenitore idoneo, refrigerazione ed etichettatura con la data di apertura"],
     ["Oli e grassi", "Ambiente, al riparo dalla luce e da fonti di calore"],
