@@ -26,7 +26,6 @@ import Documenti from "./modules/Documenti";
 import OlioFrittura from "./modules/OlioFrittura";
 import Fornitori from "./modules/Fornitori";
 import ManualeHaccp from "./modules/ManualeHaccp";
-import CatalogoCicli from "./modules/CatalogoCicli";
 import ArchivioFirme from "./modules/ArchivioFirme";
 import Manutenzione from "./modules/Manutenzione";
 import AcquaFiltrata from "./modules/AcquaFiltrata";
@@ -283,13 +282,9 @@ function Shell() {
             <Users size={16} /> I miei clienti
           </button>
         )}
-        {/* Il catalogo dei cicli è del consulente, non dell'azienda aperta:
-            sta fuori dai moduli, accanto all'elenco dei clienti. */}
-        {hasMultipleClients && (
-          <button className={"nav-item" + (tab === "catalogo" ? " active" : "")} onClick={() => setTab("catalogo")}>
-            <Layers size={16} /> Catalogo cicli
-          </button>
-        )}
+        {/* Il catalogo dei cicli non è più qui: è passato in Configurazione,
+            subito dopo Generale, dove si prepara il manuale. Resta visibile al
+            solo consulente, come prima. */}
         {/* L'archivio delle firme è del consulente come il catalogo: le firme
             di chi redige valgono su tutte le aziende seguite. */}
         {hasMultipleClients && (
@@ -431,7 +426,6 @@ function Shell() {
         {tab === "manutenzione" && <Manutenzione />}
         {tab === "fornitori" && <Fornitori />}
         {tab === "manuale" && <ManualeHaccp />}
-        {tab === "catalogo" && <CatalogoCicli />}
         {tab === "firme" && <ArchivioFirme ambito="consulente" />}
         {tab === "registrazione" && <RegistrazioneSanitaria />}
         {tab === "nonconformita" && <NonConformita />}
