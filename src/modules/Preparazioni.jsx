@@ -3,6 +3,7 @@ import { Plus, Trash2, Check, Printer, Info, AlertTriangle, Search, ChevronDown,
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { supabase } from "../supabaseClient";
+import { stampaHtml } from "../utils/etichetta";
 
 // Preparazioni e cartellino (tracciabilità interna).
 //
@@ -48,9 +49,9 @@ function sommaGiorni(dataIso, giorni) {
 
 const cella = { font: "inherit", fontSize: 13.5, padding: "9px 10px", border: "1px solid #D8DED6", borderRadius: 8, background: "#fff", color: "#1B2A22", width: "100%", boxSizing: "border-box" };
 
-// L'etichetta si apre in una finestra a parte e parte la stampa: così esce
-// solo il cartellino, non la pagina dell'app. Da telefono la stessa finestra
-// permette di salvarla come PDF o mandarla alla stampante.
+// L'etichetta si manda in stampa da sola: esce solo il cartellino, non la
+// pagina dell'app. Da telefono la stessa finestra di stampa permette di
+// salvarla come PDF o di mandarla alla stampante.
 function stampaEtichetta(p, righeIngredienti) {
   const tracce = (p.may_contain_traces || []).length
     ? `<div class="sez"><span class="et">PUÒ CONTENERE TRACCE DI</span><div class="alle">${p.may_contain_traces.join(" · ").toUpperCase()}</div></div>`
@@ -94,12 +95,12 @@ function stampaEtichetta(p, righeIngredienti) {
     ${ingredienti}${formati}${allergeni}${tracce}${lotti}
   </body></html>`;
 
-  const w = window.open("", "_blank", "width=480,height=700");
-  if (!w) { window.alert("Il browser ha bloccato la finestra dell'etichetta: consenti le finestre pop-up per stampare."); return; }
-  w.document.write(html);
-  w.document.close();
-  w.focus();
-  setTimeout(() => w.print(), 300);
+  // Si stampa da un iframe nascosto e non da una finestra nuova: window.open
+  // lo bloccano i browser quando la stampa non parte da un click diretto, e
+  // su iPhone lasciava aperta una scheda vuota da chiudere a mano. Il
+  // meccanismo sta in utils/etichetta.js, lo stesso usato dalle etichette
+  // dell'abbattimento e del congelamento.
+  stampaHtml(html);
 }
 
 // Il catalogo delle ricette.

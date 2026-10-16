@@ -1,7 +1,8 @@
 import React, { useState } from "react";
-import { Plus, Trash2, AlertTriangle, CheckCircle2, Snowflake, Timer, ThermometerSnowflake, XCircle, Package } from "lucide-react";
+import { Plus, Trash2, AlertTriangle, CheckCircle2, Snowflake, Timer, ThermometerSnowflake, XCircle, Package, Printer } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
+import { stampaEtichetta, dataEtichetta } from "../utils/etichetta";
 
 // I due soli trattamenti previsti dal Reg. (CE) n. 853/2004, Allegato III,
 // sezione VIII, capitolo III, lettera D, per il pesce destinato al consumo
@@ -177,7 +178,23 @@ function AbbattimentoCotti({ company }) {
                     <strong>{c.product_name}</strong>
                     <span className="lot-tag">{c.cycle_type === "positivo" ? "+3°C al cuore" : "-18°C al cuore"}</span>
                   </div>
-                  <button className="icon-btn" onClick={() => { if (window.confirm("Eliminare questo ciclo?")) remove(c.id); }} aria-label="Elimina"><Trash2 size={14} /></button>
+                  <div style={{ display: "flex", gap: 2 }}>
+                    <button className="icon-btn" aria-label="Stampa etichetta" title="Stampa etichetta"
+                      onClick={() => stampaEtichetta({
+                        titolo: c.product_name,
+                        righe: [
+                          ["Raffreddato il", dataEtichetta(c.end_time || c.start_time)],
+                          ["Ciclo", c.cycle_type === "positivo" ? "+3 °C al cuore" : "-18 °C al cuore"],
+                          ["T. finale", c.end_core_temp != null ? `${c.end_core_temp} °C` : ""],
+                          ["Operatore", c.operator],
+                          "Conservare in frigorifero. Consumare entro il termine indicato in manuale.",
+                        ],
+                        piede: company?.name || "",
+                      })}>
+                      <Printer size={14} />
+                    </button>
+                    <button className="icon-btn" onClick={() => { if (window.confirm("Eliminare questo ciclo?")) remove(c.id); }} aria-label="Elimina"><Trash2 size={14} /></button>
+                  </div>
                 </div>
                 <div className="traccia-meta">
                   <span className="doc-type-tag">{c.operator}</span>
@@ -346,7 +363,24 @@ function RegistroCongelamento({ company }) {
             <strong>{x.product_name}</strong>
             {x.lot_number && <span className="lot-tag">Lotto {x.lot_number}</span>}
           </div>
-          <button className="icon-btn" onClick={() => remove(x.id)} aria-label="Elimina"><Trash2 size={14} /></button>
+          <div style={{ display: "flex", gap: 2 }}>
+            <button className="icon-btn" aria-label="Stampa etichetta" title="Stampa etichetta"
+              onClick={() => stampaEtichetta({
+                titolo: x.product_name,
+                righe: [
+                  ["Lotto", x.lot_number],
+                  ["Prodotto il", dataEtichetta(x.production_date)],
+                  ["Congelato il", dataEtichetta(x.freezing_date)],
+                  ["T. raggiunta", x.blast_temp != null ? `${String(x.blast_temp).replace(".", ",")} °C` : ""],
+                  ["Operatore", x.operator],
+                  "Prodotto congelato. Scongelare in frigorifero a non più di +4 °C. Non ricongelare.",
+                ],
+                piede: company?.name || "",
+              })}>
+              <Printer size={14} />
+            </button>
+            <button className="icon-btn" onClick={() => remove(x.id)} aria-label="Elimina"><Trash2 size={14} /></button>
+          </div>
         </div>
         <div className="traccia-meta">
           {x.production_date && <span className="doc-type-tag">Prodotto il {fmtGiorno(x.production_date)}</span>}
@@ -678,7 +712,24 @@ export default function AbbattimentoPesce() {
                         <span className="lot-tag">{b.kg} kg</span>
                         {b.completed && <span className="lot-tag">Residui: {remaining} kg</span>}
                       </div>
-                      <button className="icon-btn" onClick={() => removeBatch(b.id)} aria-label="Elimina"><Trash2 size={14} /></button>
+                      <div style={{ display: "flex", gap: 2 }}>
+                        <button className="icon-btn" aria-label="Stampa etichetta" title="Stampa etichetta"
+                          onClick={() => stampaEtichetta({
+                            titolo: b.product_name,
+                            righe: [
+                              ["Bonifica", `${b.target_temp} °C per ${b.required_hours} h`],
+                              ["Inizio", dataEtichetta(b.start_time)],
+                              ["Fine", dataEtichetta(b.completed_at)],
+                              ["Quantità", b.kg != null ? `${b.kg} kg` : ""],
+                              ["Operatore", b.operator],
+                              "Pesce bonificato ai sensi del Reg. CE 853/2004. Mantenere identificato fino al servizio.",
+                            ],
+                            piede: company?.name || "",
+                          })}>
+                          <Printer size={14} />
+                        </button>
+                        <button className="icon-btn" onClick={() => removeBatch(b.id)} aria-label="Elimina"><Trash2 size={14} /></button>
+                      </div>
                     </div>
                     <div className="traccia-meta">
                       <span className="doc-type-tag">{b.target_temp}°C per {b.required_hours}h</span>
