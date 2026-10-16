@@ -78,7 +78,12 @@ export default function Infestanti() {
   const { items: esiti, add: addEsito, reload: reloadEsiti } = useTable("pest_station_checks", companyId);
 
   const responsabile = (company?.haccp_manager || "").trim();
-  const ogniGiorni = Number(company?.pest_round_days) || 30;
+  // Sette giorni, non trenta. È la cadenza che il manuale dichiara al modulo
+  // M09 e che vale come buona prassi per un giro di monitoraggio; trenta era
+  // un numero arbitrario scritto qui dentro, e teneva l'app in contraddizione
+  // con il documento che l'app stessa genera. Resta un valore per azienda:
+  // chi ha concordato un'altra cadenza la tiene in pest_round_days.
+  const ogniGiorni = Number(company?.pest_round_days) || 7;
 
   const [vista, setVista] = useState("giri");
   const [errore, setErrore] = useState("");
