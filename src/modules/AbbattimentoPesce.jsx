@@ -384,11 +384,13 @@ function RegistroCongelamento({ company }) {
     <>
       <p className="login-info" style={{ margin: "0 0 14px" }}>
         <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
-        Qui si registra il congelamento fatto <strong>per conservare</strong> — gelati, semifreddi,
-        tavola calda, preparati — non la bonifica del pesce crudo, che è un trattamento sanitario con
-        parametri imposti e ha la sua scheda. Lo scongelamento si fa in frigorifero a non più di
-        +4&nbsp;°C, oppure per cottura diretta se il prodotto è già porzionato: mai a temperatura
-        ambiente, e non si ricongela.
+        <span>
+          Qui si registra il congelamento fatto <strong>per conservare</strong> — gelati, semifreddi,
+          tavola calda, preparati — non la bonifica del pesce crudo, che è un trattamento sanitario con
+          parametri imposti e ha la sua scheda. Lo scongelamento si fa in frigorifero a non più di
+          +4&nbsp;°C, oppure per cottura diretta se il prodotto è già porzionato: mai a temperatura
+          ambiente, e non si ricongela.
+        </span>
       </p>
 
       <form className="traccia-form" onSubmit={salva}>
@@ -605,14 +607,16 @@ export default function AbbattimentoPesce() {
         <>
           <p className="login-info" style={{ margin: "0 0 14px" }}>
             <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
-            Questo è un <strong>trattamento sanitario obbligatorio</strong>, non una conservazione:
-            il Reg. CE 853/2004 impone il congelamento preventivo del pesce destinato a essere
-            consumato crudo, marinato o poco cotto, per inattivare le larve di Anisakis. I parametri
-            non si scelgono: −20&nbsp;°C per 24 ore o −35&nbsp;°C per 15 ore in tutte le parti del
-            prodotto. Qui, a differenza del raffreddamento dei cotti, <strong>la durata è il
-            limite</strong>: vanno dichiarati il trattamento scelto, l'ora di inizio e l'ora di fine,
-            e un trattamento più breve del dovuto non ha ucciso le larve. Per congelare allo scopo di
-            conservare si usa «Congelamento per conservazione».
+            <span>
+              Questo è un <strong>trattamento sanitario obbligatorio</strong>, non una conservazione:
+              il Reg. CE 853/2004 impone il congelamento preventivo del pesce destinato a essere
+              consumato crudo, marinato o poco cotto, per inattivare le larve di Anisakis. I parametri
+              non si scelgono: −20&nbsp;°C per 24 ore o −35&nbsp;°C per 15 ore in tutte le parti del
+              prodotto. Qui, a differenza del raffreddamento dei cotti, <strong>la durata è il
+              limite</strong>: vanno dichiarati il trattamento scelto, l'ora di inizio e l'ora di fine,
+              e un trattamento più breve del dovuto non ha ucciso le larve. Per congelare allo scopo di
+              conservare si usa «Congelamento per conservazione».
+            </span>
           </p>
           <form onSubmit={submitBatch} className="traccia-form">
             <div className="row-form">
