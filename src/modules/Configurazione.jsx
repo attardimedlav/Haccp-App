@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { CheckCircle2, CalendarClock, Download, Wrench, Droplets, SprayCan, Settings2, RefreshCw, Lock, Users, BookOpen, Layers, FileText, Paperclip, KeyRound, PenLine, Trash2, ClipboardCheck } from "lucide-react";
+import { CheckCircle2, CalendarClock, Download, Wrench, Droplets, SprayCan, Settings2, RefreshCw, Lock, Users, BookOpen, Layers, ListOrdered, FileText, Paperclip, KeyRound, PenLine, Trash2, ClipboardCheck } from "lucide-react";
 import { useAuth } from "../AuthContext";
 import { downloadReminderICS } from "../hooks/useReminders";
 import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
@@ -12,6 +12,7 @@ import PreparazioneManuale from "./PreparazioneManuale";
 import ArchivioFirme from "./ArchivioFirme";
 import Dipendenti from "./Dipendenti";
 import CatalogoCicli from "./CatalogoCicli";
+import CicliAzienda from "./CicliAzienda";
 import AccessoAzienda from "./AccessoAzienda";
 import { scaricaProceduraRegistrazioni } from "../utils/proceduraRegistrazioniDocx";
 
@@ -24,7 +25,7 @@ import { scaricaProceduraRegistrazioni } from "../utils/proceduraRegistrazioniDo
 // del manuale sono lavoro suo — decidere le frequenze e sapere cosa manca
 // prima di generare il documento è consulenza, non compilazione. Al cliente
 // restano i dati della sua attività, le persone e le attrezzature.
-const SUB_TABS_CONSULENTE = new Set(["cicli", "pulizie", "preparazione"]);
+const SUB_TABS_CONSULENTE = new Set(["cicli", "cicli-azienda", "pulizie", "preparazione"]);
 
 const SUB_TABS = [
   { id: "generale", label: "Generale", icon: Settings2 },
@@ -34,6 +35,11 @@ const SUB_TABS = [
   // accanto all'elenco dei clienti, e chi preparava un manuale doveva uscire
   // dall'azienda su cui stava lavorando per raggiungerla.
   { id: "cicli", label: "Catalogo cicli", icon: Layers },
+  // Il catalogo e' la biblioteca, uguale per tutti; questa e' la scelta per
+  // questo cliente. Due schede vicine e distinte: nella prima si scrivono i
+  // cicli, nella seconda si decide quali di quei cicli descrivono davvero il
+  // lavoro di questa azienda e in che ordine finiscono nel manuale.
+  { id: "cicli-azienda", label: "Cicli dell'azienda", icon: ListOrdered },
   { id: "dipendenti", label: "Dipendenti", icon: Users },
   { id: "attrezzature", label: "Attrezzature", icon: Wrench },
   { id: "sanificanti", label: "Sanificanti", icon: Droplets },
@@ -406,6 +412,7 @@ export default function Configurazione({ onVai, subTabIniziale }) {
       </div>
 
       {subTab === "cicli" && isConsultant && <CatalogoCicli />}
+      {subTab === "cicli-azienda" && isConsultant && <CicliAzienda />}
       {subTab === "attrezzature" && <Attrezzature />}
       {subTab === "sanificanti" && <Sanificanti />}
       {subTab === "pulizie" && <PianoPulizie />}
