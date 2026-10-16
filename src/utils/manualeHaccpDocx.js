@@ -702,7 +702,15 @@ export function corpoManuale(dossier) {
     ["M09", "Monitoraggio insetti e roditori", "Settimanale", null],
     ["M10", "Comunicazione di ritiro del prodotto", "All'occorrenza", null],
     ["M11", "Controllo della macchina del ghiaccio", "Ispezione settimanale, sanificazione mensile", "has_ice_machine"],
-    ["M12", "Registro degli abbattimenti", "A ogni ciclo", "has_blast_chiller"],
+    // Tre registri e non uno: "abbattimento" nel parlare comune indica tre
+    // processi diversi — raffreddare in fretta un cotto, congelare per
+    // conservare, bonificare il pesce crudo dall'Anisakis — e un unico
+    // "registro degli abbattimenti" li confonde proprio dove la confusione
+    // costa: il pesce crudo e' un obbligo di legge con parametri fissi, gli
+    // altri due no. Vedi PRO 19, PRO 20 e PRO 21.
+    ["M12", "Registro del raffreddamento rapido dei prodotti cotti", "A ogni ciclo", "has_blast_chiller"],
+    ["M13", "Registro di congelamento e scongelamento", "A ogni partita congelata e a ogni uscita dal congelatore", "has_blast_chiller"],
+    ["M14", "Registro della bonifica preventiva del pesce crudo", "A ogni trattamento e a ogni scongelamento", "serves_raw_fish"],
   ].filter(([, , , flag]) => !flag || azienda[flag]);
   b.push(griglia(["N.", "Modulo", "Frequenza di compilazione"], moduli.map(([n, m, f]) => [n, m, f]), [900, 5000, 3460]));
   b.push(par("", { after: 180 }));
