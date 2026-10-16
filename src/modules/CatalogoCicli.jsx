@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Plus, Trash2, Pencil, Check, X, ChevronDown, ChevronRight, AlertTriangle, Layers, FileText } from "lucide-react";
+import { Plus, Trash2, Pencil, Check, X, ChevronDown, ChevronRight, AlertTriangle, Layers, FileText, Power } from "lucide-react";
 import { supabase } from "../supabaseClient";
 import { useAuth } from "../AuthContext";
 
@@ -185,9 +185,11 @@ export default function CatalogoCicli() {
     caricaProcedure();
   };
 
-  const eliminaProc = async (p) => {
-    if (!window.confirm(`Elimino la procedura "${p.code} — ${p.title}"?`)) return;
-    const { error } = await supabase.from("procedure_templates").delete().eq("id", p.id);
+  // Stessa regola delle procedure: si spengono, non si cancellano.
+  const commutaProc = async (p) => {
+    setErrore("");
+    const { error } = await supabase.from("procedure_templates")
+      .update({ active: !p.active }).eq("id", p.id);
     if (error) { setErrore(error.message); return; }
     caricaProcedure();
   };
@@ -251,9 +253,17 @@ export default function CatalogoCicli() {
     carica();
   };
 
-  const eliminaCiclo = async (c) => {
-    if (!window.confirm(`Elimino il ciclo "${c.name}" e tutte le sue righe di analisi?`)) return;
-    const { error } = await supabase.from("cycle_templates").delete().eq("id", c.id);
+  // Un ciclo non si cancella: si spegne.
+  //
+  // Il catalogo è la biblioteca del consulente, costruita nel tempo, e una
+  // riga cancellata non torna indietro — l'abbiamo imparato perdendo il ciclo
+  // della panineria, ritrovato per fortuna dentro un manuale già generato.
+  // Spegnere toglie il ciclo dai manuali nuovi e lo lascia in archivio: si
+  // riaccende quando serve a un altro cliente.
+  const commutaCiclo = async (c) => {
+    setErrore("");
+    const { error } = await supabase.from("cycle_templates")
+      .update({ active: !c.active }).eq("id", c.id);
     if (error) { setErrore(error.message); return; }
     carica();
   };
@@ -387,7 +397,7 @@ export default function CatalogoCicli() {
                 const espansa = procAperta === p.id;
                 const inMod = procInModifica?.id === p.id;
                 return (
-                  <li key={p.id} className="dish-row">
+                  <li key={p.id} className={"dish-row" + (p.active ? "" : " row-warn")}>
                     <div className="dish-top">
                       <div>
                         <button type="button" className="link-btn" onClick={() => setProcAperta(espansa ? null : p.id)}>
@@ -398,7 +408,9 @@ export default function CatalogoCicli() {
                       </div>
                       <div style={{ display: "flex", gap: 4 }}>
                         <button className="icon-btn" onClick={() => setProcInModifica({ ...p, testo: corpoInTesto(p.body) })} aria-label="Modifica"><Pencil size={14} /></button>
-                        <button className="icon-btn" onClick={() => eliminaProc(p)} aria-label="Elimina"><Trash2 size={14} /></button>
+                        <button className="icon-btn icon-btn-ok" onClick={() => commutaProc(p)}
+                          title={p.active ? "Spegni: esce dai manuali nuovi, resta in catalogo" : "Riaccendi"}
+                          aria-label="Accendi o spegni"><Power size={14} /></button>
                       </div>
                     </div>
 
@@ -464,7 +476,7 @@ export default function CatalogoCicli() {
             const lista = righe[c.id] || [];
             const inModifica = cicloInModifica?.id === c.id;
             return (
-              <li key={c.id} className="dish-row">
+              <li key={c.id} className={"dish-row" + (c.active ? "" : " row-warn")}>
                 <div className="dish-top">
                   <div>
                     <button type="button" className="link-btn" onClick={() => setAperto(espanso ? null : c.id)}>
@@ -474,10 +486,13 @@ export default function CatalogoCicli() {
                     <span className="lot-tag">{c.classification}</span>
                     {c.requires_flag && <span className="lot-tag">{etichettaFlag(c.requires_flag)}</span>}
                     <span className="lot-tag">{lista.length} righe</span>
+                    {!c.active && <span className="pill pill-warn">spento</span>}
                   </div>
                   <div style={{ display: "flex", gap: 4 }}>
                     <button className="icon-btn" onClick={() => setCicloInModifica({ ...c, flow: (c.flow || []).join("\n") })} aria-label="Modifica"><Pencil size={14} /></button>
-                    <button className="icon-btn" onClick={() => eliminaCiclo(c)} aria-label="Elimina"><Trash2 size={14} /></button>
+                    <button className="icon-btn icon-btn-ok" onClick={() => commutaCiclo(c)}
+                      title={c.active ? "Spegni: esce dai manuali nuovi, resta in catalogo" : "Riaccendi"}
+                      aria-label="Accendi o spegni"><Power size={14} /></button>
                   </div>
                 </div>
 
