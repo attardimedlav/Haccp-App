@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Trash2, Check, Printer, Info, AlertTriangle, Search, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, Trash2, Check, Printer, Info, AlertTriangle, Search, ChevronDown, ChevronRight, BookOpen, Pencil, X } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { supabase } from "../supabaseClient";
@@ -102,12 +102,253 @@ function stampaEtichetta(p, righeIngredienti) {
   setTimeout(() => w.print(), 300);
 }
 
+// Il catalogo delle ricette.
+//
+// Le stesse cose si rifanno ogni settimana, e riscrivere ogni volta a mano
+// ingredienti, allergeni e giorni di scadenza significa prima o poi scriverli
+// in due modi diversi: lo stesso dolce con due elenchi di allergeni e' un
+// errore che si scopre in ispezione, non prima.
+//
+// Quello che la ricetta NON porta e' deliberato: quantita', operatore e lotti
+// usati cambiano a ogni lavorazione, e nessuno puo' saperli al posto di chi ha
+// impastato. I prodotti collegati servono a filtrare l'elenco dei lotti, mai a
+// spuntarli.
+function CatalogoRicette({ companyId, prodotti, ricette, prodottiRicetta, onCambiato }) {
+  const [aperto, setAperto] = useState(false);
+  const [modifica, setModifica] = useState(null);   // id in modifica, o "nuova"
+  const [nome, setNome] = useState("");
+  const [ingredienti, setIngredienti] = useState("");
+  const [allergeni, setAllergeni] = useState([]);
+  const [tracce, setTracce] = useState([]);
+  const [conservazione, setConservazione] = useState("frigo");
+  const [giorni, setGiorni] = useState("");
+  const [scelti, setScelti] = useState([]);
+  const [cerca, setCerca] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [errore, setErrore] = useState("");
+
+  const prodottiDi = (idRicetta) => prodottiRicetta
+    .filter((x) => x.recipe_id === idRicetta)
+    .map((x) => prodotti.find((p) => p.id === x.product_id))
+    .filter(Boolean);
+
+  const chiudi = () => {
+    setModifica(null); setNome(""); setIngredienti(""); setAllergeni([]); setTracce([]);
+    setConservazione("frigo"); setGiorni(""); setScelti([]); setCerca(""); setErrore("");
+  };
+
+  const apriNuova = () => {
+    chiudi(); setModifica("nuova");
+  };
+
+  const apriModifica = (r) => {
+    setModifica(r.id);
+    setNome(r.name || "");
+    setIngredienti(r.ingredients_text || "");
+    setAllergeni(r.allergens || []);
+    setTracce(r.may_contain_traces || []);
+    setConservazione(r.storage_method || "frigo");
+    setGiorni(r.shelf_life_days == null ? "" : String(r.shelf_life_days));
+    setScelti(prodottiDi(r.id).map((p) => p.id));
+    setCerca(""); setErrore("");
+  };
+
+  const salva = async () => {
+    if (!nome.trim()) { setErrore("Manca il nome della ricetta."); return; }
+    setBusy(true); setErrore("");
+    try {
+      const dati = {
+        company_id: companyId,
+        name: nome.trim(),
+        ingredients_text: ingredienti.trim() || null,
+        allergens: allergeni,
+        may_contain_traces: tracce,
+        storage_method: conservazione,
+        shelf_life_days: giorni === "" ? null : Number(giorni),
+      };
+      let idRicetta = modifica;
+      if (modifica === "nuova") {
+        const { data, error } = await supabase.from("preparation_recipes").insert(dati).select().single();
+        if (error) throw error;
+        idRicetta = data.id;
+      } else {
+        const { error } = await supabase.from("preparation_recipes").update(dati).eq("id", modifica);
+        if (error) throw error;
+        // I prodotti si riscrivono da capo: e' un elenco corto e sostituirlo
+        // intero evita di ragionare su cosa e' stato tolto e cosa aggiunto.
+        const via = await supabase.from("recipe_products").delete().eq("recipe_id", modifica);
+        if (via.error) throw via.error;
+      }
+      if (scelti.length) {
+        const { error } = await supabase.from("recipe_products").insert(
+          scelti.map((idProdotto) => ({ company_id: companyId, recipe_id: idRicetta, product_id: idProdotto }))
+        );
+        if (error) throw error;
+      }
+      await onCambiato();
+      chiudi();
+    } catch (err) {
+      setErrore(/duplicate|unique/i.test(err.message || "")
+        ? "Esiste gia' una ricetta con questo nome."
+        : "Salvataggio non riuscito: " + err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const elimina = async (r) => {
+    setErrore("");
+    const { error } = await supabase.from("preparation_recipes").delete().eq("id", r.id);
+    if (error) { setErrore("Eliminazione non riuscita: " + error.message); return; }
+    await onCambiato();
+  };
+
+  const chip = (lista, valore, set) => (
+    <button type="button" key={valore} className={"chip" + (lista.includes(valore) ? " chip-on" : "")}
+      onClick={() => set(lista.includes(valore) ? lista.filter((x) => x !== valore) : [...lista, valore])}>
+      {valore}
+    </button>
+  );
+
+  const prodottiFiltrati = prodotti.filter((p) =>
+    !cerca.trim() || (p.name || "").toLowerCase().includes(cerca.trim().toLowerCase()));
+
+  return (
+    <div style={{ marginTop: 18, borderTop: "1px solid #E1E5DF", paddingTop: 14 }}>
+      <button type="button" className="icon-btn" style={{ color: "#2F6F4E", fontSize: 14, gap: 6 }}
+        onClick={() => setAperto(!aperto)}>
+        {aperto ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+        <BookOpen size={15} /> Ricette ({ricette.length})
+      </button>
+
+      {aperto && (
+        <div style={{ marginTop: 10 }}>
+          <p className="sub" style={{ margin: "0 0 10px" }}>
+            Le cose che si rifanno uguali: ingredienti, allergeni, conservazione e giorni di
+            scadenza scritti una volta sola. Quantità, operatore e lotti restano da indicare a ogni
+            lavorazione, perché cambiano ogni volta.
+          </p>
+
+          {errore && <span className="file-error"><AlertTriangle size={13} /> {errore}</span>}
+
+          {modifica === null ? (
+            <button type="button" className="btn-primary" onClick={apriNuova}>
+              <Plus size={15} /> Nuova ricetta
+            </button>
+          ) : (
+            <div className="traccia-form">
+              <input style={cella} placeholder="Nome della ricetta (es. Besciamella base)"
+                value={nome} onChange={(e) => setNome(e.target.value)} />
+
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+                <label className="field-label">Conservazione
+                  <select style={{ ...cella, width: 200 }} value={conservazione} onChange={(e) => setConservazione(e.target.value)}>
+                    {CONSERVAZIONE.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
+                  </select>
+                </label>
+                <label className="field-label">Scadenza (giorni)
+                  <input style={{ ...cella, width: 110 }} inputMode="numeric"
+                    value={giorni} onChange={(e) => setGiorni(e.target.value)} />
+                </label>
+              </div>
+
+              <label className="field-label">Ingredienti (in ordine di peso, come vanno in etichetta)
+                <textarea style={{ ...cella, minHeight: 64 }} value={ingredienti}
+                  onChange={(e) => setIngredienti(e.target.value)} />
+              </label>
+
+              <div>
+                <div className="sub" style={{ marginBottom: 6 }}>Allergeni presenti</div>
+                <div className="chip-grid">{ALLERGENI.map((a) => chip(allergeni, a, setAllergeni))}</div>
+              </div>
+
+              <div>
+                <div className="sub" style={{ marginBottom: 6 }}>Può contenere tracce di…</div>
+                <div className="chip-grid">{ALLERGENI.map((a) => chip(tracce, a, setTracce))}</div>
+              </div>
+
+              <div>
+                <div className="sub" style={{ marginBottom: 6 }}>
+                  Materie prime della ricetta — servono a filtrare i lotti al momento della
+                  lavorazione, non vengono spuntate da sole
+                </div>
+                {prodotti.length === 0 ? (
+                  <p className="range-hint">Nessun prodotto nel catalogo: si riempie da Arrivo merci.</p>
+                ) : (
+                  <>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                      <Search size={14} color="#6E7C73" />
+                      <input style={cella} placeholder="Cerca un prodotto…" value={cerca}
+                        onChange={(e) => setCerca(e.target.value)} />
+                    </div>
+                    <div style={{ maxHeight: 180, overflowY: "auto", border: "1px solid #E1E5DF", borderRadius: 8, padding: 8, background: "#fff" }}>
+                      {prodottiFiltrati.slice(0, 80).map((p) => (
+                        <label key={p.id} style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "5px 2px", fontSize: 13 }}>
+                          <input type="checkbox" checked={scelti.includes(p.id)} style={{ marginTop: 3 }}
+                            onChange={() => setScelti(scelti.includes(p.id)
+                              ? scelti.filter((x) => x !== p.id)
+                              : [...scelti, p.id])} />
+                          <span>{p.name}</span>
+                        </label>
+                      ))}
+                      {prodottiFiltrati.length === 0 && <span className="none-label">Nessun prodotto trovato.</span>}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button type="button" className="btn-primary" disabled={busy} onClick={salva}>
+                  <Check size={15} /> {busy ? "Salvataggio…" : "Salva la ricetta"}
+                </button>
+                <button type="button" className="icon-btn" style={{ color: "#6E7C73", fontSize: 13, gap: 4 }} onClick={chiudi}>
+                  <X size={14} /> Annulla
+                </button>
+              </div>
+            </div>
+          )}
+
+          {ricette.length === 0 ? (
+            <p className="none-label" style={{ display: "block", marginTop: 10 }}>Nessuna ricetta in catalogo.</p>
+          ) : (
+            <ul className="dish-list" style={{ marginTop: 10 }}>
+              {ricette.map((r) => (
+                <li key={r.id} className="dish-row">
+                  <div className="dish-top" style={{ marginBottom: 4 }}>
+                    <strong>{r.name}</strong>
+                    <span style={{ display: "flex", gap: 2 }}>
+                      <button className="icon-btn" title="Modifica" onClick={() => apriModifica(r)}><Pencil size={14} /></button>
+                      <button className="icon-btn" title="Elimina" onClick={() => elimina(r)}><Trash2 size={14} /></button>
+                    </span>
+                  </div>
+                  <div className="traccia-meta">
+                    <span className="doc-type-tag">{etichettaConservazione(r.storage_method) || "conservazione non indicata"}</span>
+                    {r.shelf_life_days != null && <span className="doc-type-tag">{r.shelf_life_days} giorni</span>}
+                    {prodottiDi(r.id).length > 0 && (
+                      <span className="doc-type-tag">{prodottiDi(r.id).length} materie prime</span>
+                    )}
+                  </div>
+                  {(r.allergens || []).length > 0 && (
+                    <div className="chip-grid">{r.allergens.map((a) => <span key={a} className="chip chip-static">{a}</span>)}</div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Preparazioni() {
   const { company, session } = useAuth();
   const { items: preparazioni, add, remove, reload, loading } = useTable("preparations", company?.id);
   const { items: collegamenti, reload: reloadCollegamenti } = useTable("preparation_ingredients", company?.id);
   const { items: arrivi } = useTable("traceability_records", company?.id);
   const { items: prodotti } = useTable("products", company?.id);
+  const { items: ricette, reload: reloadRicette } = useTable("preparation_recipes", company?.id);
+  const { items: prodottiRicetta, reload: reloadProdottiRicetta } = useTable("recipe_products", company?.id);
 
   const [apertoForm, setApertoForm] = useState(false);
   const [nome, setNome] = useState("");
@@ -126,6 +367,11 @@ export default function Preparazioni() {
   const [quantitaKg, setQuantitaKg] = useState("");
   const [pezzi, setPezzi] = useState("");
   const [operatore, setOperatore] = useState("");
+  // La ricetta da cui si parte: riempie il modulo e restringe l'elenco dei
+  // lotti alle sue materie prime. Resta registrata sulla preparazione, cosi'
+  // dopo si sa quante volte una ricetta e' stata lavorata.
+  const [ricettaId, setRicettaId] = useState("");
+  const [tuttiILotti, setTuttiILotti] = useState(false);
   const [allergeni, setAllergeni] = useState([]);
   const [tracce, setTracce] = useState([]);
   const [note, setNote] = useState("");
@@ -146,9 +392,22 @@ export default function Preparazioni() {
     return `${prefisso}-${String(delGiorno + 1).padStart(3, "0")}`;
   })();
 
+  // Sta QUI, sopra arriviFiltrati, e non accanto ad applicaRicetta: il filtro\n  // lo legge mentre la pagina si disegna, e una costante usata prima di essere\n  // dichiarata non e' un dettaglio di stile — e' la pagina bianca.\n  // I prodotti della ricetta scelta: restringono l'elenco dei lotti a quelli
+  // che c'entrano, senza nascondere la possibilita' di vedere tutto — in
+  // laboratorio capita di sostituire un ingrediente, e un elenco che nasconde
+  // quello che e' stato usato davvero fa scrivere il falso.
+  const prodottiDellaRicetta = ricettaId
+    ? prodottiRicetta.filter((x) => x.recipe_id === ricettaId).map((x) => x.product_id)
+    : [];
+
   // Gli arrivi più recenti in cima: sono quelli che l'OSA ha in mano.
   const arriviOrdinati = [...arrivi].sort((a, b) => (a.received_date < b.received_date ? 1 : -1));
   const arriviFiltrati = arriviOrdinati.filter((a) => {
+    // Un lotto gia' spuntato resta sempre visibile: nasconderlo cambiando
+    // ricetta lo lascerebbe collegato senza che si veda.
+    if (prodottiDellaRicetta.length && !tuttiILotti
+        && !prodottiDellaRicetta.includes(a.product_id)
+        && !lottiScelti.includes(a.id)) return false;
     const t = (cercaLotto || "").trim().toLowerCase();
     if (!t) return true;
     return `${nomeProdotto(a.product_id)} ${a.lot_number || ""} ${a.supplier_name}`.toLowerCase().includes(t);
@@ -186,10 +445,25 @@ export default function Preparazioni() {
     .map((a) => prodotti.find((p) => p.id === a.product_id))
     .filter((p) => p && !p.allergens_checked_at);
 
+  // Scegliere una ricetta riempie i campi che non cambiano. Non tocca
+  // quantita', operatore e lotti: quelli li sa solo chi ha lavorato.
+  const applicaRicetta = (id) => {
+    setRicettaId(id);
+    setTuttiILotti(false);
+    const r = ricette.find((x) => x.id === id);
+    if (!r) return;
+    setNome(r.name || "");
+    setIngredienti(r.ingredients_text || "");
+    setAllergeni(r.allergens || []);
+    setTracce(r.may_contain_traces || []);
+    if (r.storage_method) setConservazione(r.storage_method);
+    setGiorni(r.shelf_life_days == null ? "" : String(r.shelf_life_days));
+  };
+
   const azzera = () => {
     setNome(""); setData(oggi()); setOra(oraAdesso()); setConservazione("frigo"); setGiorni("");
     setIngredienti(""); setFormati([]); setLottiScelti([]); setSemilavorati([]); setAllergeni([]); setTracce([]); setNote("");
-    setQuantitaKg(""); setPezzi(""); setOperatore("");
+    setQuantitaKg(""); setPezzi(""); setOperatore(""); setRicettaId(""); setTuttiILotti(false);
     setCercaLotto(""); setErrore(""); setApertoForm(false);
   };
 
@@ -213,6 +487,7 @@ export default function Preparazioni() {
         quantity_kg: quantitaKg === "" ? null : Number(String(quantitaKg).replace(",", ".")),
         quantity_pieces: pezzi === "" ? null : Number(pezzi),
         operator_name: operatore.trim() || null,
+        recipe_id: ricettaId || null,
         created_by: session?.user?.id || null,
       });
       if (!riga) throw new Error("salvataggio non riuscito");
@@ -308,6 +583,15 @@ export default function Preparazioni() {
 
       {apertoForm && (
         <div className="traccia-form">
+          {ricette.length > 0 && (
+            <label className="field-label">Parti da una ricetta (facoltativo)
+              <select style={cella} value={ricettaId} onChange={(e) => applicaRicetta(e.target.value)}>
+                <option value="">— nessuna ricetta —</option>
+                {ricette.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+              </select>
+            </label>
+          )}
+
           <input style={cella} list="piatti-usati" placeholder="Nome della preparazione (es. Tiramisù)" value={nome} onChange={(e) => setNome(e.target.value)} />
           <datalist id="piatti-usati">
             {[...new Set(preparazioni.map((p) => p.product_name))].map((n) => <option key={n} value={n} />)}
@@ -376,7 +660,18 @@ export default function Preparazioni() {
           </div>
 
           <div>
-            <div className="sub" style={{ marginBottom: 6 }}>Materie prime tracciate — spunta i lotti che hai usato</div>
+            <div className="sub" style={{ marginBottom: 6 }}>
+              Materie prime tracciate — spunta i lotti che hai usato
+              {prodottiDellaRicetta.length > 0 && !tuttiILotti && (
+                <>
+                  {" · "}
+                  <button type="button" className="icon-btn" style={{ color: "#2F6F4E", fontSize: 13 }}
+                    onClick={() => setTuttiILotti(true)}>
+                    mostra tutti i lotti
+                  </button>
+                </>
+              )}
+            </div>
             {arrivi.length === 0 ? (
               <p className="range-hint">Nessun arrivo merci registrato: puoi comunque salvare la preparazione e collegare i lotti più avanti.</p>
             ) : (
@@ -469,6 +764,14 @@ export default function Preparazioni() {
           L'etichetta riporta scadenza, conservazione, lotto del prodotto finito, ingredienti e allergeni. I lotti delle materie prime restano registrati qui: servono in caso di allerta, non vanno stampati.
         </p>
       )}
+
+      <CatalogoRicette
+        companyId={company?.id}
+        prodotti={prodotti}
+        ricette={ricette}
+        prodottiRicetta={prodottiRicetta}
+        onCambiato={async () => { await reloadRicette(); await reloadProdottiRicetta(); }}
+      />
 
       {loading ? (
         <p className="sub">Caricamento…</p>
