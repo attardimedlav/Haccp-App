@@ -166,7 +166,7 @@ function diagramma(ciclo) {
 
   // intestazione piena: codice, nome e classificazione del ciclo
   righe.push(rigaDia(
-    cellaDia(par(`${ciclo.code}    ${ciclo.name}`, { bold: true, size: 21, color: "FFFFFF", after: 0 }),
+    cellaDia(par(`${ciclo.numero ? "Ciclo " + ciclo.numero : ciclo.code}    ${ciclo.name}`, { bold: true, size: 21, color: "FFFFFF", after: 0 }),
       DIA.num + DIA.box, { sfondo: VERDE, span: 2 }) +
     cellaDia(par(cicloCritico ? "CCP" : "CP", { bold: true, size: 16, color: "FFFFFF", align: "center", after: 0 }),
       DIA.tag, { sfondo: VERDE })
@@ -264,7 +264,16 @@ export function corpoManuale(dossier) {
   } = dossier;
 
   const inApp = azienda.haccp_records_mode !== "cartaceo";
-  const cicliAttivi = cicli.filter((c) => vale(c, azienda));
+  // I cicli del manuale sono quelli scelti per questa azienda, nell'ordine
+  // deciso in Configurazione, meno quelli il cui interruttore e' spento.
+  // Il numero nasce da qui: il primo ciclo dell'elenco e' il numero 1. I
+  // codici del catalogo (C01, C07...) restano un'etichetta interna della
+  // biblioteca e nel manuale non compaiono piu': lo stesso ciclo in una
+  // pasticceria e' il terzo e in un bar il primo, e stampare un codice fisso
+  // obbligava a spiegare al cliente perche' il suo manuale salta dei numeri.
+  const cicliAttivi = cicli
+    .filter((c) => vale(c, azienda))
+    .map((c, i) => ({ ...c, numero: i + 1 }));
   const procedureAttive = procedure.filter((x) => vale(x, azienda));
   const ccp = cicliAttivi.filter((c) => /^CCP/.test(c.classification));
   const cp = cicliAttivi.filter((c) => !/^CCP/.test(c.classification));
@@ -383,7 +392,7 @@ export function corpoManuale(dossier) {
   b.push(h1("2. Premessa e campo di applicazione"));
   b.push(p(`Il presente Manuale di Autocontrollo appartiene a ${azienda.name || "—"} e si applica a tutte le attività di deposito, preparazione, cottura, somministrazione e vendita di alimenti e bevande che si svolgono presso la sede di ${azienda.sede_operativa || "—"}.`));
   b.push(p("Nell'esercizio si svolgono i seguenti cicli di lavorazione:"));
-  cicliAttivi.forEach((c) => b.push(punto(c.name + (c.intro ? " — " + c.intro : ""))));
+  cicliAttivi.forEach((c) => b.push(punto(`${c.numero}. ${c.name}` + (c.intro ? " — " + c.intro : ""))));
   b.push(p("Il manuale è redatto al fine di soddisfare gli obblighi dei Regolamenti comunitari in materia di igiene degli alimenti, e in particolare l'obbligo di predisporre, attuare e mantenere procedure permanenti basate sui principi del sistema HACCP di cui all'art. 5 del Reg. (CE) n. 852/2004."));
   b.push(p("Il titolare si impegna ad acquistare le materie prime esclusivamente da fornitori qualificati e da canali ufficiali, quale prima garanzia di salubrità del prodotto somministrato o venduto."));
   b.push(p("Il manuale non sostituisce il documento di valutazione dei rischi previsto dal D.Lgs. 81/08, che l'impresa redige separatamente.", { italic: true, size: 20 }));
@@ -578,7 +587,7 @@ export function corpoManuale(dossier) {
     // ogni ciclo da pagina nuova: la tabella dei pericoli e' larga e
     // spezzata fra due pagine non si legge
     if (i > 0) b.push(saltoPagina());
-    b.push(h2(`${c.code} — ${c.name}`));
+    b.push(h2(`${c.numero ? "Ciclo " + c.numero : c.code} — ${c.name}`));
     b.push(par("Classificazione: " + c.classification, { bold: true, size: 20, color: /^CCP/.test(c.classification) ? "A83A2C" : VERDE_CHIARO, after: 100 }));
     if (c.intro) b.push(p(c.intro));
     // nella riga di testo i marcatori non si scrivono: li porta il diagramma
