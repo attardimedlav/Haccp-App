@@ -9,7 +9,14 @@ import { useAuth } from "../AuthContext";
 // secondo il manuale del produttore della macchina di quel cliente.
 // Il ghiaccio a contatto con bevande e alimenti e' esso stesso un alimento.
 
+// L'ispezione settimanale e' una registrazione a se': il manuale la dichiara
+// al modulo M11 ("ispezione settimanale, sanificazione mensile") e finche'
+// l'app non la sapeva registrare il documento prometteva un controllo che non
+// lasciava traccia da nessuna parte. Non azzera il conteggio della pulizia:
+// guardare dentro il contenitore e sanificare la macchina sono due cose
+// diverse, e una non sostituisce l'altra.
 const TIPI = [
+  "Ispezione visiva settimanale",
   "Pulizia e sanificazione ordinaria",
   "Sostituzione filtro acqua",
   "Decalcificazione",
@@ -17,8 +24,10 @@ const TIPI = [
   "Pulizia straordinaria",
   "Altro",
 ];
-// Solo questi interventi azzerano il conteggio dei giorni.
+// Solo questi interventi azzerano il conteggio dei giorni della sanificazione.
 const TIPI_CHE_CONTANO = ["Pulizia e sanificazione ordinaria", "Pulizia straordinaria"];
+const TIPO_ISPEZIONE = "Ispezione visiva settimanale";
+const GIORNI_ISPEZIONE = 7;
 
 const oggi = () => new Date().toISOString().slice(0, 10);
 
@@ -52,6 +61,16 @@ export default function MacchinaGhiaccio() {
   const inRitardo = giorni === null || giorni > intervallo;
   const prossima = ultimaPulizia
     ? (() => { const d = new Date(ultimaPulizia.intervention_date); d.setDate(d.getDate() + intervallo); return d.toISOString().slice(0, 10); })()
+    : null;
+
+  // L'ispezione ha un suo conteggio, separato da quello della sanificazione.
+  const ultimaIspezione = [...items]
+    .filter((i) => i.intervention_type === TIPO_ISPEZIONE)
+    .sort((a, b) => (a.intervention_date < b.intervention_date ? 1 : -1))[0];
+  const giorniIspezione = ultimaIspezione ? giorniTra(ultimaIspezione.intervention_date, oggi()) : null;
+  const ispezioneInRitardo = giorniIspezione === null || giorniIspezione > GIORNI_ISPEZIONE;
+  const prossimaIspezione = ultimaIspezione
+    ? (() => { const d = new Date(ultimaIspezione.intervention_date); d.setDate(d.getDate() + GIORNI_ISPEZIONE); return d.toISOString().slice(0, 10); })()
     : null;
 
   const submit = async (e) => {
@@ -88,6 +107,26 @@ export default function MacchinaGhiaccio() {
             <strong style={{ color: "#B3432E" }}>Nessuna pulizia registrata.</strong>
           )}
           <div className="sub" style={{ marginTop: 2 }}>Frequenza impostata: ogni {intervallo} giorni.</div>
+        </div>
+      </div>
+
+      <div className={"dish-row" + (ispezioneInRitardo ? " row-warn" : "")} style={{ margin: "0 0 16px", display: "flex", gap: 10, alignItems: "flex-start" }}>
+        {ispezioneInRitardo ? <AlertTriangle size={18} color="#B3432E" style={{ flexShrink: 0 }} /> : <CheckCircle2 size={18} color="#2F6F4E" style={{ flexShrink: 0 }} />}
+        <div style={{ fontSize: 13.5 }}>
+          {ultimaIspezione ? (
+            <>
+              <strong>Ultima ispezione il {fmtData(ultimaIspezione.intervention_date)}</strong> ({giorniIspezione === 0 ? "oggi" : `${giorniIspezione} giorni fa`}).
+              {" "}{ispezioneInRitardo
+                ? <span style={{ color: "#B3432E" }}>Andava ripetuta entro il {fmtData(prossimaIspezione)}: è in ritardo.</span>
+                : <>Prossima entro il {fmtData(prossimaIspezione)}.</>}
+            </>
+          ) : (
+            <strong style={{ color: "#B3432E" }}>Nessuna ispezione visiva registrata.</strong>
+          )}
+          <div className="sub" style={{ marginTop: 2 }}>
+            Ogni {GIORNI_ISPEZIONE} giorni: si guarda dentro il contenitore e sul deflettore che non ci siano
+            depositi, muffe o calcare, e che la paletta sia fuori. È un controllo a vista, non una sanificazione.
+          </div>
         </div>
       </div>
 
