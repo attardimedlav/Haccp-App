@@ -84,7 +84,14 @@ function griglia(intestazione, righe, larghezze, o = {}) {
 // da frecce scritte con un carattere, che a seconda del font installato in
 // Word diventano un quadratino vuoto. Ogni ciclo ha la sua pagina.
 
-const DIA = { num: 560, box: 5620, tag: 800 };
+// Quattro colonne: il numero, il riquadro della fase, l'etichetta CP/CCP e
+// la colonna laterale, dove finisce il ramo NO di una decisione. La somma
+// resta quella di prima, cosi' il diagramma occupa la stessa larghezza.
+const DIA = { num: 520, box: 4100, tag: 780, lato: 1580 };
+const GIALLO = "FBF4DA";      // il rombo della decisione
+const GIALLO_BORDO = "C9A227";
+const GRIGIO = "F2F2F0";      // l'azione correttiva, fuori dal flusso
+const GRIGIO_BORDO = "C8CCC6";
 
 function bordiCella(colore, spessore) {
   return ["top", "left", "bottom", "right"]
@@ -123,7 +130,7 @@ function rigaDia(celle, o = {}) {
 }
 
 function tabellaDia(righe) {
-  const L = [DIA.num, DIA.box, DIA.tag];
+  const L = [DIA.num, DIA.box, DIA.tag, DIA.lato];
   const senza = ["top", "left", "bottom", "right", "insideH", "insideV"]
     .map((b) => `<w:${b} w:val="none" w:sz="0" w:space="0" w:color="auto"/>`).join("");
   return (
@@ -138,14 +145,32 @@ function tabellaDia(righe) {
 // La legenda si stampa una volta sola all'inizio della sezione: ripeterla
 // sotto ogni diagramma era rumore su ogni pagina.
 export function legendaFlusso() {
-  return par("CP  punto di controllo        CCP  punto critico di controllo",
+  return par("CP  punto di controllo        CCP  punto critico di controllo        \u25C7  decisione, con a destra che cosa fare quando la risposta è no",
     { size: 16, align: "center", color: "5A6B5E", maiuscoletto: true, before: 40, after: 200 });
 }
 
 // Una fase del flusso si scrive "Nome della fase" oppure, per marcarla,
 // "Nome della fase | CCP 1" - la stessa barra verticale usata altrove.
 function leggiFase(testo, classificazione) {
-  const pezzi = String(testo || "").split("|").map((x) => x.trim());
+  const grezzo = String(testo || "").trim();
+  // Una decisione si scrive con il punto interrogativo davanti:
+  //   ? Tempo e bollore rispettati? | NO: ripetere il trattamento
+  // Non e' una fase del processo ma un bivio, e il ramo NO non prosegue: va
+  // di lato, nella casella grigia dell'azione correttiva, perche' e' quello
+  // che fa l'operatore quando il controllo non torna. Finche' il diagramma
+  // sapeva disegnare solo una catena di scatole, il manuale diceva che cosa
+  // si controlla e taceva che cosa succede se il controllo va male.
+  if (grezzo.startsWith("?")) {
+    const pz = grezzo.slice(1).split("|").map((x) => x.trim());
+    return {
+      tipo: "decisione",
+      nome: pz[0],
+      ramo: (pz[1] || "").replace(/^NO\s*[:\-]\s*/i, ""),
+      dettaglio: "",
+      marcatore: "",
+    };
+  }
+  const pezzi = grezzo.split("|").map((x) => x.trim());
   const nome = pezzi[0];
   const dettaglio = pezzi.length > 2 ? pezzi[1] : "";
   const marcato = pezzi.length > 2 ? pezzi[2] : (pezzi.length === 2 ? pezzi[1] : "");
@@ -155,7 +180,7 @@ function leggiFase(testo, classificazione) {
   // dispensa a temperatura ambiente non sono punti critici - e marcarle
   // tutte in rosso dichiara controlli che non esistono.
   const marcatore = marcato || "CP";
-  return { nome, dettaglio, marcatore };
+  return { tipo: "fase", nome, dettaglio, marcatore };
 }
 
 function diagramma(ciclo) {
@@ -163,35 +188,63 @@ function diagramma(ciclo) {
   if (!fasi.length) return [];
   const cicloCritico = /CCP/i.test(ciclo.classification || "");
   const righe = [];
+  const vuota = (l, o) => cellaDia(par("", { size: 2, after: 0 }), l, o || {});
 
-  // intestazione piena: codice, nome e classificazione del ciclo
+  // intestazione piena: numero, nome e classificazione del ciclo
   righe.push(rigaDia(
     cellaDia(par(`${ciclo.numero ? "Ciclo " + ciclo.numero : ciclo.code}    ${ciclo.name}`, { bold: true, size: 21, color: "FFFFFF", after: 0 }),
       DIA.num + DIA.box, { sfondo: VERDE, span: 2 }) +
     cellaDia(par(cicloCritico ? "CCP" : "CP", { bold: true, size: 16, color: "FFFFFF", align: "center", after: 0 }),
-      DIA.tag, { sfondo: VERDE })
+      DIA.tag, { sfondo: VERDE }) +
+    vuota(DIA.lato)
   ));
 
-  fasi.forEach((f, i) => {
+  // il tratto di collegamento: la colonna dei numeri resta colorata e tiene
+  // la linea, le altre restano vuote
+  const tratto = () => righe.push(rigaDia(
+    vuota(DIA.num, { sfondo: VERDE_CHIARO, pad: 0 }) +
+    vuota(DIA.box, { pad: 0 }) + vuota(DIA.tag, { pad: 0 }) + vuota(DIA.lato, { pad: 0 }),
+    { altezza: 120 }
+  ));
+
+  let n = 0;
+  fasi.forEach((f) => {
+    tratto();
+
+    if (f.tipo === "decisione") {
+      // Il bivio. La colonna dei numeri resta verde perche' il flusso
+      // prosegue comunque: il ramo SI' e' la riga sotto, il ramo NO esce di
+      // lato e non torna nella catena.
+      righe.push(rigaDia(
+        vuota(DIA.num, { sfondo: VERDE_CHIARO, pad: 0 }) +
+        cellaDia(
+          par("◇  " + f.nome, { bold: true, size: 19, align: "center", after: 40 }) +
+          par("SÌ  ↓", { size: 15, align: "center", color: "6E8B78", after: 0 }),
+          DIA.box, { sfondo: GIALLO, bordo: GIALLO_BORDO, spessore: 8 }) +
+        cellaDia(par(f.ramo ? "NO  →" : "", { size: 15, align: "center", after: 0, color: "8A7320" }), DIA.tag) +
+        (f.ramo
+          ? cellaDia(par(f.ramo, { size: 16, after: 0, color: "4A4A46", interlinea: 220 }),
+              DIA.lato, { sfondo: GRIGIO, bordo: GRIGIO_BORDO, spessore: 6, padLat: 110 })
+          : vuota(DIA.lato))
+      ));
+      return;
+    }
+
+    // Le decisioni non consumano un numero: numerate sono le fasi del
+    // processo, non le domande che ci si fa dentro.
+    n += 1;
     const ccp = /CCP/i.test(f.marcatore || "");
-    // il tratto di collegamento: la colonna dei numeri resta colorata e
-    // tiene la linea, le altre due restano vuote
-    righe.push(rigaDia(
-      cellaDia(par("", { size: 2, after: 0 }), DIA.num, { sfondo: VERDE_CHIARO, pad: 0 }) +
-      cellaDia(par("", { size: 2, after: 0 }), DIA.box, { pad: 0 }) +
-      cellaDia(par("", { size: 2, after: 0 }), DIA.tag, { pad: 0 }),
-      { altezza: 120 }
-    ));
     const dentro =
       par(f.nome, { bold: true, size: 20, after: f.dettaglio ? 50 : 0 }) +
       (f.dettaglio ? par(f.dettaglio, { size: 17, color: "4A5A50", after: 0, interlinea: 240 }) : "");
     righe.push(rigaDia(
-      cellaDia(par(String(i + 1), { bold: true, size: 20, color: "FFFFFF", align: "center", after: 0 }),
+      cellaDia(par(String(n), { bold: true, size: 20, color: "FFFFFF", align: "center", after: 0 }),
         DIA.num, { sfondo: ccp ? "A83A2C" : VERDE_CHIARO }) +
       cellaDia(dentro, DIA.box,
         { sfondo: ccp ? "FBEDEC" : "F4F7F2", bordo: ccp ? "A83A2C" : "CBD9CE", spessore: ccp ? 12 : 6 }) +
       cellaDia(par(ccp ? f.marcatore : "CP",
-        { bold: ccp, size: 16, align: "center", after: 0, color: ccp ? "A83A2C" : "6E8B78" }), DIA.tag)
+        { bold: ccp, size: 16, align: "center", after: 0, color: ccp ? "A83A2C" : "6E8B78" }), DIA.tag) +
+      vuota(DIA.lato)
     ));
   });
 
@@ -495,12 +548,21 @@ export function corpoManuale(dossier) {
     ["Prodotti deperibili refrigerati", "Refrigerazione negli impianti dell'azienda, entro i limiti indicati nel prospetto delle temperature e nel rispetto dell'etichetta del produttore"],
     ["Prodotti surgelati", "Congelatore ai limiti indicati nel prospetto delle temperature, comunque non superiori a −18 °C"],
     ["Prodotti pronti acquistati da terzi", "Secondo le indicazioni del fornitore; i freschi sono venduti in giornata"],
+    // La riga dei semilavorati mancava, ed e' quella che in un laboratorio
+    // riempie davvero il frigorifero: creme, ripieni, basi, impasti pronti.
+    // Il loro tempo di vita non sta sull'etichetta di nessuno, lo decide
+    // l'azienda - e se non e' scritto da qualche parte non lo decide nessuno.
+    ["Semilavorati e preparati del laboratorio", "Refrigerazione in contenitore chiuso o coperto, con cartellino di identificazione e data di produzione; impiego entro 48 ore dalla preparazione"],
     ["Conserve e prodotti in barattolo", "Ambiente; dopo l'apertura travaso in contenitore idoneo, refrigerazione ed etichettatura con la data di apertura"],
     ["Oli e grassi", "Ambiente, al riparo dalla luce e da fonti di calore"],
     ["Bevande", "Ambiente o refrigerazione secondo l'etichetta"],
   ], [3000, 6360]));
   b.push(par("", { after: 160 }));
   b.push(p("I prodotti preparati hanno una doppia destinazione d'uso: consumo immediato all'interno del locale e vendita da asporto. Per l'asporto il prodotto è confezionato in contenitori idonei al contatto con gli alimenti; il personale informa il cliente che il prodotto è destinato al consumo in tempi brevi e che, se non consumato subito, va conservato in frigorifero."));
+  b.push(p("Ogni preparato che non viene impiegato subito è coperto o riposto in contenitore chiuso e porta un cartellino con la denominazione e la data di produzione. È la regola che tiene in piedi tutto il resto: senza data, un contenitore in frigorifero non si può né usare con fiducia né scartare con ragione, e la decisione finisce per dipendere dall'aspetto e dall'odore. Salvo diversa indicazione scritta nella scheda di lavorazione, i semilavorati si impiegano entro 48 ore dalla preparazione; oltre quel termine si eliminano."));
+  b.push(p(inApp
+    ? "Le preparazioni e le etichette si registrano nell'app, che conserva per ogni lotto la data di produzione, gli ingredienti impiegati e i lotti delle materie prime da cui proviene."
+    : "Le preparazioni e le etichette si annotano sul modulo cartaceo di produzione, conservato insieme agli altri registri."));
   b.push(p("I prodotti ottenuti da impasto surgelato o parzialmente cotto sono dichiarati come tali al consumatore, come previsto dal Reg. (UE) n. 1169/2011.", { italic: true, size: 20 }));
 
   b.push(h2("5.4 Diagrammi di flusso"));
@@ -592,7 +654,10 @@ export function corpoManuale(dossier) {
     if (c.intro) b.push(p(c.intro));
     // nella riga di testo i marcatori non si scrivono: li porta il diagramma
     if ((c.flow || []).length) {
-      const fasi = (c.flow || []).map((x) => leggiFase(x, c.classification).nome);
+      const fasi = (c.flow || [])
+        .map((x) => leggiFase(x, c.classification))
+        .filter((f) => f.tipo !== "decisione")
+        .map((f) => f.nome);
       b.push(par("Flusso:  " + fasi.join("  →  "), { size: 19, after: 140 }));
     }
     if (righe.length) {
