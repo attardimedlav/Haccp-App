@@ -3,9 +3,24 @@ import { Plus, Trash2, Thermometer } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 
+// Qui stanno solo gli impianti di CONSERVAZIONE, quelli di cui si legge e si
+// registra la temperatura tutti i giorni. L'abbattitore non è uno di questi:
+// non conserva niente, lavora a cicli, e la sua temperatura si registra alla
+// fine di ogni ciclo nella sua scheda, non una volta al giorno. Si accende con
+// l'interruttore in Configurazione, non aggiungendolo fra le attrezzature.
+// Le due voci "abbattitore positivo" e "abbattitore negativo" che c'erano qui
+// producevano un impianto da leggere ogni sera e un avviso di registrazione
+// mancante che non voleva dire niente.
 export const EQUIPMENT_TYPES = [
   { id: "frigorifero", label: "Frigorifero", min: 0, max: 4 },
   { id: "congelatore", label: "Congelatore", min: -22, max: -18 },
+];
+
+// Restano riconosciute in lettura per le righe già salvate: un impianto
+// registrato in passato come abbattitore non deve diventare "tipo
+// sconosciuto" nelle schede che lo mostrano.
+export const EQUIPMENT_TYPES_STORICI = [
+  ...EQUIPMENT_TYPES,
   { id: "abbattitore_positivo", label: "Abbattitore positivo", min: 0, max: 3 },
   { id: "abbattitore_negativo", label: "Abbattitore negativo", min: -22, max: -18 },
 ];
@@ -28,7 +43,7 @@ export default function Attrezzature() {
   };
 
   const typeLabel = (item) => {
-    const t = EQUIPMENT_TYPES.find((o) => o.id === item.equipment_type);
+    const t = EQUIPMENT_TYPES_STORICI.find((o) => o.id === item.equipment_type);
     return t ? t.label : "Personalizzato";
   };
 

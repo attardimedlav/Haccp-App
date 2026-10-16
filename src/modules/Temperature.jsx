@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Trash2, AlertTriangle, CheckCircle2, Pencil, Check, X, Refrigerator, Info } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
-import { EQUIPMENT_TYPES } from "./Attrezzature";
+import { EQUIPMENT_TYPES_STORICI } from "./Attrezzature";
 
 // Temperature.
 //
@@ -68,7 +68,7 @@ export default function Temperature() {
       .reduce((best, i) => (!best || i.created_at > best.created_at ? i : best), null);
 
   const tipoDi = (u) =>
-    u.equipment_type ? (EQUIPMENT_TYPES.find((t) => t.id === u.equipment_type)?.label || "") : "";
+    u.equipment_type ? (EQUIPMENT_TYPES_STORICI.find((t) => t.id === u.equipment_type)?.label || "") : "";
 
   const registra = async (u, inRange, nota) => {
     if (!(operator || responsabile).trim()) { setErrore("Indica chi esegue il controllo."); return; }
