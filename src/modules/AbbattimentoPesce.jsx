@@ -30,9 +30,16 @@ const SUB_TABS = [
 
 // Abbattimento rapido dei prodotti cotti: valori di buona prassi riportati nei
 // manuali di autocontrollo, confermati dall'utente il 17/09/2026.
+// Il limite critico è la TEMPERATURA al cuore. Il tempo resta scritto nel
+// registro e resta un riferimento di buona prassi, ma non fa più scattare la
+// non conformità: gli abbattitori lavorano sulla sonda e si fermano quando la
+// temperatura è raggiunta, e nessuno cronometra il ciclo. Far dipendere il
+// giudizio da due orari scritti a mano produceva non conformità finte, che
+// poi vanno trattate come se fossero vere — e un registro pieno di non
+// conformità finte è un registro che non si legge più.
 const CICLI = {
-  positivo: { label: "Positivo — da +70°C a +3°C al cuore entro 90 minuti", target: 3, minuti: 90 },
-  negativo: { label: "Negativo — da +70°C a -18°C al cuore entro 240 minuti", target: -18, minuti: 240 },
+  positivo: { label: "Positivo — da +70°C a +3°C al cuore", target: 3, minuti: 90 },
+  negativo: { label: "Negativo — da +70°C a -18°C al cuore", target: -18, minuti: 240 },
 };
 
 function minutiTrascorsi(da, a = Date.now()) {
@@ -79,7 +86,7 @@ function AbbattimentoCotti({ company }) {
     const c = CICLI[tipo];
     const temp = Number(String(tempFine).replace(",", "."));
     const minuti = minutiTrascorsi(inizioData, fineData);
-    const conforme = temp <= c.target && minuti <= c.minuti;
+    const conforme = temp <= c.target;
 
     setBusy(true);
     await add({
@@ -105,7 +112,7 @@ function AbbattimentoCotti({ company }) {
     const fine = dati.fine ? new Date(dati.fine) : new Date();
     const temp = Number(String(dati.temp).replace(",", "."));
     const minuti = minutiTrascorsi(ciclo.start_time, fine);
-    const conforme = temp <= Number(ciclo.target_temp) && minuti <= ciclo.max_minutes;
+    const conforme = temp <= Number(ciclo.target_temp);
     await update(ciclo.id, {
       end_time: fine.toISOString(),
       end_core_temp: temp,
@@ -117,7 +124,7 @@ function AbbattimentoCotti({ company }) {
   return (
     <>
       <p className="range-hint">
-        Il prodotto appena cotto va portato velocemente a bassa temperatura al cuore, letta sul display dell'abbattitore che riporta la sonda a spillone, per attraversare in fretta la fascia in cui i germi si moltiplicano: entro 90 minuti a +3°C (ciclo positivo) o entro 240 minuti a -18°C (negativo). Se il limite non viene rispettato il ciclo risulta non conforme: valuta il prodotto e registra l'azione in Non conformità. Questo non è né la bonifica del pesce crudo né il congelamento per conservazione: sono schede diverse.
+        Il prodotto appena cotto va portato velocemente a bassa temperatura al cuore, letta sul display dell'abbattitore che riporta la sonda a spillone, per attraversare in fretta la fascia in cui i germi si moltiplicano: +3°C (ciclo positivo) o -18°C (negativo). <strong>Il giudizio si fonda sulla temperatura raggiunta</strong>; la durata viene registrata e, se è lunga, segnalata come cosa da verificare — carico dell'abbattitore e pezzatura — ma non fa da sola una non conformità. Se la temperatura non è stata raggiunta il ciclo è non conforme: valuta il prodotto e registra l'azione in Non conformità. Questo non è né la bonifica del pesce crudo né il congelamento per conservazione: sono schede diverse.
       </p>
       <form onSubmit={registra} className="traccia-form">
         <div className="row-form">
@@ -161,12 +168,14 @@ function AbbattimentoCotti({ company }) {
             const trascorsi = minutiTrascorsi(c.start_time);
             const scaduto = !chiuso && trascorsi > c.max_minutes;
             const nc = c.outcome === "non_conforme";
+            // La durata lunga si segnala, non si condanna.
+            const lungo = chiuso && minutiTrascorsi(c.start_time, c.end_time) > c.max_minutes;
             return (
               <li key={c.id} className={"dish-row" + (nc || scaduto ? " row-warn" : "")}>
                 <div className="dish-top">
                   <div>
                     <strong>{c.product_name}</strong>
-                    <span className="lot-tag">{c.cycle_type === "positivo" ? "+3°C / 90 min" : "-18°C / 240 min"}</span>
+                    <span className="lot-tag">{c.cycle_type === "positivo" ? "+3°C al cuore" : "-18°C al cuore"}</span>
                   </div>
                   <button className="icon-btn" onClick={() => { if (window.confirm("Eliminare questo ciclo?")) remove(c.id); }} aria-label="Elimina"><Trash2 size={14} /></button>
                 </div>
@@ -174,19 +183,25 @@ function AbbattimentoCotti({ company }) {
                   <span className="doc-type-tag">{c.operator}</span>
                   <span className="log-time">Inizio: {fmtDateTime(c.start_time)}{c.start_core_temp != null ? ` · ${c.start_core_temp}°C` : ""}</span>
                 </div>
+                {chiuso && !nc && lungo && (
+                  <p className="range-hint" style={{ margin: "4px 0 0" }}>
+                    Durata oltre i {c.max_minutes} minuti di riferimento: controlla il carico dell'abbattitore e la pezzatura. Non è una non conformità.
+                  </p>
+                )}
                 {chiuso ? (
                   <div className="nc-resolved" style={nc ? { color: "#B3432E" } : undefined}>
                     {nc ? <XCircle size={13} color="#B3432E" /> : <CheckCircle2 size={13} color="#2F6F4E" />}
                     <span>
-                      {nc ? "NON CONFORME" : "Conforme"}: {c.end_core_temp}°C al cuore dopo {minutiTrascorsi(c.start_time, c.end_time)} minuti (fine {fmtDateTime(c.end_time)})
+                      {nc
+                        ? `NON CONFORME: temperatura al cuore ${c.end_core_temp}°C, limite ${c.target_temp}°C`
+                        : `Conforme: ${c.end_core_temp}°C al cuore`}
+                      {" "}— {minutiTrascorsi(c.start_time, c.end_time)} minuti (fine {fmtDateTime(c.end_time)})
                     </span>
                   </div>
                 ) : (
                   <>
                     <p className={scaduto ? "pest-note" : "range-hint"} style={{ marginBottom: 8, ...(scaduto ? { color: "#B3432E", fontWeight: 500 } : {}) }}>
-                      {scaduto
-                        ? `Ciclo rimasto aperto: superati i ${c.max_minutes} minuti (${trascorsi} trascorsi). Scrivi temperatura e ora di fine per completarlo.`
-                        : `Ciclo aperto da ${trascorsi} minuti — limite ${c.max_minutes}. Completalo scrivendo temperatura e ora di fine.`}
+                      {`Ciclo rimasto aperto da ${trascorsi} minuti. Scrivi la temperatura al cuore e l'ora di fine per completarlo.`}
                     </p>
                     <div className="row-form" style={{ margin: "0 0 4px" }}>
                       <input type="text" inputMode="decimal" placeholder="°C al cuore a fine" value={chiusura[c.id]?.temp ?? ""} onChange={(e) => setChiusura((s) => ({ ...s, [c.id]: { ...s[c.id], temp: e.target.value } }))} style={{ width: 150 }} />
@@ -472,12 +487,25 @@ export default function AbbattimentoPesce() {
   const [kg, setKg] = useState("");
   const [treatment, setTreatment] = useState(TREATMENT_OPTIONS[0].id);
   const [startTime, setStartTime] = useState(nowLocalInput());
+  // Nella bonifica la durata NON è un riferimento: è il limite. Il
+  // Reg. CE 853/2004 impone 24 ore a -20 °C o 15 ore a -35 °C, e un
+  // trattamento più breve non ha ucciso le larve. Per questo l'ora di fine si
+  // dichiara, non si deduce da quando l'operatore apre l'app.
+  const [endTime, setEndTime] = useState("");
+  const [batchError, setBatchError] = useState("");
   const [operator, setOperator] = useState("");
   const [busy, setBusy] = useState(false);
 
   const submitBatch = async (e) => {
     e.preventDefault();
+    setBatchError("");
     if (!productName.trim() || !kg || !operator.trim()) return;
+    if (!startTime) { setBatchError("Manca l'ora di inizio del trattamento."); return; }
+    if (!endTime) { setBatchError("Manca l'ora di fine: senza durata non si può dire che il trattamento sia stato fatto."); return; }
+    const inizio = new Date(startTime);
+    const fine = new Date(endTime);
+    if (fine <= inizio) { setBatchError("La fine deve venire dopo l'inizio."); return; }
+
     const t = TREATMENT_OPTIONS.find((o) => o.id === treatment);
     setBusy(true);
     await addBatch({
@@ -486,11 +514,13 @@ export default function AbbattimentoPesce() {
       kg: Number(kg),
       target_temp: t.temp,
       required_hours: t.hours,
-      start_time: new Date(startTime).toISOString(),
+      start_time: inizio.toISOString(),
+      completed: true,
+      completed_at: fine.toISOString(),
       operator,
     });
     setProductName(""); setKg(""); setLotId(""); setOperator("");
-    setStartTime(nowLocalInput());
+    setStartTime(nowLocalInput()); setEndTime("");
     setBusy(false);
   };
 
@@ -579,7 +609,10 @@ export default function AbbattimentoPesce() {
             il Reg. CE 853/2004 impone il congelamento preventivo del pesce destinato a essere
             consumato crudo, marinato o poco cotto, per inattivare le larve di Anisakis. I parametri
             non si scelgono: −20&nbsp;°C per 24 ore o −35&nbsp;°C per 15 ore in tutte le parti del
-            prodotto. Per congelare allo scopo di conservare si usa «Congelamento per conservazione».
+            prodotto. Qui, a differenza del raffreddamento dei cotti, <strong>la durata è il
+            limite</strong>: vanno dichiarati il trattamento scelto, l'ora di inizio e l'ora di fine,
+            e un trattamento più breve del dovuto non ha ucciso le larve. Per congelare allo scopo di
+            conservare si usa «Congelamento per conservazione».
           </p>
           <form onSubmit={submitBatch} className="traccia-form">
             <div className="row-form">
@@ -596,9 +629,14 @@ export default function AbbattimentoPesce() {
               </select>
             )}
             <div className="row-form">
-              <label className="field-label">Inizio abbattimento
-                <input type="datetime-local" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+              <label className="field-label">Inizio del trattamento
+                <input type="datetime-local" value={startTime} onChange={(e) => setStartTime(e.target.value)} required />
               </label>
+              <label className="field-label">Fine del trattamento
+                <input type="datetime-local" value={endTime} onChange={(e) => setEndTime(e.target.value)} required />
+              </label>
+            </div>
+            <div className="row-form">
               <input type="text" placeholder="Operatore" required value={operator} onChange={(e) => setOperator(e.target.value)} className="note-input" />
               {company?.haccp_manager && (
                 <button type="button" className="link-btn" onClick={() => setOperator(company.haccp_manager)}>
@@ -606,8 +644,9 @@ export default function AbbattimentoPesce() {
                 </button>
               )}
             </div>
+            {batchError && <span className="file-error"><AlertTriangle size={13} /> {batchError}</span>}
             <button type="submit" className="btn-primary" disabled={busy} style={{ alignSelf: "flex-start" }}>
-              <Plus size={16} /> Avvia ciclo di abbattimento
+              <Plus size={16} /> {busy ? "Registrazione…" : "Registra il trattamento"}
             </button>
           </form>
 
@@ -621,6 +660,12 @@ export default function AbbattimentoPesce() {
                 const elapsed = hoursElapsed(b.start_time);
                 const ready = elapsed >= b.required_hours;
                 const remaining = kgRemaining(b.id, b.kg);
+                // Ore effettive del trattamento, da quanto è stato dichiarato:
+                // è su queste che si giudica, non sull'orologio di chi guarda.
+                const oreFatte = b.completed_at
+                  ? (new Date(b.completed_at) - new Date(b.start_time)) / 3600000
+                  : null;
+                const conforme = oreFatte != null && oreFatte >= Number(b.required_hours);
                 return (
                   <li key={b.id} className="dish-row">
                     <div className="dish-top">
@@ -633,13 +678,20 @@ export default function AbbattimentoPesce() {
                     </div>
                     <div className="traccia-meta">
                       <span className="doc-type-tag">{b.target_temp}°C per {b.required_hours}h</span>
+                      {oreFatte != null && <span className="doc-type-tag">durata {oreFatte.toFixed(1)}h</span>}
                       <span className="doc-type-tag">{b.operator}</span>
                       <span className="log-time">Inizio: {fmtDateTime(b.start_time)}</span>
                     </div>
                     {b.completed ? (
-                      <div className="nc-resolved">
-                        <CheckCircle2 size={13} color="#2F6F4E" />
-                        <span>Abbattimento completato il {fmtDateTime(b.completed_at)}</span>
+                      <div className="nc-resolved" style={conforme ? undefined : { color: "#B3432E" }}>
+                        {conforme
+                          ? <CheckCircle2 size={13} color="#2F6F4E" />
+                          : <XCircle size={13} color="#B3432E" />}
+                        <span>
+                          {conforme
+                            ? `Conforme: ${oreFatte.toFixed(1)} ore a ${b.target_temp}°C (fine ${fmtDateTime(b.completed_at)})`
+                            : `NON CONFORME: ${oreFatte == null ? "durata non dichiarata" : oreFatte.toFixed(1) + " ore"}, ne servono ${b.required_hours} a ${b.target_temp}°C. Questa partita non può essere destinata al consumo crudo: si ripete il trattamento per intero, oppure si usa per preparazioni con cottura completa.`}
+                        </span>
                       </div>
                     ) : ready ? (
                       <button type="button" className="btn-primary nc-resolve-btn" onClick={() => completeBatch(b)}>
@@ -647,7 +699,7 @@ export default function AbbattimentoPesce() {
                       </button>
                     ) : (
                       <p className="range-hint" style={{ marginBottom: 0 }}>
-                        In corso — mancano ancora {(b.required_hours - elapsed).toFixed(1)} ore prima di poter confermare.
+                        Trattamento aperto dalla versione precedente: sono trascorse {elapsed.toFixed(1)} ore delle {b.required_hours} richieste.
                       </p>
                     )}
                   </li>
