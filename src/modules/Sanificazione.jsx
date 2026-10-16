@@ -69,10 +69,26 @@ export default function Sanificazione() {
       String(i.created_at).slice(0, 10) === oggiISO()
     ) || null;
 
+  // Il prodotto proposto e' quello che il consulente ha scritto nel piano
+  // quando ha redatto il manuale. L'OSA puo' cambiarlo al momento della
+  // spunta - succede, e il registro deve dire che cosa ha usato davvero - ma
+  // la proposta resta la sua.
+  //
+  // Prima, se quel prodotto non era fra i sanificanti registrati
+  // dell'azienda, l'app ci metteva al suo posto il primo della lista senza
+  // dire niente: la scelta scritta nel manuale spariva in silenzio, e il
+  // registro documentava un prodotto che nessuno aveva approvato.
   const prodottoDi = (riga) => {
     if (prodotti[riga.id] !== undefined) return prodotti[riga.id];
-    if (riga.product && sanitizers.some((s) => s.name === riga.product)) return riga.product;
+    if (riga.product) return riga.product;
     return sanitizers.length ? sanitizers[0].name : "";
+  };
+
+  // Le voci della tendina: i sanificanti dell'azienda piu', se manca, quello
+  // previsto dal piano, cosi' resta selezionabile invece di sparire.
+  const prodottiPer = (riga) => {
+    const nomi = sanitizers.map((s) => s.name);
+    return riga.product && !nomi.includes(riga.product) ? [riga.product, ...nomi] : nomi;
   };
 
   const spunta = async (riga) => {
@@ -211,14 +227,18 @@ export default function Sanificazione() {
 
                       {!log && (
                         <div className="row-form" style={{ margin: "6px 0 0" }}>
-                          {sanitizers.length > 0 ? (
+                          {prodottiPer(riga).length > 0 ? (
                             <label className="field-label" style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                               Prodotto
                               <select
                                 value={prodottoDi(riga)}
                                 onChange={(e) => setProdotti({ ...prodotti, [riga.id]: e.target.value })}
                               >
-                                {sanitizers.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
+                                {prodottiPer(riga).map((nome) => (
+                                  <option key={nome} value={nome}>
+                                    {nome}{nome === riga.product ? "  (previsto dal piano)" : ""}
+                                  </option>
+                                ))}
                                 <option value="">— nessuno —</option>
                               </select>
                             </label>
