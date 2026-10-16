@@ -70,9 +70,11 @@ export default function MacchinaGhiaccio() {
 
       <p className="login-info" style={{ margin: "16px 0" }}>
         <Info size={14} style={{ flexShrink: 0, marginTop: 1 }} />
-        L'ispezione del contenitore e la pulizia ordinaria si registrano in <strong>Sanificazione</strong>,
-        insieme a tutte le altre pulizie: lì hanno la loro frequenza e i loro avvisi. Qui si annota
-        quello che non ha una cadenza — l'intervento della ditta esterna e la pulizia straordinaria.
+        <span>
+          L'ispezione del contenitore e la pulizia ordinaria si registrano in <strong>Sanificazione</strong>,
+          insieme a tutte le altre pulizie: lì hanno la loro frequenza e i loro avvisi. Qui si annota
+          quello che non ha una cadenza — l'intervento della ditta esterna e la pulizia straordinaria.
+        </span>
       </p>
 
       <p className="login-info" style={{ marginBottom: 16, display: "block" }}>
