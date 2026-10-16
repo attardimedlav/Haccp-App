@@ -118,6 +118,14 @@ export default function Preparazioni() {
   const [ingredienti, setIngredienti] = useState("");
   const [formati, setFormati] = useState([]);
   const [lottiScelti, setLottiScelti] = useState([]);
+  // I semilavorati: altre preparazioni gia' registrate che entrano in questa.
+  // E' il pezzo che tiene insieme la catena — besciamella dentro l'arancino —
+  // e senza il quale dal prodotto finito si risale alle materie prime solo a
+  // memoria.
+  const [semilavorati, setSemilavorati] = useState([]);
+  const [quantitaKg, setQuantitaKg] = useState("");
+  const [pezzi, setPezzi] = useState("");
+  const [operatore, setOperatore] = useState("");
   const [allergeni, setAllergeni] = useState([]);
   const [tracce, setTracce] = useState([]);
   const [note, setNote] = useState("");
@@ -180,7 +188,8 @@ export default function Preparazioni() {
 
   const azzera = () => {
     setNome(""); setData(oggi()); setOra(oraAdesso()); setConservazione("frigo"); setGiorni("");
-    setIngredienti(""); setFormati([]); setLottiScelti([]); setAllergeni([]); setTracce([]); setNote("");
+    setIngredienti(""); setFormati([]); setLottiScelti([]); setSemilavorati([]); setAllergeni([]); setTracce([]); setNote("");
+    setQuantitaKg(""); setPezzi(""); setOperatore("");
     setCercaLotto(""); setErrore(""); setApertoForm(false);
   };
 
@@ -201,13 +210,27 @@ export default function Preparazioni() {
         allergens: allergeni,
         may_contain_traces: tracce,
         notes: note || null,
+        quantity_kg: quantitaKg === "" ? null : Number(String(quantitaKg).replace(",", ".")),
+        quantity_pieces: pezzi === "" ? null : Number(pezzi),
+        operator_name: operatore.trim() || null,
         created_by: session?.user?.id || null,
       });
       if (!riga) throw new Error("salvataggio non riuscito");
-      if (lottiScelti.length) {
-        const { error } = await supabase.from("preparation_ingredients").insert(
-          lottiScelti.map((idArrivo) => ({ company_id: company.id, preparation_id: riga.id, traceability_record_id: idArrivo }))
-        );
+      // Una riga per ogni origine: l'arrivo merci porta traceability_record_id,
+      // il semilavorato porta source_preparation_id. Mai tutti e due, e il
+      // vincolo sta nel database.
+      const righeOrigine = [
+        ...lottiScelti.map((idArrivo) => ({
+          company_id: company.id, preparation_id: riga.id,
+          traceability_record_id: idArrivo, source_preparation_id: null,
+        })),
+        ...semilavorati.map((idPrep) => ({
+          company_id: company.id, preparation_id: riga.id,
+          traceability_record_id: null, source_preparation_id: idPrep,
+        })),
+      ];
+      if (righeOrigine.length) {
+        const { error } = await supabase.from("preparation_ingredients").insert(righeOrigine);
         if (error) throw error;
         await reloadCollegamenti();
       }
@@ -221,15 +244,44 @@ export default function Preparazioni() {
   };
 
   const elimina = async (p) => {
+    const dove = dentroA(p);
+    if (dove.length) {
+      setErrore(
+        `"${p.product_name}" lotto ${p.lot_number} e' usata come semilavorato in: ` +
+        dove.map((x) => `${x.product_name} lotto ${x.lot_number}`).join(", ") +
+        ". Cancellarla spezzerebbe la catena: togli prima quelle preparazioni, o lasciala dov'e'.");
+      return;
+    }
     if (!window.confirm(`Eliminare la preparazione "${p.product_name}" del ${fmtData(p.production_date)}?`)) return;
     await remove(p.id); // i collegamenti spariscono da soli (on delete cascade)
     await reloadCollegamenti();
   };
 
   const lottiDi = (preparazione) => collegamenti
-    .filter((c) => c.preparation_id === preparazione.id)
+    .filter((c) => c.preparation_id === preparazione.id && c.traceability_record_id)
     .map((c) => arrivi.find((a) => a.id === c.traceability_record_id))
     .filter(Boolean);
+
+  const semilavoratiDi = (preparazione) => collegamenti
+    .filter((c) => c.preparation_id === preparazione.id && c.source_preparation_id)
+    .map((c) => preparazioni.find((p) => p.id === c.source_preparation_id))
+    .filter(Boolean);
+
+  // Dove finisce questa preparazione: serve prima di cancellarla, e serve a
+  // chi deve risalire la catena nell'altro verso durante un'allerta.
+  const dentroA = (preparazione) => collegamenti
+    .filter((c) => c.source_preparation_id === preparazione.id)
+    .map((c) => preparazioni.find((p) => p.id === c.preparation_id))
+    .filter(Boolean);
+
+  const prepLabel = (p) => `${p.product_name} — lotto ${p.lot_number} (${fmtData(p.production_date)})`;
+
+  // Si propongono come semilavorati solo le preparazioni ancora in vita: una
+  // besciamella scaduta la settimana scorsa dentro l'impasto di oggi e' quasi
+  // sempre un errore di battitura, non una lavorazione.
+  const semilavorabili = [...preparazioni]
+    .filter((p) => !p.expiry_date || p.expiry_date >= oggi())
+    .sort((a, b) => (a.production_date < b.production_date ? 1 : -1));
 
   const chip = (lista, valore, set) => (
     <button type="button" key={valore} className={"chip" + (lista.includes(valore) ? " chip-on" : "")}
@@ -275,6 +327,24 @@ export default function Preparazioni() {
             </label>
             <label className="field-label">Scadenza (giorni)<input style={{ ...cella, width: 110 }} inputMode="numeric" value={giorni} onChange={(e) => setGiorni(e.target.value)} /></label>
             <span className="sub" style={{ paddingBottom: 10 }}>{scadenza ? `Scade il ${fmtData(scadenza)}` : "Scadenza non calcolata"}</span>
+          </div>
+
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <label className="field-label">Quantità prodotta (kg)
+              <input style={{ ...cella, width: 130 }} inputMode="decimal" placeholder="es. 4,5"
+                value={quantitaKg} onChange={(e) => setQuantitaKg(e.target.value)} />
+            </label>
+            <label className="field-label">Numero pezzi
+              <input style={{ ...cella, width: 120 }} inputMode="numeric" placeholder="es. 60"
+                value={pezzi} onChange={(e) => setPezzi(e.target.value)} />
+            </label>
+            <label className="field-label">Operatore
+              <input style={{ ...cella, width: 200 }} list="operatori-usati" placeholder="Chi ha lavorato"
+                value={operatore} onChange={(e) => setOperatore(e.target.value)} />
+            </label>
+            <datalist id="operatori-usati">
+              {[...new Set(preparazioni.map((p) => p.operator_name).filter(Boolean))].map((n) => <option key={n} value={n} />)}
+            </datalist>
           </div>
 
           <label className="field-label">Ingredienti (in ordine di peso, come vanno in etichetta)
@@ -329,6 +399,33 @@ export default function Preparazioni() {
           </div>
 
           <div>
+            <div className="sub" style={{ marginBottom: 6 }}>
+              Semilavorati usati — altre preparazioni che entrano in questa
+            </div>
+            {semilavorabili.length === 0 ? (
+              <p className="range-hint">
+                Nessuna preparazione in corso di validità da usare come semilavorato.
+              </p>
+            ) : (
+              <div style={{ maxHeight: 180, overflowY: "auto", border: "1px solid #E1E5DF", borderRadius: 8, padding: 8, background: "#fff" }}>
+                {semilavorabili.slice(0, 60).map((p) => (
+                  <label key={p.id} style={{ display: "flex", gap: 8, alignItems: "flex-start", padding: "6px 2px", fontSize: 13 }}>
+                    <input type="checkbox" checked={semilavorati.includes(p.id)} style={{ marginTop: 3 }}
+                      onChange={() => setSemilavorati(semilavorati.includes(p.id)
+                        ? semilavorati.filter((x) => x !== p.id)
+                        : [...semilavorati, p.id])} />
+                    <span>{prepLabel(p)}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+            <div className="sub" style={{ marginTop: 4 }}>
+              Collegando un semilavorato, la catena resta intera: dall'arancino si arriva alla
+              besciamella e da lì ai lotti di farina e latte con cui è stata fatta.
+            </div>
+          </div>
+
+          <div>
             <div className="sub" style={{ marginBottom: 6 }}>Allergeni presenti (proposti dai lotti collegati, correggibili)</div>
             <div className="chip-grid">{ALLERGENI.map((a) => chip(allergeni, a, setAllergeni))}</div>
           </div>
@@ -370,6 +467,8 @@ export default function Preparazioni() {
         <ul className="dish-list">
           {ordinate.map((p) => {
             const lotti = lottiDi(p);
+            const semi = semilavoratiDi(p);
+            const usataIn = dentroA(p);
             const aperta = apertaScheda === p.id;
             return (
               <li key={p.id} className="dish-row">
@@ -387,6 +486,14 @@ export default function Preparazioni() {
                   <span className="doc-type-tag">Prodotto il {fmtData(p.production_date)}{p.production_time ? ` alle ${p.production_time.slice(0, 5)}` : ""}</span>
                   {p.expiry_date && <span className="doc-type-tag">Scade il {fmtData(p.expiry_date)}</span>}
                   <span className="doc-type-tag">{etichettaConservazione(p.storage_method)}</span>
+                  {(p.quantity_kg != null || p.quantity_pieces != null) && (
+                    <span className="doc-type-tag">
+                      {[p.quantity_kg != null ? `${p.quantity_kg} kg` : null,
+                        p.quantity_pieces != null ? `${p.quantity_pieces} pezzi` : null]
+                        .filter(Boolean).join(" · ")}
+                    </span>
+                  )}
+                  {p.operator_name && <span className="doc-type-tag">{p.operator_name}</span>}
                 </div>
                 {(p.allergens || []).length > 0 ? (
                   <div className="chip-grid">{p.allergens.map((a) => <span key={a} className="chip chip-static">{a}</span>)}</div>
@@ -394,7 +501,9 @@ export default function Preparazioni() {
                   <span className="none-label">Nessun allergene dichiarato</span>
                 )}
                 <button type="button" className="icon-btn" style={{ color: "#2F6F4E", fontSize: 13, gap: 4, marginTop: 6 }} onClick={() => setApertaScheda(aperta ? null : p.id)}>
-                  {aperta ? <ChevronDown size={14} /> : <ChevronRight size={14} />} {lotti.length} {lotti.length === 1 ? "lotto collegato" : "lotti collegati"}
+                  {aperta ? <ChevronDown size={14} /> : <ChevronRight size={14} />}{" "}
+                  {lotti.length} {lotti.length === 1 ? "lotto collegato" : "lotti collegati"}
+                  {semi.length > 0 && ` · ${semi.length} ${semi.length === 1 ? "semilavorato" : "semilavorati"}`}
                 </button>
                 {aperta && (
                   <div style={{ marginTop: 6, fontSize: 13 }}>
@@ -406,6 +515,20 @@ export default function Preparazioni() {
                       <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
                         {lotti.map((a) => <li key={a.id} style={{ padding: "3px 0" }}>{arrivoLabel(a)}</li>)}
                       </ul>
+                    )}
+                    {semi.length > 0 && (
+                      <div style={{ marginTop: 6 }}>
+                        <span className="sub">Semilavorati usati: </span>
+                        <ul style={{ listStyle: "none", margin: "2px 0 0", padding: 0 }}>
+                          {semi.map((x) => <li key={x.id} style={{ padding: "3px 0" }}>{prepLabel(x)}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                    {usataIn.length > 0 && (
+                      <div style={{ marginTop: 6 }}>
+                        <span className="sub">Entrata in: </span>
+                        {usataIn.map((x) => `${x.product_name} lotto ${x.lot_number}`).join(", ")}
+                      </div>
                     )}
                     {p.notes && <div style={{ marginTop: 6 }}><span className="sub">Note: </span>{p.notes}</div>}
                   </div>
