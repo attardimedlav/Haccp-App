@@ -70,7 +70,11 @@ const QUOTIDIANI = new Set(["temperature", "sanificazione", "tracciabilita", "ab
 // quotidiani: non si compilano ogni giorno ma quando si produce un lotto
 // o quando si controlla la friggitrice, e in "Ogni giorno" facevano
 // sembrare incompleta una giornata che era in regola.
-const PERIODICI = new Set(["infestanti", "acquepotabili", "acquafiltrata", "controllianalitici", "manutenzione", "preparazioni", "oliofrittura"]);
+// Abbattimento e macchina del ghiaccio non sono registrazioni quotidiane:
+// l'abbattimento si registra quando si abbatte, e la macchina del ghiaccio ha
+// cadenze proprie. Tenerli sotto "Ogni giorno" faceva credere all'OSA di avere
+// un arretrato tutte le sere.
+const PERIODICI = new Set(["infestanti", "acquepotabili", "acquafiltrata", "controllianalitici", "manutenzione", "preparazioni", "oliofrittura", "abbattimento", "ghiaccio"]);
 const EVENTI = new Set(["nonconformita"]);
 
 const WORK_SAFETY_SUB_ITEMS = [
