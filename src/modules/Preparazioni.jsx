@@ -300,7 +300,7 @@ export default function Preparazioni() {
           <p className="sub">Registra un piatto preparato in azienda, collega i lotti delle materie prime usate e stampa il cartellino.</p>
         </div>
         {!apertoForm && (
-          <button type="button" className="btn-primary" onClick={() => { setApertoForm(true); setData(oggi()); setOra(oraAdesso()); }}>
+          <button type="button" className="btn-primary" onClick={() => { setErrore(""); setApertoForm(true); setData(oggi()); setOra(oraAdesso()); }}>
             <Plus size={16} /> Nuova preparazione
           </button>
         )}
@@ -450,6 +450,17 @@ export default function Preparazioni() {
             <button type="button" className="btn-primary" style={{ background: "#fff", color: "#6E7C73", border: "1px solid #D8DED6" }} onClick={azzera}>Annulla</button>
           </div>
         </div>
+      )}
+
+      {/* L'avviso sta QUI, fuori dal modulo, e non accanto al pulsante di
+          salvataggio: il rifiuto di cancellare una preparazione usata come
+          semilavorato arriva a modulo chiuso, e un messaggio scritto dentro
+          una parte di pagina che in quel momento non esiste e' un pulsante
+          che non fa niente. */}
+      {!apertoForm && errore && (
+        <span className="file-error" style={{ margin: "12px 0" }}>
+          <AlertTriangle size={13} /> {errore}
+        </span>
       )}
 
       {!apertoForm && (
