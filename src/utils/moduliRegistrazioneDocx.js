@@ -77,6 +77,7 @@ export function corpoModuli(azienda = {}, impianti = [], piano = [], postazioni 
   const frigo = !!azienda.has_fryer;
   const ghiaccio = !!azienda.has_ice_machine;
   const abbattitore = !!azienda.has_blast_chiller;
+  const pesceCrudo = !!azienda.serves_raw_fish;
   const b = [];
 
   // ---------------- copertina ----------------
@@ -100,7 +101,16 @@ export function corpoModuli(azienda = {}, impianti = [], piano = [], postazioni 
     ["M09", "Monitoraggio insetti e roditori", "Settimanale, a cura del responsabile"],
     ["M10", "Comunicazione di ritiro del prodotto", "All'occorrenza"],
     ghiaccio ? ["M11", "Controllo della macchina del ghiaccio", "Ispezione settimanale, sanificazione periodica"] : null,
-    abbattitore ? ["M12", "Registro degli abbattimenti", "A ogni ciclo"] : null,
+    // Tre registri e non uno. "Abbattimento" nel parlare comune indica tre
+    // processi diversi - raffreddare in fretta un cotto, congelare per
+    // conservare, bonificare il pesce crudo dall'Anisakis - e un foglio solo
+    // li confonde proprio dove la confusione costa: la bonifica e' un obbligo
+    // di legge con parametri fissi, gli altri due no. I codici sono gli stessi
+    // del capitolo 10 del manuale: se il foglio in mano all'OSA non porta lo
+    // stesso numero del modulo dichiarato, in ispezione la differenza si vede.
+    abbattitore ? ["M12", "Registro del raffreddamento rapido dei prodotti cotti", "A ogni ciclo"] : null,
+    abbattitore ? ["M13", "Registro di congelamento e scongelamento", "A ogni partita congelata e a ogni uscita dal congelatore"] : null,
+    pesceCrudo ? ["M14", "Registro della bonifica preventiva del pesce crudo", "A ogni trattamento e a ogni scongelamento"] : null,
   ].filter(Boolean);
   b.push(griglia(["Codice", "Modulo", "Frequenza di compilazione"], elenco, [1000, 5560, 2800], { size: 19, altezza: 460 }));
   b.push(nota("Allergeni, formazione del personale e controlli analitici non hanno una scheda da compilare: gli allergeni sono riportati nell'elenco che l'operatore tiene esposto o a disposizione del consumatore (art. 44 del Reg. UE 1169/2011), la formazione è documentata dagli attestati degli alimentaristi e i controlli analitici dai rapporti di prova del laboratorio, tutti conservati in azienda."));
@@ -347,13 +357,40 @@ export function corpoModuli(azienda = {}, impianti = [], piano = [], postazioni 
     b.push(griglia(["DATA", "TIPO DI INTERVENTO|ispezione / sanificazione", "PRODOTTO USATO", "ESITO / NOTE", "FIRMA"], vuote(18, 5), [1100, 2600, 2200, 2360, 1100], { altezza: 460 }));
     b.push(nota("Il ghiaccio destinato al contatto con gli alimenti è ottenuto da acqua potabile (Reg. CE 852/2004, Allegato II, Capitolo VII)."));
     }
+  // ---------------- M12: il raffreddamento dei cotti ----------------
   if (abbattitore) {
     b.push(saltoPagina());
-    b.push(...capo("M12 — REGISTRO DEGLI ABBATTIMENTI"));
-    b.push(nota("Un rigo per ciclo. Si registrano temperatura e ora di inizio e di fine del ciclo."));
-    b.push(griglia(["DATA", "PRODOTTO", "QUANTITÀ", "INIZIO|ora / °C", "FINE|ora / °C", "DESTINAZIONE", "FIRMA"], vuote(18, 7), [1100, 2400, 1100, 1500, 1500, 1660, 1100], { altezza: 460 }));
-    b.push(nota("Abbattimento positivo: da +65 °C a +10 °C entro 2 ore. Abbattimento negativo: da +65 °C a −18 °C entro 4 ore e 30 minuti. Il prodotto abbattuto viene etichettato con data di produzione e termine di conservazione."));
-    }
+    b.push(...capo("M12 — REGISTRO DEL RAFFREDDAMENTO RAPIDO DEI PRODOTTI COTTI"));
+    b.push(nota("Un rigo per ciclo. Si registrano la temperatura e l'ora di inizio e di fine. Qui il tempo è un riferimento e non un limite: gli abbattitori recenti si fermano sulla sonda, e quello che conta è la temperatura raggiunta al cuore del prodotto."));
+    b.push(griglia(
+      ["DATA", "PRODOTTO", "QUANTITÀ", "INIZIO|ora / °C", "FINE|ora / °C", "DESTINAZIONE", "FIRMA"],
+      vuote(16, 7), [1000, 2250, 1000, 1450, 1450, 1360, 850], { altezza: 460 }));
+    b.push(nota("Il prodotto raffreddato si etichetta con la data di produzione e il termine di conservazione, e si conserva in frigorifero fino all'impiego. Un ciclo che non arriva alla temperatura prevista si annota su M07 con l'azione correttiva adottata."));
+
+    // ---------------- M13: il congelamento per conservare ----------------
+    b.push(saltoPagina());
+    b.push(...capo("M13 — REGISTRO DI CONGELAMENTO E SCONGELAMENTO"));
+    b.push(nota("Per le partite congelate allo scopo di conservarle: gelati, semifreddi, tavola calda, preparati di laboratorio. Non è la bonifica del pesce crudo, che è un trattamento sanitario e ha la scheda M14. La riga si chiude quando la partita esce dal congelatore."));
+    b.push(griglia(
+      // Intestazioni di parole corte: "DATA DI CONGELAMENTO" in una colonna
+      // stretta Word lo spezza a meta' parola, e un'intestazione tagliata e'
+      // la prima cosa che si nota su un foglio da firmare.
+      ["PRODOTTO E LOTTO", "PRODOTTO IL", "CONGELATO IL", "T. AL CUORE|°C", "USCITO IL", "COME SCONGELATO", "FIRMA"],
+      vuote(16, 7), [2200, 1200, 1300, 1000, 1100, 1700, 860], { altezza: 460 }));
+    b.push(nota("Ogni partita porta un cartellino con denominazione, lotto e data di congelamento. Lo scongelamento si fa in frigorifero a non più di +4 °C, oppure per cottura diretta se il prodotto è già porzionato: mai a temperatura ambiente. Il prodotto scongelato non si ricongela."));
+  }
+
+  // ---------------- M14: la bonifica del pesce crudo ----------------
+  if (pesceCrudo) {
+    b.push(saltoPagina());
+    b.push(...capo("M14 — REGISTRO DELLA BONIFICA PREVENTIVA DEL PESCE CRUDO"));
+    b.push(nota("Trattamento sanitario obbligatorio per il pesce destinato a essere consumato crudo, marinato o poco cotto (Reg. CE 853/2004, allegato III, sezione VIII). I parametri non si scelgono: −20 °C per 24 ore oppure −35 °C per 15 ore, in tutte le parti del prodotto."));
+    b.push(griglia(
+      ["DATA", "PRODOTTO E LOTTO", "QUANTITÀ", "TRATTAMENTO|−20 °C/24 h · −35 °C/15 h", "INIZIO|ora", "FINE|ora", "FIRMA"],
+      vuote(16, 7), [950, 2150, 1000, 2000, 950, 950, 1360], { altezza: 460 }));
+    b.push(nota("Qui, a differenza del raffreddamento dei cotti, la durata È il limite: un trattamento più breve del dovuto non ha ucciso le larve di Anisakis, e il prodotto non può essere servito crudo. Ora di inizio e ora di fine vanno scritte entrambe."));
+    b.push(nota("Il pesce bonificato si identifica con il lotto e la data del trattamento fino al momento del servizio. L'informazione al consumatore sul trattamento di bonifica resta esposta in sala secondo quanto previsto dal manuale."));
+  }
 
   return b;
 }
