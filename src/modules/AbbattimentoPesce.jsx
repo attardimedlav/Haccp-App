@@ -3,10 +3,17 @@ import { Plus, Trash2, AlertTriangle, CheckCircle2, Snowflake, Timer, Thermomete
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 
+// I due soli trattamenti previsti dal Reg. (CE) n. 853/2004, Allegato III,
+// sezione VIII, capitolo III, lettera D, per il pesce destinato al consumo
+// crudo. Il terzo che c'era prima — -15 °C per 96 ore — in quel regolamento
+// non esiste: circola nei manuali e l'avevamo raccolto da lì. Lasciarlo
+// significava permettere di registrare come conforme un trattamento che non
+// soddisfa l'obbligo di legge, e che il manuale della stessa azienda non
+// dichiara. I cicli già registrati con quei parametri restano negli archivi
+// con i valori che avevano: lo storico non si riscrive.
 const TREATMENT_OPTIONS = [
   { id: "-20-24", label: "-20°C per 24 ore", temp: -20, hours: 24 },
   { id: "-35-15", label: "-35°C per 15 ore (abbattitore rapido)", temp: -35, hours: 15 },
-  { id: "-15-96", label: "-15°C per 96 ore", temp: -15, hours: 96 },
 ];
 
 const SUB_TABS = [
@@ -32,29 +39,57 @@ function AbbattimentoCotti({ company }) {
   const [tipo, setTipo] = useState("positivo");
   const [inizio, setInizio] = useState(nowLocalInput());
   const [tempInizio, setTempInizio] = useState("");
+  const [fine, setFine] = useState("");
+  const [tempFine, setTempFine] = useState("");
   const [operatore, setOperatore] = useState("");
   const [busy, setBusy] = useState(false);
+  const [errore, setErrore] = useState("");
   const [, tick] = useState(0);
   React.useEffect(() => { const t = setInterval(() => tick((n) => n + 1), 30000); return () => clearInterval(t); }, []);
 
-  // chiusura di un ciclo: temperatura finale e ora di fine, per riga
+  // Chiusura dei cicli lasciati aperti dalla versione precedente, che
+  // registrava prima l'avvio e poi la fine. Si tiene finché ce ne sono: una
+  // riga aperta che non si può più chiudere resterebbe incompleta per sempre.
   const [chiusura, setChiusura] = useState({});
 
-  const avvia = async (e) => {
+  // Una registrazione sola, come sul foglio di carta: inizio, fine e le due
+  // temperature si scrivono insieme, quando il ciclo è finito. Prima bisognava
+  // avviare il ciclo, tornare un'ora e mezza dopo e chiuderlo — con l'app
+  // aperta e il telefono in mano in mezzo al lavoro. L'esito lo calcola
+  // comunque il programma, confrontando temperatura e minuti con i limiti del
+  // ciclo scelto: quello non si scrive a mano, altrimenti non sarebbe un
+  // controllo ma una dichiarazione.
+  const registra = async (e) => {
     e.preventDefault();
+    setErrore("");
     if (!prodotto.trim() || !operatore.trim()) return;
+    if (!inizio) { setErrore("Manca l'ora di inizio."); return; }
+    if (!fine) { setErrore("Manca l'ora di fine."); return; }
+    if (tempFine === "") { setErrore("Manca la temperatura al cuore a fine ciclo: è il dato su cui si giudica il ciclo."); return; }
+    const inizioData = new Date(inizio);
+    const fineData = new Date(fine);
+    if (fineData <= inizioData) { setErrore("La fine deve venire dopo l'inizio."); return; }
+
     const c = CICLI[tipo];
+    const temp = Number(String(tempFine).replace(",", "."));
+    const minuti = minutiTrascorsi(inizioData, fineData);
+    const conforme = temp <= c.target && minuti <= c.minuti;
+
     setBusy(true);
     await add({
       product_name: prodotto,
       cycle_type: tipo,
       target_temp: c.target,
       max_minutes: c.minuti,
-      start_time: new Date(inizio).toISOString(),
+      start_time: inizioData.toISOString(),
       start_core_temp: tempInizio === "" ? null : Number(String(tempInizio).replace(",", ".")),
+      end_time: fineData.toISOString(),
+      end_core_temp: temp,
+      outcome: conforme ? "conforme" : "non_conforme",
       operator: operatore,
     });
-    setProdotto(""); setTempInizio(""); setOperatore(""); setInizio(nowLocalInput());
+    setProdotto(""); setTempInizio(""); setTempFine(""); setFine("");
+    setOperatore(""); setInizio(nowLocalInput());
     setBusy(false);
   };
 
@@ -78,7 +113,7 @@ function AbbattimentoCotti({ company }) {
       <p className="range-hint">
         Il prodotto cotto va portato velocemente a bassa temperatura al cuore, misurata con la sonda: entro 90 minuti a +3°C (abbattimento positivo) o entro 240 minuti a -18°C (negativo). Se il limite non viene rispettato il ciclo risulta non conforme: valuta il prodotto e registra l'azione in Non conformità.
       </p>
-      <form onSubmit={avvia} className="traccia-form">
+      <form onSubmit={registra} className="traccia-form">
         <div className="row-form">
           <input type="text" placeholder="Prodotto (es. Ragù, Crema pasticcera)" required value={prodotto} onChange={(e) => setProdotto(e.target.value)} className="note-input" />
           <select value={tipo} onChange={(e) => setTipo(e.target.value)}>
@@ -86,17 +121,26 @@ function AbbattimentoCotti({ company }) {
           </select>
         </div>
         <div className="row-form">
-          <label className="field-label">Inizio abbattimento
-            <input type="datetime-local" value={inizio} onChange={(e) => setInizio(e.target.value)} />
+          <label className="field-label">Inizio
+            <input type="datetime-local" value={inizio} onChange={(e) => setInizio(e.target.value)} required />
           </label>
-          <input type="text" inputMode="decimal" placeholder="°C al cuore a inizio" value={tempInizio} onChange={(e) => setTempInizio(e.target.value)} style={{ width: 150 }} />
+          <input type="text" inputMode="decimal" placeholder="°C al cuore a inizio" value={tempInizio} onChange={(e) => setTempInizio(e.target.value)} style={{ width: 160 }} />
+        </div>
+        <div className="row-form">
+          <label className="field-label">Fine
+            <input type="datetime-local" value={fine} onChange={(e) => setFine(e.target.value)} required />
+          </label>
+          <input type="text" inputMode="decimal" placeholder="°C al cuore a fine" value={tempFine} onChange={(e) => setTempFine(e.target.value)} style={{ width: 160 }} required />
+        </div>
+        <div className="row-form">
           <input type="text" placeholder="Operatore" required value={operatore} onChange={(e) => setOperatore(e.target.value)} className="note-input" />
           {company?.haccp_manager && (
             <button type="button" className="link-btn" onClick={() => setOperatore(company.haccp_manager)}>Usa responsabile HACCP</button>
           )}
         </div>
+        {errore && <span className="file-error"><AlertTriangle size={13} /> {errore}</span>}
         <button type="submit" className="btn-primary" disabled={busy} style={{ alignSelf: "flex-start" }}>
-          <Plus size={16} /> Avvia abbattimento
+          <Plus size={16} /> {busy ? "Registrazione…" : "Registra l'abbattimento"}
         </button>
       </form>
 
@@ -135,8 +179,8 @@ function AbbattimentoCotti({ company }) {
                   <>
                     <p className={scaduto ? "pest-note" : "range-hint"} style={{ marginBottom: 8, ...(scaduto ? { color: "#B3432E", fontWeight: 500 } : {}) }}>
                       {scaduto
-                        ? `Superati i ${c.max_minutes} minuti (${trascorsi} trascorsi): misura la temperatura e chiudi il ciclo.`
-                        : `In corso da ${trascorsi} minuti — limite ${c.max_minutes}.`}
+                        ? `Ciclo rimasto aperto: superati i ${c.max_minutes} minuti (${trascorsi} trascorsi). Scrivi temperatura e ora di fine per completarlo.`
+                        : `Ciclo aperto da ${trascorsi} minuti — limite ${c.max_minutes}. Completalo scrivendo temperatura e ora di fine.`}
                     </p>
                     <div className="row-form" style={{ margin: "0 0 4px" }}>
                       <input type="text" inputMode="decimal" placeholder="°C al cuore a fine" value={chiusura[c.id]?.temp ?? ""} onChange={(e) => setChiusura((s) => ({ ...s, [c.id]: { ...s[c.id], temp: e.target.value } }))} style={{ width: 150 }} />
