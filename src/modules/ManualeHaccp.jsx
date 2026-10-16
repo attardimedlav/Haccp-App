@@ -74,7 +74,22 @@ export default function ManualeHaccp() {
       supabase.from("cycle_templates").select("*").eq("sector", settore).eq("active", true).order("sort_order"),
       supabase.from("procedure_templates").select("*").eq("sector", settore).eq("active", true).order("sort_order"),
     ]);
-    const listaCicli = cicli.data || [];
+    // Quali cicli, e in che ordine: la scelta fatta in Configurazione ->
+    // Cicli dell'azienda. Se per questa azienda non e' stata ancora fatta
+    // nessuna scelta, si ricade sulla regola di prima - tutto il catalogo del
+    // settore - cosi' un manuale generato oggi esce come ieri.
+    const scelta = await supabase
+      .from("company_cycles")
+      .select("cycle_template_id, sort_order, active")
+      .eq("company_id", company.id);
+    const scelti = (scelta.data || []).filter((x) => x.active);
+    let listaCicli = cicli.data || [];
+    if (scelti.length) {
+      const posizione = new Map(scelti.map((x) => [x.cycle_template_id, x.sort_order || 0]));
+      listaCicli = listaCicli
+        .filter((c) => posizione.has(c.id))
+        .sort((a, b) => posizione.get(a.id) - posizione.get(b.id));
+    }
     let righe = [];
     if (listaCicli.length) {
       const { data } = await supabase
