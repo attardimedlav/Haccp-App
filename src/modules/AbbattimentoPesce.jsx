@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Trash2, AlertTriangle, CheckCircle2, Snowflake, Timer, ThermometerSnowflake, XCircle } from "lucide-react";
+import { Plus, Trash2, AlertTriangle, CheckCircle2, Snowflake, Timer, ThermometerSnowflake, XCircle, Package } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 
@@ -16,10 +16,16 @@ const TREATMENT_OPTIONS = [
   { id: "-35-15", label: "-35°C per 15 ore (abbattitore rapido)", temp: -35, hours: 15 },
 ];
 
+// Tre processi diversi sotto la stessa scheda, e i nomi devono dirlo: uno e'
+// un trattamento sanitario imposto dalla legge, uno e' raffreddamento rapido
+// dopo la cottura, uno e' conservazione. Un'etichetta generica come
+// "abbattimento" su tutti e tre e' il modo migliore perche' un giorno qualcuno
+// registri un semifreddo credendo di aver bonificato del pesce.
 const SUB_TABS = [
-  { id: "cotti", label: "Prodotti cotti", icon: ThermometerSnowflake, requires: "has_blast_chiller" },
-  { id: "abbattimento", label: "Pesce crudo", icon: Snowflake, requires: "serves_raw_fish" },
-  { id: "scongelamento", label: "Scongelamento pesce", icon: Timer, requires: "serves_raw_fish" },
+  { id: "cotti", label: "Raffreddamento rapido (cotti)", icon: ThermometerSnowflake, requires: "has_blast_chiller" },
+  { id: "congelamento", label: "Congelamento per conservazione", icon: Package, requires: "has_blast_chiller" },
+  { id: "abbattimento", label: "Bonifica del pesce crudo", icon: Snowflake, requires: "serves_raw_fish" },
+  { id: "scongelamento", label: "Scongelamento del pesce", icon: Timer, requires: "serves_raw_fish" },
 ];
 
 // Abbattimento rapido dei prodotti cotti: valori di buona prassi riportati nei
@@ -111,7 +117,7 @@ function AbbattimentoCotti({ company }) {
   return (
     <>
       <p className="range-hint">
-        Il prodotto cotto va portato velocemente a bassa temperatura al cuore, misurata con la sonda: entro 90 minuti a +3°C (abbattimento positivo) o entro 240 minuti a -18°C (negativo). Se il limite non viene rispettato il ciclo risulta non conforme: valuta il prodotto e registra l'azione in Non conformità.
+        Il prodotto appena cotto va portato velocemente a bassa temperatura al cuore, letta sul display dell'abbattitore che riporta la sonda a spillone, per attraversare in fretta la fascia in cui i germi si moltiplicano: entro 90 minuti a +3°C (ciclo positivo) o entro 240 minuti a -18°C (negativo). Se il limite non viene rispettato il ciclo risulta non conforme: valuta il prodotto e registra l'azione in Non conformità. Questo non è né la bonifica del pesce crudo né il congelamento per conservazione: sono schede diverse.
       </p>
       <form onSubmit={registra} className="traccia-form">
         <div className="row-form">
@@ -216,6 +222,237 @@ function nowLocalInput() {
 
 function hoursElapsed(startTime) {
   return (Date.now() - new Date(startTime).getTime()) / (1000 * 60 * 60);
+}
+
+
+const oggiISO = () => new Date().toISOString().slice(0, 10);
+
+function fmtGiorno(iso) {
+  if (!iso) return "";
+  const [a, m, g] = String(iso).slice(0, 10).split("-");
+  return `${g}/${m}/${a}`;
+}
+
+function giorniDa(iso) {
+  if (!iso) return null;
+  return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+}
+
+// Registro di congelamento e scongelamento.
+//
+// Non e' l'abbattimento: quello e' un ciclo di novanta minuti con un esito,
+// questo segue una partita per tutta la vita che passa nel congelatore. La
+// domanda a cui risponde e' "da quanto tempo e' la' dentro", che e' quella che
+// fa un ispettore aprendo il freezer.
+//
+// Scegliendo una preparazione il registro si aggancia alla scheda di
+// produzione: sulla carta il sacchetto porta un numero che rimanda a un foglio
+// in archivio, qui il rimando e' il collegamento stesso, e da una partita
+// congelata si risale ai lotti delle materie prime.
+function RegistroCongelamento({ company }) {
+  const { items, add, update, remove, loading } = useTable("freezing_records", company?.id);
+  const { items: preparazioni } = useTable("preparations", company?.id);
+
+  const [preparazioneId, setPreparazioneId] = useState("");
+  const [prodotto, setProdotto] = useState("");
+  const [lotto, setLotto] = useState("");
+  const [dataProduzione, setDataProduzione] = useState("");
+  const [dataCongelamento, setDataCongelamento] = useState(oggiISO());
+  const [temperatura, setTemperatura] = useState("");
+  const [operatore, setOperatore] = useState("");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [errore, setErrore] = useState("");
+  const [scongelamento, setScongelamento] = useState({});
+
+  // Si propongono le preparazioni destinate al freddo: le altre nel
+  // congelatore non ci finiscono, e un elenco lungo di cose che non c'entrano
+  // e' un elenco che non si legge.
+  const candidate = [...preparazioni]
+    .filter((p) => p.storage_method === "freezer" || p.storage_method === "abbattuto")
+    .sort((a, b) => (a.production_date < b.production_date ? 1 : -1))
+    .slice(0, 60);
+
+  const scegliPreparazione = (id) => {
+    setPreparazioneId(id);
+    const p = preparazioni.find((x) => x.id === id);
+    if (!p) return;
+    setProdotto(p.product_name || "");
+    setLotto(p.lot_number || "");
+    setDataProduzione(p.production_date || "");
+    if (p.operator_name) setOperatore(p.operator_name);
+  };
+
+  const azzera = () => {
+    setPreparazioneId(""); setProdotto(""); setLotto(""); setDataProduzione("");
+    setDataCongelamento(oggiISO()); setTemperatura(""); setOperatore(""); setNote(""); setErrore("");
+  };
+
+  const salva = async (e) => {
+    e.preventDefault();
+    if (!prodotto.trim()) { setErrore("Manca il nome del prodotto."); return; }
+    if (!dataCongelamento) { setErrore("Manca la data di congelamento."); return; }
+    setBusy(true); setErrore("");
+    try {
+      await add({
+        preparation_id: preparazioneId || null,
+        product_name: prodotto.trim(),
+        lot_number: lotto.trim() || null,
+        production_date: dataProduzione || null,
+        freezing_date: dataCongelamento,
+        blast_temp: temperatura === "" ? null : Number(String(temperatura).replace(",", ".")),
+        operator: operatore.trim() || null,
+        notes: note.trim() || null,
+      });
+      azzera();
+    } catch (err) {
+      setErrore("Salvataggio non riuscito: " + (err?.message || err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const registraScongelamento = async (riga) => {
+    const data = scongelamento[riga.id] || oggiISO();
+    await update(riga.id, { thaw_date: data });
+    setScongelamento((s) => ({ ...s, [riga.id]: undefined }));
+  };
+
+  const nelCongelatore = items.filter((x) => !x.thaw_date);
+  const usciti = items.filter((x) => x.thaw_date);
+  const ordina = (lista, campo) => [...lista].sort((a, b) => (a[campo] < b[campo] ? 1 : -1));
+
+  const riga = (x) => {
+    const giorni = giorniDa(x.freezing_date);
+    return (
+      <li key={x.id} className="dish-row">
+        <div className="dish-top">
+          <div style={{ minWidth: 0 }}>
+            <strong>{x.product_name}</strong>
+            {x.lot_number && <span className="lot-tag">Lotto {x.lot_number}</span>}
+          </div>
+          <button className="icon-btn" onClick={() => remove(x.id)} aria-label="Elimina"><Trash2 size={14} /></button>
+        </div>
+        <div className="traccia-meta">
+          {x.production_date && <span className="doc-type-tag">Prodotto il {fmtGiorno(x.production_date)}</span>}
+          <span className="doc-type-tag">Congelato il {fmtGiorno(x.freezing_date)}</span>
+          {x.blast_temp != null && <span className="doc-type-tag">a {String(x.blast_temp).replace(".", ",")}°C</span>}
+          {x.operator && <span className="doc-type-tag">{x.operator}</span>}
+          {!x.thaw_date && giorni != null && (
+            <span className={"pill " + (giorni > 180 ? "pill-warn" : "pill-ok")}>
+              {giorni === 0 ? "congelato oggi" : `da ${giorni} ${giorni === 1 ? "giorno" : "giorni"}`}
+            </span>
+          )}
+        </div>
+        {x.notes && <p className="pest-note">{x.notes}</p>}
+        {x.thaw_date ? (
+          <div className="nc-resolved">
+            <CheckCircle2 size={13} color="#2F6F4E" />
+            <span>Scongelato il {fmtGiorno(x.thaw_date)}</span>
+          </div>
+        ) : (
+          <div className="row-form" style={{ margin: "6px 0 0" }}>
+            <label className="field-label">Data di scongelamento
+              <input type="date" value={scongelamento[x.id] || oggiISO()}
+                onChange={(e) => setScongelamento((s) => ({ ...s, [x.id]: e.target.value }))} />
+            </label>
+            <button type="button" className="link-btn" onClick={() => registraScongelamento(x)}>
+              <Timer size={14} /> Registra lo scongelamento
+            </button>
+          </div>
+        )}
+      </li>
+    );
+  };
+
+  return (
+    <>
+      <p className="login-info" style={{ margin: "0 0 14px" }}>
+        <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+        Qui si registra il congelamento fatto <strong>per conservare</strong> — gelati, semifreddi,
+        tavola calda, preparati — non la bonifica del pesce crudo, che è un trattamento sanitario con
+        parametri imposti e ha la sua scheda. Lo scongelamento si fa in frigorifero a non più di
+        +4&nbsp;°C, oppure per cottura diretta se il prodotto è già porzionato: mai a temperatura
+        ambiente, e non si ricongela.
+      </p>
+
+      <form className="traccia-form" onSubmit={salva}>
+        {candidate.length > 0 && (
+          <label className="field-label">Parti da una preparazione (facoltativo)
+            <select value={preparazioneId} onChange={(e) => scegliPreparazione(e.target.value)}>
+              <option value="">— scrivo a mano —</option>
+              {candidate.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.product_name} — lotto {p.lot_number} ({fmtGiorno(p.production_date)})
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        <div className="row-form" style={{ marginTop: 0 }}>
+          <input type="text" className="note-input" placeholder="Prodotto (es. Semifreddo al pistacchio)"
+            value={prodotto} onChange={(e) => setProdotto(e.target.value)} required />
+          <input type="text" className="note-input" placeholder="Numero identificativo o lotto"
+            value={lotto} onChange={(e) => setLotto(e.target.value)} />
+        </div>
+
+        <div className="row-form">
+          <label className="field-label">Data di produzione
+            <input type="date" value={dataProduzione} onChange={(e) => setDataProduzione(e.target.value)} />
+          </label>
+          <label className="field-label">Data di congelamento
+            <input type="date" value={dataCongelamento} onChange={(e) => setDataCongelamento(e.target.value)} required />
+          </label>
+          <label className="field-label">Temperatura raggiunta (°C)
+            <input type="text" inputMode="decimal" placeholder="es. -18"
+              value={temperatura} onChange={(e) => setTemperatura(e.target.value)} />
+          </label>
+        </div>
+
+        <div className="row-form">
+          <input type="text" className="note-input" placeholder="Operatore"
+            value={operatore} onChange={(e) => setOperatore(e.target.value)} />
+          {company?.haccp_manager && (
+            <button type="button" className="link-btn" onClick={() => setOperatore(company.haccp_manager)}>
+              Usa responsabile HACCP
+            </button>
+          )}
+        </div>
+
+        <input type="text" className="full-input" placeholder="Note (facoltative)"
+          value={note} onChange={(e) => setNote(e.target.value)} />
+
+        {errore && <span className="file-error"><AlertTriangle size={13} /> {errore}</span>}
+
+        <button type="submit" className="btn-primary" disabled={busy} style={{ alignSelf: "flex-start" }}>
+          <Plus size={16} /> {busy ? "Salvataggio…" : "Registra il congelamento"}
+        </button>
+      </form>
+
+      {loading ? (
+        <p className="sub">Caricamento…</p>
+      ) : items.length === 0 ? (
+        <div className="empty"><p>Nessun congelamento registrato.</p></div>
+      ) : (
+        <>
+          <p className="corso-sezione">Nel congelatore ({nelCongelatore.length})</p>
+          {nelCongelatore.length === 0 ? (
+            <p className="none-label" style={{ display: "block" }}>Niente in giacenza.</p>
+          ) : (
+            <ul className="dish-list">{ordina(nelCongelatore, "freezing_date").map(riga)}</ul>
+          )}
+
+          {usciti.length > 0 && (
+            <>
+              <p className="corso-sezione">Scongelati ({usciti.length})</p>
+              <ul className="dish-list">{ordina(usciti, "thaw_date").map(riga)}</ul>
+            </>
+          )}
+        </>
+      )}
+    </>
+  );
 }
 
 export default function AbbattimentoPesce() {
@@ -332,9 +569,18 @@ export default function AbbattimentoPesce() {
       </div>
 
       {subTab === "cotti" && <AbbattimentoCotti company={company} />}
+      {subTab === "congelamento" && <RegistroCongelamento company={company} />}
 
       {subTab === "abbattimento" && (
         <>
+          <p className="login-info" style={{ margin: "0 0 14px" }}>
+            <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+            Questo è un <strong>trattamento sanitario obbligatorio</strong>, non una conservazione:
+            il Reg. CE 853/2004 impone il congelamento preventivo del pesce destinato a essere
+            consumato crudo, marinato o poco cotto, per inattivare le larve di Anisakis. I parametri
+            non si scelgono: −20&nbsp;°C per 24 ore o −35&nbsp;°C per 15 ore in tutte le parti del
+            prodotto. Per congelare allo scopo di conservare si usa «Congelamento per conservazione».
+          </p>
           <form onSubmit={submitBatch} className="traccia-form">
             <div className="row-form">
               <input type="text" placeholder="Prodotto (es. Salmone)" required value={productName} onChange={(e) => setProductName(e.target.value)} className="note-input" />
