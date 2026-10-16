@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Info, ScanLine, PenLine, Check, X, Pencil, Package, BookOpen, Merge, Search, Printer, Camera } from "lucide-react";
+import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Info, ScanLine, PenLine, Check, X, Pencil, Package, BookOpen, Merge, Search, Printer, Camera, PackageX, RotateCcw } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { supabase } from "../supabaseClient";
@@ -561,7 +561,21 @@ export default function Tracciabilita() {
                       ? <span className="lot-tag" style={{ marginLeft: 0 }}>Lotto {item.lot_number}</span>
                       : <span className="lot-tag" style={{ marginLeft: 0, color: "#8A5A00", background: "#FFF1D6" }}>Lotto non indicato</span>}
                     {item.expiry_date && <span className="doc-type-tag">Scade il {fmtData(item.expiry_date)}</span>}
+                    {item.exhausted_at && (
+                      <span className="doc-type-tag" style={{ color: "#6E7C73" }}>
+                        Esaurito il {fmtData(item.exhausted_at)}
+                      </span>
+                    )}
                     <span style={{ marginLeft: "auto", display: "flex", gap: 2 }}>
+                      {/* Dichiarare finito un lotto non cancella niente: la riga
+                          resta nel registro degli arrivi e nelle preparazioni in
+                          cui è già collegata. Sparisce soltanto dall'elenco da
+                          cui si scelgono i lotti per le lavorazioni di domani. */}
+                      <button className="icon-btn" title={item.exhausted_at ? "Rimettilo fra i lotti in uso" : "Segna il lotto come esaurito"}
+                        aria-label={item.exhausted_at ? "Rimetti in uso" : "Segna esaurito"}
+                        onClick={() => update(item.id, { exhausted_at: item.exhausted_at ? null : new Date().toISOString() })}>
+                        {item.exhausted_at ? <RotateCcw size={13} /> : <PackageX size={13} />}
+                      </button>
                       <button className="icon-btn icon-btn-ok" onClick={() => setModRiga({ id: item.id, prodotto: nomeProdotto(item.product_id), quantita: item.quantity == null ? "" : String(item.quantity).replace(".", ","), unita: item.unit || "", lotto: item.lot_number || "", scadenza: item.expiry_date || "" })} aria-label="Modifica prodotto" title="Modifica"><Pencil size={13} /></button>
                       <button className="icon-btn" onClick={() => { if (window.confirm("Eliminare solo questo prodotto dal documento?")) remove(item.id); }} aria-label="Elimina prodotto"><Trash2 size={13} /></button>
                     </span>

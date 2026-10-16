@@ -402,12 +402,46 @@ export default function Preparazioni() {
 
   // Gli arrivi più recenti in cima: sono quelli che l'OSA ha in mano.
   const arriviOrdinati = [...arrivi].sort((a, b) => (a.received_date < b.received_date ? 1 : -1));
+
+  // Quali lotti hanno senso oggi.
+  //
+  // Un registro degli arrivi cresce per anni; l'elenco da cui si spuntano i
+  // lotti usati deve contenere quello che c'è in casa adesso. Tre esclusioni,
+  // in ordine di certezza: dichiarato esaurito (lo sa l'OSA), scaduto (lo dice
+  // la data), superato da arrivi più recenti dello stesso prodotto (lo
+  // suggerisce il buon senso: comprato lo zucchero lotto 03, il 01 è finito).
+  //
+  // L'ultima è una supposizione, non un fatto, e per questo non nasconde
+  // niente per sempre: restano la ricerca per numero di lotto e "mostra tutti
+  // i lotti". Se in laboratorio tengono aperti tre lotti di farina insieme,
+  // IN_USO_PER_PRODOTTO è il numero da alzare.
+  const IN_USO_PER_PRODOTTO = 2;
+  const recentiPerProdotto = (() => {
+    const visti = {};
+    const dentro = new Set();
+    arriviOrdinati.forEach((a) => {
+      const k = a.product_id || "senza-prodotto";
+      visti[k] = (visti[k] || 0) + 1;
+      if (visti[k] <= IN_USO_PER_PRODOTTO) dentro.add(a.id);
+    });
+    return dentro;
+  })();
+
+  const lottoInUso = (a) => {
+    if (a.exhausted_at) return false;
+    if (a.expiry_date && a.expiry_date < oggi()) return false;
+    return recentiPerProdotto.has(a.id);
+  };
+
+  const nascosti = arriviOrdinati.filter((a) => !lottoInUso(a)).length;
   const arriviFiltrati = arriviOrdinati.filter((a) => {
-    // Un lotto gia' spuntato resta sempre visibile: nasconderlo cambiando
-    // ricetta lo lascerebbe collegato senza che si veda.
-    if (prodottiDellaRicetta.length && !tuttiILotti
-        && !prodottiDellaRicetta.includes(a.product_id)
-        && !lottiScelti.includes(a.id)) return false;
+    // Un lotto gia' spuntato resta sempre visibile: nasconderlo lo lascerebbe
+    // collegato senza che si veda, ed e' il modo piu' rapido per scrivere in un
+    // registro una materia prima che nessuno ha piu' davanti agli occhi.
+    const scelto = lottiScelti.includes(a.id);
+    if (!tuttiILotti && !scelto && !lottoInUso(a)) return false;
+    if (prodottiDellaRicetta.length && !tuttiILotti && !scelto
+        && !prodottiDellaRicetta.includes(a.product_id)) return false;
     const t = (cercaLotto || "").trim().toLowerCase();
     if (!t) return true;
     return `${nomeProdotto(a.product_id)} ${a.lot_number || ""} ${a.supplier_name}`.toLowerCase().includes(t);
@@ -662,12 +696,21 @@ export default function Preparazioni() {
           <div>
             <div className="sub" style={{ marginBottom: 6 }}>
               Materie prime tracciate — spunta i lotti che hai usato
-              {prodottiDellaRicetta.length > 0 && !tuttiILotti && (
+              {!tuttiILotti && (prodottiDellaRicetta.length > 0 || nascosti > 0) && (
                 <>
                   {" · "}
                   <button type="button" className="icon-btn" style={{ color: "#2F6F4E", fontSize: 13 }}
                     onClick={() => setTuttiILotti(true)}>
-                    mostra tutti i lotti
+                    mostra tutti i lotti{nascosti > 0 ? ` (${nascosti} nascosti)` : ""}
+                  </button>
+                </>
+              )}
+              {tuttiILotti && (
+                <>
+                  {" · "}
+                  <button type="button" className="icon-btn" style={{ color: "#2F6F4E", fontSize: 13 }}
+                    onClick={() => setTuttiILotti(false)}>
+                    mostra solo quelli in uso
                   </button>
                 </>
               )}
