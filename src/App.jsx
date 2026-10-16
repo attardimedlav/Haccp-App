@@ -65,7 +65,11 @@ const STATIC_TABS = [
 // allergeni, attestati, documenti), poi i registri di ogni giorno, poi i
 // controlli periodici, infine le non conformità, che si aprono solo quando
 // succede qualcosa.
-const QUOTIDIANI = new Set(["temperature", "sanificazione", "tracciabilita", "abbattimento", "ghiaccio"]);
+// Abbattimento e macchina del ghiaccio stanno SOLO fra i controlli periodici
+// (vedi PERIODICI qui sotto). Erano rimasti anche qui, e il risultato era che
+// comparivano due volte nel menu, una per sezione: l'OSA vedeva due voci
+// identiche e non sapeva quale aprire.
+const QUOTIDIANI = new Set(["temperature", "sanificazione", "tracciabilita"]);
 // Preparazioni ed etichette e Olio di frittura stanno qui e non fra i
 // quotidiani: non si compilano ogni giorno ma quando si produce un lotto
 // o quando si controlla la friggitrice, e in "Ogni giorno" facevano
