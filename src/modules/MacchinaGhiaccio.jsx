@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Trash2, CheckCircle2, AlertTriangle, Info } from "lucide-react";
+import { Plus, Trash2, Info } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 
@@ -9,25 +9,24 @@ import { useAuth } from "../AuthContext";
 // secondo il manuale del produttore della macchina di quel cliente.
 // Il ghiaccio a contatto con bevande e alimenti e' esso stesso un alimento.
 
-// L'ispezione settimanale e' una registrazione a se': il manuale la dichiara
-// al modulo M11 ("ispezione settimanale, sanificazione mensile") e finche'
-// l'app non la sapeva registrare il documento prometteva un controllo che non
-// lasciava traccia da nessuna parte. Non azzera il conteggio della pulizia:
-// guardare dentro il contenitore e sanificare la macchina sono due cose
-// diverse, e una non sostituisce l'altra.
+// Che cosa resta qui dentro, dal 16/10/2026.
+//
+// La pulizia ordinaria e l'ispezione del contenitore sono passate nel piano
+// di pulizia, cioe' nella scheda Sanificazione: sono operazioni ricorrenti
+// con una frequenza, e una frequenza genera un avviso in Panoramica solo se
+// e' una riga del piano. Averle anche qui significava due registri per la
+// stessa cosa, e chi spuntava l'una lasciava l'altra scoperta.
+//
+// Qui restano gli interventi che una frequenza non ce l'hanno: quelli della
+// ditta esterna e la pulizia straordinaria, che si fa quando succede
+// qualcosa - un guasto, un'anomalia nel ghiaccio, un fermo prolungato.
 const TIPI = [
-  "Ispezione visiva settimanale",
-  "Pulizia e sanificazione ordinaria",
+  "Intervento di ditta esterna",
+  "Pulizia straordinaria",
   "Sostituzione filtro acqua",
   "Decalcificazione",
-  "Manutenzione del tecnico",
-  "Pulizia straordinaria",
   "Altro",
 ];
-// Solo questi interventi azzerano il conteggio dei giorni della sanificazione.
-const TIPI_CHE_CONTANO = ["Pulizia e sanificazione ordinaria", "Pulizia straordinaria"];
-const TIPO_ISPEZIONE = "Ispezione visiva settimanale";
-const GIORNI_ISPEZIONE = 7;
 
 const oggi = () => new Date().toISOString().slice(0, 10);
 
@@ -37,15 +36,10 @@ function fmtData(iso) {
   return `${g}/${m}/${a}`;
 }
 
-function giorniTra(isoDa, isoA) {
-  return Math.round((new Date(isoA) - new Date(isoDa)) / 86400000);
-}
-
 export default function MacchinaGhiaccio() {
   const { company } = useAuth();
   const { items, add, remove, loading } = useTable("ice_machine_logs", company?.id);
   const { items: sanificanti } = useTable("sanitizers", company?.id);
-  const intervallo = company?.ice_machine_cleaning_days || 30;
 
   const [data, setData] = useState(oggi());
   const [tipo, setTipo] = useState(TIPI[0]);
@@ -53,25 +47,6 @@ export default function MacchinaGhiaccio() {
   const [operatore, setOperatore] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
-
-  const ultimaPulizia = [...items]
-    .filter((i) => TIPI_CHE_CONTANO.includes(i.intervention_type))
-    .sort((a, b) => (a.intervention_date < b.intervention_date ? 1 : -1))[0];
-  const giorni = ultimaPulizia ? giorniTra(ultimaPulizia.intervention_date, oggi()) : null;
-  const inRitardo = giorni === null || giorni > intervallo;
-  const prossima = ultimaPulizia
-    ? (() => { const d = new Date(ultimaPulizia.intervention_date); d.setDate(d.getDate() + intervallo); return d.toISOString().slice(0, 10); })()
-    : null;
-
-  // L'ispezione ha un suo conteggio, separato da quello della sanificazione.
-  const ultimaIspezione = [...items]
-    .filter((i) => i.intervention_type === TIPO_ISPEZIONE)
-    .sort((a, b) => (a.intervention_date < b.intervention_date ? 1 : -1))[0];
-  const giorniIspezione = ultimaIspezione ? giorniTra(ultimaIspezione.intervention_date, oggi()) : null;
-  const ispezioneInRitardo = giorniIspezione === null || giorniIspezione > GIORNI_ISPEZIONE;
-  const prossimaIspezione = ultimaIspezione
-    ? (() => { const d = new Date(ultimaIspezione.intervention_date); d.setDate(d.getDate() + GIORNI_ISPEZIONE); return d.toISOString().slice(0, 10); })()
-    : null;
 
   const submit = async (e) => {
     e.preventDefault();
@@ -89,46 +64,16 @@ export default function MacchinaGhiaccio() {
       <div className="panel-head">
         <div>
           <h2>Macchina del ghiaccio</h2>
-          <p className="sub">Registro di pulizia e sanificazione. Il ghiaccio a contatto con bevande e alimenti è esso stesso un alimento.</p>
+          <p className="sub">Interventi straordinari e della ditta esterna. Il ghiaccio a contatto con bevande e alimenti è esso stesso un alimento.</p>
         </div>
       </div>
 
-      <div className={"dish-row" + (inRitardo ? " row-warn" : "")} style={{ margin: "16px 0", display: "flex", gap: 10, alignItems: "flex-start" }}>
-        {inRitardo ? <AlertTriangle size={18} color="#B3432E" style={{ flexShrink: 0 }} /> : <CheckCircle2 size={18} color="#2F6F4E" style={{ flexShrink: 0 }} />}
-        <div style={{ fontSize: 13.5 }}>
-          {ultimaPulizia ? (
-            <>
-              <strong>Ultima pulizia il {fmtData(ultimaPulizia.intervention_date)}</strong> ({giorni === 0 ? "oggi" : `${giorni} giorni fa`}).
-              {" "}{inRitardo
-                ? <span style={{ color: "#B3432E" }}>Andava ripetuta entro il {fmtData(prossima)}: è in ritardo.</span>
-                : <>Prossima entro il {fmtData(prossima)}.</>}
-            </>
-          ) : (
-            <strong style={{ color: "#B3432E" }}>Nessuna pulizia registrata.</strong>
-          )}
-          <div className="sub" style={{ marginTop: 2 }}>Frequenza impostata: ogni {intervallo} giorni.</div>
-        </div>
-      </div>
-
-      <div className={"dish-row" + (ispezioneInRitardo ? " row-warn" : "")} style={{ margin: "0 0 16px", display: "flex", gap: 10, alignItems: "flex-start" }}>
-        {ispezioneInRitardo ? <AlertTriangle size={18} color="#B3432E" style={{ flexShrink: 0 }} /> : <CheckCircle2 size={18} color="#2F6F4E" style={{ flexShrink: 0 }} />}
-        <div style={{ fontSize: 13.5 }}>
-          {ultimaIspezione ? (
-            <>
-              <strong>Ultima ispezione il {fmtData(ultimaIspezione.intervention_date)}</strong> ({giorniIspezione === 0 ? "oggi" : `${giorniIspezione} giorni fa`}).
-              {" "}{ispezioneInRitardo
-                ? <span style={{ color: "#B3432E" }}>Andava ripetuta entro il {fmtData(prossimaIspezione)}: è in ritardo.</span>
-                : <>Prossima entro il {fmtData(prossimaIspezione)}.</>}
-            </>
-          ) : (
-            <strong style={{ color: "#B3432E" }}>Nessuna ispezione visiva registrata.</strong>
-          )}
-          <div className="sub" style={{ marginTop: 2 }}>
-            Ogni {GIORNI_ISPEZIONE} giorni: si guarda dentro il contenitore e sul deflettore che non ci siano
-            depositi, muffe o calcare, e che la paletta sia fuori. È un controllo a vista, non una sanificazione.
-          </div>
-        </div>
-      </div>
+      <p className="login-info" style={{ margin: "16px 0" }}>
+        <Info size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+        L'ispezione del contenitore e la pulizia ordinaria si registrano in <strong>Sanificazione</strong>,
+        insieme a tutte le altre pulizie: lì hanno la loro frequenza e i loro avvisi. Qui si annota
+        quello che non ha una cadenza — l'intervento della ditta esterna e la pulizia straordinaria.
+      </p>
 
       <p className="login-info" style={{ marginBottom: 16, display: "block" }}>
         <span style={{ display: "flex", gap: 6, fontWeight: 600, marginBottom: 4 }}><Info size={14} style={{ flexShrink: 0, marginTop: 1 }} /> Buone pratiche di igiene</span>
