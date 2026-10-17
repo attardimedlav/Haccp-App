@@ -78,6 +78,9 @@ export function corpoModuli(azienda = {}, impianti = [], piano = [], postazioni 
   const ghiaccio = !!azienda.has_ice_machine;
   const abbattitore = !!azienda.has_blast_chiller;
   const pesceCrudo = !!azienda.serves_raw_fish;
+  // La tracciabilita' e' accesa salvo che il consulente la spenga: dove c'e',
+  // c'e' anche una lavorazione da registrare.
+  const tracciabilita = azienda.active_traceability !== false;
   const b = [];
 
   // ---------------- copertina ----------------
@@ -111,6 +114,7 @@ export function corpoModuli(azienda = {}, impianti = [], piano = [], postazioni 
     abbattitore ? ["M12", "Registro del raffreddamento rapido dei prodotti cotti", "A ogni ciclo"] : null,
     abbattitore ? ["M13", "Registro di congelamento e scongelamento", "A ogni partita congelata e a ogni uscita dal congelatore"] : null,
     pesceCrudo ? ["M14", "Registro della bonifica preventiva del pesce crudo", "A ogni trattamento e a ogni scongelamento"] : null,
+    tracciabilita ? ["M15", "Scheda di produzione e cartellino del preparato", "A ogni lotto prodotto in laboratorio"] : null,
   ].filter(Boolean);
   b.push(griglia(["Codice", "Modulo", "Frequenza di compilazione"], elenco, [1000, 5560, 2800], { size: 19, altezza: 460 }));
   b.push(nota("Allergeni, formazione del personale e controlli analitici non hanno una scheda da compilare: gli allergeni sono riportati nell'elenco che l'operatore tiene esposto o a disposizione del consumatore (art. 44 del Reg. UE 1169/2011), la formazione è documentata dagli attestati degli alimentaristi e i controlli analitici dai rapporti di prova del laboratorio, tutti conservati in azienda."));
@@ -390,6 +394,57 @@ export function corpoModuli(azienda = {}, impianti = [], piano = [], postazioni 
       vuote(16, 7), [950, 2150, 1000, 2000, 950, 950, 1360], { altezza: 460 }));
     b.push(nota("Qui, a differenza del raffreddamento dei cotti, la durata È il limite: un trattamento più breve del dovuto non ha ucciso le larve di Anisakis, e il prodotto non può essere servito crudo. Ora di inizio e ora di fine vanno scritte entrambe."));
     b.push(nota("Il pesce bonificato si identifica con il lotto e la data del trattamento fino al momento del servizio. L'informazione al consumatore sul trattamento di bonifica resta esposta in sala secondo quanto previsto dal manuale."));
+  }
+
+  // ---------------- M15: la scheda di produzione ----------------
+  //
+  // E' il foglio che corrisponde alla scheda Preparazioni dell'app, ed era
+  // l'ultimo pezzo che in cartaceo non esisteva: l'OSA che lavora su carta
+  // registrava gli arrivi e le temperature ma non quello che produceva, cioe'
+  // proprio l'anello che tiene insieme la catena — da un prodotto finito ai
+  // lotti delle materie prime con cui e' stato fatto.
+  //
+  // Una scheda per lotto, non una riga: gli ingredienti sono piu' d'uno e la
+  // riga di una tabella non li contiene. Il riquadro in fondo e' il cartellino
+  // da ritagliare e attaccare al prodotto, per chi non ha la stampante di
+  // etichette.
+  if (tracciabilita) {
+    b.push(saltoPagina());
+    b.push(...capo("M15 — SCHEDA DI PRODUZIONE E CARTELLINO DEL PREPARATO"));
+    b.push(nota("Una scheda per ogni lotto prodotto in laboratorio: semilavorati, creme, ripieni, impasti, prodotti finiti. Il numero di lotto si scrive una volta qui e si ripete sul cartellino del prodotto."));
+    b.push(scheda([
+      ["Denominazione del preparato", " "],
+      ["Numero di lotto", " "],
+      ["Data e ora di produzione", " "],
+      ["Quantità prodotta (kg / pezzi)", " "],
+      ["Operatore", " "],
+    ], [3600, 5760]));
+    b.push(par("", { after: 120 }));
+    b.push(nota("Materie prime impiegate: per ognuna il lotto scritto sulla confezione o sul documento di consegna. È questo elenco che, partendo da un prodotto finito, permette di risalire ai fornitori."));
+    b.push(griglia(["INGREDIENTE", "FORNITORE", "LOTTO", "SCADENZA"], vuote(8, 4), [3000, 2600, 2000, 1760], { altezza: 420 }));
+    b.push(par("", { after: 120 }));
+    b.push(nota("Semilavorati già registrati che entrano in questa preparazione: si indica il loro numero di lotto, non gli ingredienti, che sono già scritti nella loro scheda."));
+    b.push(griglia(["SEMILAVORATO", "LOTTO", "DATA DI PRODUZIONE"], vuote(3, 3), [4400, 2400, 2560], { altezza: 420 }));
+    b.push(par("", { after: 140 }));
+    b.push(scheda([
+      ["Allergeni presenti", " "],
+      ["Può contenere tracce di", " "],
+      ["Conservazione (frigo / freezer / ambiente)", " "],
+      ["Da consumarsi entro", " "],
+    ], [3600, 5760]));
+    b.push(nota("Gli allergeni si leggono dalle etichette delle materie prime impiegate e si riportano qui: sono gli stessi che vanno dichiarati al consumatore (Reg. UE 1169/2011)."));
+
+    b.push(saltoPagina());
+    b.push(...capo("M15/a — CARTELLINI DA RITAGLIARE"));
+    b.push(nota("Da compilare e attaccare al contenitore. Un preparato senza cartellino non si può né usare con fiducia né scartare con ragione, e la decisione finisce per dipendere dall'aspetto e dall'odore."));
+    const cartellino = () => griglia(
+      ["DENOMINAZIONE", "LOTTO", "PRODOTTO IL", "DA CONSUMARSI ENTRO", "ALLERGENI"],
+      vuote(1, 5), [2600, 1500, 1500, 1900, 1860], { altezza: 620 });
+    for (let i = 0; i < 4; i += 1) {
+      b.push(cartellino());
+      b.push(par("", { after: 200 }));
+    }
+    b.push(nota("Chi ha la stampante di etichette non usa questo foglio: l'etichetta si stampa dalla scheda Preparazioni con i dati già scritti."));
   }
 
   return b;

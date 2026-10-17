@@ -790,7 +790,14 @@ export function corpoManuale(dossier) {
     ["M12", "Registro del raffreddamento rapido dei prodotti cotti", "A ogni ciclo", "has_blast_chiller"],
     ["M13", "Registro di congelamento e scongelamento", "A ogni partita congelata e a ogni uscita dal congelatore", "has_blast_chiller"],
     ["M14", "Registro della bonifica preventiva del pesce crudo", "A ogni trattamento e a ogni scongelamento", "serves_raw_fish"],
-  ].filter(([, , , flag]) => !flag || azienda[flag]);
+    // La scheda di produzione e' l'anello che tiene insieme la catena: da un
+    // prodotto finito ai lotti delle materie prime con cui e' stato fatto.
+    // Nell'app e' la scheda Preparazioni; su carta mancava.
+    ["M15", "Scheda di produzione e cartellino del preparato", "A ogni lotto prodotto in laboratorio", "__tracciabilita"],
+  ].filter(([, , , flag]) => {
+    if (flag === "__tracciabilita") return azienda.active_traceability !== false;
+    return !flag || azienda[flag];
+  });
   b.push(griglia(["N.", "Modulo", "Frequenza di compilazione"], moduli.map(([n, m, f]) => [n, m, f]), [900, 5000, 3460]));
   b.push(par("", { after: 180 }));
   b.push(p("Allergeni, formazione del personale e controlli analitici non hanno una scheda da compilare: gli allergeni sono riportati nell'elenco che l'operatore tiene esposto o a disposizione del consumatore ai sensi dell'art. 44 del Reg. (UE) n. 1169/2011, la formazione è documentata dagli attestati degli alimentaristi e i controlli analitici dai rapporti di prova del laboratorio, tutti conservati in azienda."));
