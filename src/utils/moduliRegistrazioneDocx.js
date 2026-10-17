@@ -81,6 +81,7 @@ export function corpoModuli(azienda = {}, impianti = [], piano = [], postazioni 
   // La tracciabilita' e' accesa salvo che il consulente la spenga: dove c'e',
   // c'e' anche una lavorazione da registrare.
   const tracciabilita = azienda.active_traceability !== false;
+  const cessioni = !!azienda.sells_to_businesses;
   const b = [];
 
   // ---------------- copertina ----------------
@@ -115,6 +116,7 @@ export function corpoModuli(azienda = {}, impianti = [], piano = [], postazioni 
     abbattitore ? ["M13", "Registro di congelamento e scongelamento", "A ogni partita congelata e a ogni uscita dal congelatore"] : null,
     pesceCrudo ? ["M14", "Registro della bonifica preventiva del pesce crudo", "A ogni trattamento e a ogni scongelamento"] : null,
     tracciabilita ? ["M15", "Scheda di produzione e cartellino del preparato", "A ogni lotto prodotto in laboratorio"] : null,
+    cessioni ? ["M16", "Registro delle cessioni ad altre imprese", "A ogni consegna a un'altra impresa"] : null,
   ].filter(Boolean);
   b.push(griglia(["Codice", "Modulo", "Frequenza di compilazione"], elenco, [1000, 5560, 2800], { size: 19, altezza: 460 }));
   b.push(nota("Allergeni, formazione del personale e controlli analitici non hanno una scheda da compilare: gli allergeni sono riportati nell'elenco che l'operatore tiene esposto o a disposizione del consumatore (art. 44 del Reg. UE 1169/2011), la formazione è documentata dagli attestati degli alimentaristi e i controlli analitici dai rapporti di prova del laboratorio, tutti conservati in azienda."));
@@ -445,6 +447,17 @@ export function corpoModuli(azienda = {}, impianti = [], piano = [], postazioni 
       b.push(par("", { after: 200 }));
     }
     b.push(nota("Chi ha la stampante di etichette non usa questo foglio: l'etichetta si stampa dalla scheda Preparazioni con i dati già scritti."));
+  }
+
+  // ---------------- M16: il passo avanti ----------------
+  if (cessioni) {
+    b.push(saltoPagina());
+    b.push(...capo("M16 — REGISTRO DELLE CESSIONI AD ALTRE IMPRESE"));
+    b.push(nota("Si registra quello che viene ceduto ad altre imprese — bar, ristoranti, negozi, mense, grossisti — come previsto dall'art. 18 del Reg. (CE) n. 178/2002. Le vendite al consumatore finale non si registrano."));
+    b.push(griglia(
+      ["DATA", "DESTINATARIO", "PRODOTTO", "LOTTO", "QUANTITÀ", "DOCUMENTO", "FIRMA"],
+      vuote(16, 7), [1000, 2200, 2000, 1200, 1000, 1200, 760], { altezza: 460 }));
+    b.push(nota("Se un lotto viene richiamato, è da questo foglio che si ricava l'elenco delle imprese da avvisare. Il documento di accompagnamento (DDT, fattura) si conserva insieme al registro."));
   }
 
   return b;

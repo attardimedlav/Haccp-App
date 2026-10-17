@@ -795,6 +795,17 @@ export function corpoManuale(dossier) {
   b.push(p(inApp
     ? "Le merci in arrivo si registrano nella scheda Arrivo merci e tracciabilità, con fornitore, prodotto, lotto, data di consegna e documento di riferimento. Ogni lavorazione fatta in laboratorio si registra nella scheda Preparazioni, che genera un numero di lotto interno e tiene il collegamento con i lotti delle materie prime impiegate e con gli eventuali semilavorati già registrati. Dalla preparazione si stampa il cartellino da applicare al prodotto."
     : "Le merci in arrivo si registrano sul modulo M05 «Arrivo merci e tracciabilità», con fornitore, prodotto, lotto, data di consegna e documento di riferimento. Ogni lavorazione fatta in laboratorio si registra sul modulo M15 «Scheda di produzione», che porta il numero di lotto interno, i lotti delle materie prime impiegate e gli eventuali semilavorati, e si completa con il cartellino da applicare al prodotto."));
+  // Il passo avanti si scrive solo dove esiste davvero: dichiarare un
+  // registro delle cessioni in un bar che vende al banco significa prometterlo
+  // vuoto per sempre.
+  if (azienda.sells_to_businesses) {
+    b.push(p(inApp
+      ? "I prodotti ceduti ad altre imprese — bar, ristoranti, negozi, mense, grossisti — si registrano nella scheda Cessioni ad altre imprese, con data, destinatario, prodotto, lotto, quantità e documento di accompagnamento. È il passo avanti richiesto dall'art. 18: da un lotto si risale a chi lo ha ricevuto."
+      : "I prodotti ceduti ad altre imprese — bar, ristoranti, negozi, mense, grossisti — si registrano sul modulo M16 «Registro delle cessioni ad altre imprese», con data, destinatario, prodotto, lotto, quantità e documento di accompagnamento. È il passo avanti richiesto dall'art. 18: da un lotto si risale a chi lo ha ricevuto."));
+    b.push(p("Le vendite al consumatore finale non si registrano: l'obbligo riguarda le cessioni fra imprese."));
+  } else {
+    b.push(p("L'azienda cede i propri prodotti esclusivamente al consumatore finale: il passo avanti previsto dall'art. 18 non richiede registrazioni nominative, perché l'obbligo riguarda le cessioni ad altre imprese. Se l'attività iniziasse a fornire altri operatori, la registrazione delle cessioni va attivata."));
+  }
   b.push(p("Il numero di lotto interno è costruito dalla data di produzione e da un progressivo della giornata: non contiene informazioni da interpretare, serve solo a ritrovare la scheda."));
   b.push(p("I preparati conservati portano un cartellino con denominazione, lotto, data di produzione e termine entro cui vanno impiegati. Un contenitore senza cartellino non si usa e non si conserva: si elimina."));
 
@@ -852,6 +863,7 @@ export function corpoManuale(dossier) {
     // prodotto finito ai lotti delle materie prime con cui e' stato fatto.
     // Nell'app e' la scheda Preparazioni; su carta mancava.
     ["M15", "Scheda di produzione e cartellino del preparato", "A ogni lotto prodotto in laboratorio", "__tracciabilita"],
+    ["M16", "Registro delle cessioni ad altre imprese", "A ogni consegna a un'altra impresa", "sells_to_businesses"],
   ].filter(([, , , flag]) => {
     if (flag === "__tracciabilita") return azienda.active_traceability !== false;
     return !flag || azienda[flag];
