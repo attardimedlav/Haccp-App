@@ -753,7 +753,65 @@ export function corpoManuale(dossier) {
   b.push(p("In caso di esito non conforme si applicano le azioni correttive previste dalla fase o dalla procedura interessata, si ripete il campionamento dopo l'intervento e si registra l'esito fra le non conformità."));
 
   // ---------------- 10. moduli ----------------
-  b.push(h1("10. Allegati e moduli di registrazione"));
+  // ---------------- 10. rintracciabilita' ----------------
+  //
+  // Il capitolo mancava del tutto: il Reg. 178/2002 compariva solo
+  // nell'elenco delle norme. E' il capitolo dove si gioca la distinzione che
+  // in ispezione conta davvero, e che quasi tutti i manuali sbagliano:
+  //
+  //   - la rintracciabilita' ESTERNA (un passo indietro, un passo avanti) e'
+  //     un obbligo di legge, art. 18 del Reg. 178/2002;
+  //   - la rintracciabilita' INTERNA - collegare i lotti in entrata ai
+  //     prodotti preparati - NON e' imposta: lo dicono gli Orientamenti della
+  //     Commissione del 2010 e l'Intesa Stato-Regioni del 28/07/2005, che
+  //     all'art. 5.2 scrive che il regolamento "non obbliga gli operatori ad
+  //     istituire un collegamento" fra entrata e uscita.
+  //
+  // Dichiararla obbligatoria sarebbe un errore e si ritorcerebbe contro
+  // l'azienda: quello che il manuale dichiara diventa vincolante per chi lo
+  // adotta, e promettere piu' di quanto si fa e' il modo piu' veloce di
+  // prendere una prescrizione. Il manuale dice quindi la verita': l'azienda
+  // la tiene per scelta, perche' e' quello che le permette di ritirare un
+  // lotto invece di buttare tutto, e perche' senza conoscere la composizione
+  // di quello che prepara non potrebbe ne' fare l'analisi dei pericoli ne'
+  // dire al cliente che allergeni contiene.
+  b.push(h1("10. Rintracciabilità, ritiro e richiamo"));
+
+  b.push(h2("10.1 Che cosa impone la legge"));
+  b.push(p("L'art. 18 del Reg. (CE) n. 178/2002 impone a ogni impresa alimentare di sapere, e di poter dimostrare all'Autorità di controllo, da chi ha ricevuto ogni alimento e a chi lo ha ceduto: è la regola detta «un passo indietro, un passo avanti». L'obbligo riguarda le imprese, non il consumatore finale: la vendita al banco non va tracciata nominativamente."));
+  b.push(p("Il regolamento fissa l'obiettivo e non i mezzi: non prescrive un modulo, un programma o una forma particolare. Devono però esistere documenti che permettano di risalire al fornitore e di identificare la merce — documenti di trasporto, fatture, etichette, registrazioni interne — conservati e disponibili in tempi brevi."));
+  b.push(p("Per gli alimenti di origine animale il Reg. (UE) n. 931/2011 aggiunge le informazioni minime che devono accompagnare la fornitura fra imprese: descrizione, volume o quantità, nome e indirizzo di chi spedisce e di chi riceve, data di spedizione e, quando previsto, il riferimento al lotto."));
+  b.push(p("Il lotto identifica la partita di prodotto preconfezionato ed è obbligatorio sulle confezioni destinate al consumatore, secondo il D.Lgs. 231/2017; sui prodotti venduti sfusi non è richiesto."));
+
+  b.push(h2("10.2 Che cosa la legge non impone, e perché l'azienda lo fa lo stesso"));
+  b.push(p("Collegare i lotti delle materie prime in entrata ai prodotti preparati in laboratorio — quella che si chiama rintracciabilità interna — non è imposto dall'art. 18. Lo confermano gli Orientamenti della Commissione europea del 2010 sull'attuazione degli articoli 11, 12, 14, 17, 18, 19 e 20 del Reg. 178/2002, e l'Intesa Stato-Regioni del 28 luglio 2005, che all'art. 5.2 afferma espressamente che il regolamento non obbliga gli operatori a istituire un collegamento fra i prodotti in entrata e quelli in uscita.", { italic: false }));
+  b.push(p("L'azienda la tiene ugualmente, e il motivo è pratico prima che formale."));
+  b.push(punto("Se un fornitore richiama un lotto, chi ha il collegamento ritira i prodotti che contengono quel lotto; chi non ce l'ha deve eliminare tutto quello che ha preparato in quei giorni, senza poter dimostrare il contrario."));
+  b.push(punto("L'analisi dei pericoli prevista dall'art. 5 del Reg. (CE) n. 852/2004 si fa sui prodotti e sui processi dell'azienda: per farla occorre descrivere che cosa contiene ciò che si prepara. La composizione delle preparazioni, quindi, serve comunque — ed è da lì che nasce la scheda di produzione."));
+  b.push(punto("Gli allergeni dei prodotti venduti sfusi vanno dichiarati al consumatore ai sensi dell'art. 44 del Reg. (UE) n. 1169/2011: si possono dichiarare solo se si sa, per ogni preparazione, da quali ingredienti è composta."));
+  b.push(p("Resta il principio di proporzione: si registra quello che serve a ritrovare il prodotto, non tutto quello che si potrebbe registrare. Una scheda compilata a metà documenta che il sistema non è applicato, ed è peggio di una scheda che non esiste.", { italic: true, size: 20 }));
+
+  b.push(h2("10.3 Come è organizzata in questa azienda"));
+  b.push(p(inApp
+    ? "Le merci in arrivo si registrano nella scheda Arrivo merci e tracciabilità, con fornitore, prodotto, lotto, data di consegna e documento di riferimento. Ogni lavorazione fatta in laboratorio si registra nella scheda Preparazioni, che genera un numero di lotto interno e tiene il collegamento con i lotti delle materie prime impiegate e con gli eventuali semilavorati già registrati. Dalla preparazione si stampa il cartellino da applicare al prodotto."
+    : "Le merci in arrivo si registrano sul modulo M05 «Arrivo merci e tracciabilità», con fornitore, prodotto, lotto, data di consegna e documento di riferimento. Ogni lavorazione fatta in laboratorio si registra sul modulo M15 «Scheda di produzione», che porta il numero di lotto interno, i lotti delle materie prime impiegate e gli eventuali semilavorati, e si completa con il cartellino da applicare al prodotto."));
+  b.push(p("Il numero di lotto interno è costruito dalla data di produzione e da un progressivo della giornata: non contiene informazioni da interpretare, serve solo a ritrovare la scheda."));
+  b.push(p("I preparati conservati portano un cartellino con denominazione, lotto, data di produzione e termine entro cui vanno impiegati. Un contenitore senza cartellino non si usa e non si conserva: si elimina."));
+
+  b.push(h2("10.4 Un esempio: dalla materia prima al prodotto servito"));
+  b.push(p("Arriva una partita di ricotta con il suo lotto, che viene registrato all'ingresso. Con quella ricotta si prepara una farcitura, che riceve un lotto interno e nella cui scheda compare il lotto della ricotta. Con la farcitura si producono i dolci della giornata, che nella loro scheda richiamano il lotto della farcitura. Se il caseificio richiama il lotto di ricotta, dalla sua scheda si arriva alla farcitura e da questa ai dolci: si ritirano quelli, e solo quelli."));
+
+  b.push(h2("10.5 Conservazione dei documenti"));
+  b.push(p("I documenti di acquisto e le registrazioni di rintracciabilità si conservano per un periodo adeguato alla vita del prodotto. L'azienda adotta il criterio dei due anni dalla data di registrazione per i prodotti senza una durabilità definita, e comunque per tutta la durata di conservazione dichiarata più sei mesi per i prodotti confezionati."));
+
+  b.push(h2("10.6 Ritiro e richiamo"));
+  b.push(p("Quando l'azienda ha motivo di ritenere che un alimento non sia conforme ai requisiti di sicurezza, avvia immediatamente le procedure dell'art. 19 del Reg. (CE) n. 178/2002: ritira il prodotto dal mercato, ne informa l'Autorità competente e, se il prodotto può essere già arrivato al consumatore, lo richiama informando i consumatori in modo efficace e accurato."));
+  b.push(p("Il prodotto interessato viene isolato e identificato con la dicitura «Merce non conforme — non utilizzare», tenuto a disposizione dell'Autorità di controllo, che ne stabilisce la destinazione."));
+  b.push(p(inApp
+    ? "La non conformità e l'eventuale ritiro si registrano nella scheda Non conformità, che tiene anche i dati della comunicazione all'Autorità sanitaria."
+    : "La non conformità si registra sul modulo M07 e la comunicazione all'Autorità sanitaria sul modulo M10 «Comunicazione di ritiro del prodotto»."));
+
+  b.push(h1("11. Allegati e moduli di registrazione"));
   b.push(p(inApp
     ? "Le registrazioni sono tenute nell'applicativo gestionale, che conserva anche i documenti di trasporto, le schede tecniche e gli attestati. I moduli cartacei corrispondenti sono allegati al manuale e si utilizzano in caso di indisponibilità del sistema."
     : "Le registrazioni sono tenute sui moduli cartacei allegati al presente manuale, conservati compilati in azienda e messi a disposizione degli organi di controllo."));
@@ -761,7 +819,7 @@ export function corpoManuale(dossier) {
   // Quando le schede si compilano nell'app, il manuale deve dire come: è la
   // prima cosa che un ispettore chiede quando non trova i fogli firmati.
   if (inApp) {
-    b.push(h2("10.1 " + TITOLO_PROCEDURA));
+    b.push(h2("11.1 " + TITOLO_PROCEDURA));
     testoProceduraRegistrazioni(azienda).forEach((bl) => {
       if (bl.t === "h") b.push(h3(bl.x));
       else if (bl.t === "b") b.push(punto(bl.x));
@@ -805,7 +863,7 @@ export function corpoManuale(dossier) {
   b.push(p("Si allegano inoltre: planimetria dei locali; documento di registrazione sanitaria; schede tecniche e di sicurezza dei prodotti di detergenza; schede tecniche o etichette dei prodotti alimentari acquistati con l'indicazione degli allergeni; dichiarazioni di conformità dei MOCA; attestati di formazione; rapporti di prova delle analisi; documentazione degli interventi di disinfestazione e di manutenzione."));
 
   // ---------------- 11. dati da completare ----------------
-  b.push(h1("11. Dati da completare a cura dell'azienda"));
+  b.push(h1("12. Dati da completare a cura dell'azienda"));
   b.push(p("I dati che seguono sono quelli che il manuale non può fissare in astratto e che il titolare completa alla prima emissione, aggiornandoli a ogni variazione."));
   b.push(scheda([
     ["Nominativi degli addetti", "________________________________________"],
@@ -816,7 +874,7 @@ export function corpoManuale(dossier) {
   ]));
 
   // ---------------- 12. verifica e firme ----------------
-  b.push(h1("12. Verifica, riesame e approvazione"));
+  b.push(h1("13. Verifica, riesame e approvazione"));
   [
     "Riesame mensile delle registrazioni da parte del responsabile dell'autocontrollo.",
     "Riesame completo del sistema almeno annuale, anticipato a ogni modifica di locali, attrezzature, lavorazioni o fornitori.",
