@@ -324,7 +324,7 @@ export default function Tracciabilita() {
   };
 
   const eliminaDocumento = async (doc) => {
-    if (!window.confirm(`Eliminare tutto il documento di ${doc.fornitore} (${doc.righe.length} prodotti)?`)) return;
+    if (!window.confirm(`Eliminare tutto il documento di ${doc.fornitore} (${doc.righe.length} ${doc.righe.length === 1 ? "prodotto" : "prodotti"})?`)) return;
     const { error } = await supabase
       .from("traceability_records")
       .delete()
@@ -478,7 +478,7 @@ export default function Tracciabilita() {
 
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button type="button" className="btn-primary" disabled={salvataggio} onClick={salva}>
-              <Check size={16} /> {salvataggio ? "Salvataggio…" : `Salva ${righe.filter((r) => r.prodotto.trim()).length} prodotti`}
+              <Check size={16} /> {salvataggio ? "Salvataggio…" : (() => { const n = righe.filter((r) => r.prodotto.trim()).length; return `Salva ${n} ${n === 1 ? "prodotto" : "prodotti"}`; })()}
             </button>
             <button type="button" className="btn-primary" style={{ background: "#fff", color: "#6E7C73", border: "1px solid #D8DED6" }} disabled={salvataggio} onClick={ricomincia}>
               Annulla
