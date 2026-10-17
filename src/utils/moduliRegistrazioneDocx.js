@@ -104,7 +104,7 @@ export function corpoModuli(azienda = {}, impianti = [], piano = [], postazioni 
     ["M08", "Manutenzione impianti e attrezzature", "A ogni intervento"],
     ["M09", "Monitoraggio insetti e roditori", "Settimanale, a cura del responsabile"],
     ["M10", "Comunicazione di ritiro del prodotto", "All'occorrenza"],
-    ghiaccio ? ["M11", "Controllo della macchina del ghiaccio", "Ispezione settimanale, sanificazione periodica"] : null,
+    ghiaccio ? ["M11", "Macchina del ghiaccio — interventi straordinari e della ditta esterna", "All'occorrenza"] : null,
     // Tre registri e non uno. "Abbattimento" nel parlare comune indica tre
     // processi diversi - raffreddare in fretta un cotto, congelare per
     // conservare, bonificare il pesce crudo dall'Anisakis - e un foglio solo
@@ -358,9 +358,9 @@ export function corpoModuli(azienda = {}, impianti = [], piano = [], postazioni 
   // ---------------- M11 e M12, solo se servono ----------------
   if (ghiaccio) {
     b.push(saltoPagina());
-    b.push(...capo("M11 — CONTROLLO DELLA MACCHINA DEL GHIACCIO"));
-    b.push(nota("Ispezione visiva settimanale; sanificazione con la periodicità stabilita dal manuale e secondo il libretto del costruttore."));
-    b.push(griglia(["DATA", "TIPO DI INTERVENTO|ispezione / sanificazione", "PRODOTTO USATO", "ESITO / NOTE", "FIRMA"], vuote(18, 5), [1100, 2600, 2200, 2360, 1100], { altezza: 460 }));
+    b.push(...capo("M11 — MACCHINA DEL GHIACCIO: INTERVENTI STRAORDINARI E DITTA ESTERNA"));
+    b.push(nota("Qui si annotano gli interventi che non hanno una cadenza: pulizia straordinaria, intervento della ditta esterna, sostituzione del filtro dell'acqua, decalcificazione. L'ispezione del contenitore e la pulizia ordinaria, che hanno una frequenza stabilita, si registrano sul programma di sanificazione (M04)."));
+    b.push(griglia(["DATA", "TIPO DI INTERVENTO", "ESEGUITO DA", "PRODOTTO USATO", "ESITO / NOTE", "FIRMA"], vuote(16, 6), [1000, 2200, 1700, 1700, 1760, 1000], { altezza: 460 }));
     b.push(nota("Il ghiaccio destinato al contatto con gli alimenti è ottenuto da acqua potabile (Reg. CE 852/2004, Allegato II, Capitolo VII)."));
     }
   // ---------------- M12: il raffreddamento dei cotti ----------------

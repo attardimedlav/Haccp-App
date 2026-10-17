@@ -424,12 +424,14 @@ export function corpoManuale(dossier) {
   // Indice automatico: Word lo costruisce dai titoli e ci mette i numeri di
   // pagina, che l'app non può conoscere perché non impagina il documento.
   b.push(h1("Sommario"));
-  b.push(par("L'indice si aggiorna da solo all'apertura del documento; per rigenerarlo a mano: selezionarlo e premere F9.",
-    { italic: true, size: 20, after: 160 }));
   b.push(
     `<w:p><w:pPr><w:spacing w:after="120"/></w:pPr>` +
     `<w:fldSimple w:instr=" TOC \\o &quot;1-2&quot; \\h \\z \\u ">` +
-    `<w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t xml:space="preserve">Indice in aggiornamento…</w:t></w:r>` +
+    // Il testo di ripiego e' quello che resta stampato se il campo non viene
+    // aggiornato: deve essere una frase presentabile, non un messaggio di
+    // servizio. "Indice in aggiornamento..." su un manuale consegnato faceva
+    // sembrare il documento incompiuto.
+    `<w:r><w:rPr><w:sz w:val="22"/></w:rPr><w:t xml:space="preserve">Il sommario si compone all'apertura del documento.</w:t></w:r>` +
     `</w:fldSimple></w:p>`
   );
   b.push(saltoPagina());
@@ -697,8 +699,8 @@ export function corpoManuale(dossier) {
         const r = (c.righe || []).filter((x) => vale(x, azienda));
         return [
           `${etichettaCcp(c)} — ${c.name}`,
-          r.map((x) => x.control_measure).join(" | ").slice(0, 400),
-          r.map((x) => x.monitoring).join(" | ").slice(0, 300),
+          r.map((x) => x.control_measure).filter(Boolean).join(" | "),
+          r.map((x) => x.monitoring).filter(Boolean).join(" | "),
           inApp ? "Registro nell'applicativo gestionale" : "Scheda cartacea allegata",
         ];
       }), [2400, 2600, 2400, 1960]));
@@ -923,7 +925,7 @@ export function corpoManuale(dossier) {
     ["M08", "Manutenzione impianti e attrezzature", "A ogni intervento", null],
     ["M09", "Monitoraggio insetti e roditori", "Settimanale", null],
     ["M10", "Comunicazione di ritiro del prodotto", "All'occorrenza", null],
-    ["M11", "Controllo della macchina del ghiaccio", "Ispezione settimanale, sanificazione mensile", "has_ice_machine"],
+    ["M11", "Macchina del ghiaccio — interventi straordinari e della ditta esterna", "All'occorrenza; ispezione e pulizia ordinaria sono nel programma di sanificazione (M04)", "has_ice_machine"],
     // Tre registri e non uno: "abbattimento" nel parlare comune indica tre
     // processi diversi — raffreddare in fretta un cotto, congelare per
     // conservare, bonificare il pesce crudo dall'Anisakis — e un unico
