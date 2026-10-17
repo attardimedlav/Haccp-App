@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Thermometer, SprayCan, Bug, ChevronRight, ChevronDown, LogOut, ShieldCheck, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen, Snowflake, HardHat, FileText, Paperclip, Award, Wrench, Stethoscope, Network, UtensilsCrossed, GlassWater, Menu, X, Filter, FlaskConical, ChefHat, Flame, Truck, BookOpen, LayoutDashboard, Layers , PenLine } from "lucide-react";
+import { Thermometer, SprayCan, Bug, ChevronRight, ChevronDown, LogOut, ShieldCheck, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen, Snowflake, HardHat, FileText, Paperclip, Award, Wrench, Stethoscope, Network, UtensilsCrossed, GlassWater, Menu, X, Filter, FlaskConical, ChefHat, Flame, Truck, Send, BookOpen, LayoutDashboard, Layers , PenLine } from "lucide-react";
 import { AuthProvider, useAuth } from "./AuthContext";
 import { useTable, EVENTO_SCRITTURA } from "./hooks/useTable";
 import Login from "./Login";
@@ -20,6 +20,7 @@ import Configurazione from "./modules/Configurazione";
 import PrintHeader from "./PrintHeader";
 import RicercaDocumenti from "./RicercaDocumenti";
 import NonConformita from "./modules/NonConformita";
+import Cessioni from "./modules/Cessioni";
 import AcquePotabili from "./modules/AcquePotabili";
 import MieiClienti from "./modules/MieiClienti";
 import Documenti from "./modules/Documenti";
@@ -48,6 +49,11 @@ const MAIN_TABS = [
   { id: "preparazioni", label: "Preparazioni ed etichette", icon: ChefHat },
   { id: "oliofrittura", label: "Olio di frittura", icon: Flame },
   // Solo quando succede qualcosa
+  // Il passo avanti dell'art. 18: dove e' uscito il prodotto. Si accende
+  // solo per chi cede ad altre imprese — un panificio che consegna ai bar, una
+  // pasticceria che fornisce altri locali, un grossista. Chi vende solo al
+  // consumatore finale non ha questo obbligo e non deve vedersi la scheda.
+  { id: "cessioni", label: "Cessioni ad altre imprese", icon: Send },
   { id: "nonconformita", label: "Non conformità", icon: ClipboardX },
 ];
 
@@ -79,7 +85,7 @@ const QUOTIDIANI = new Set(["temperature", "sanificazione", "tracciabilita"]);
 // cadenze proprie. Tenerli sotto "Ogni giorno" faceva credere all'OSA di avere
 // un arretrato tutte le sere.
 const PERIODICI = new Set(["infestanti", "acquepotabili", "acquafiltrata", "controllianalitici", "manutenzione", "preparazioni", "oliofrittura", "abbattimento", "ghiaccio"]);
-const EVENTI = new Set(["nonconformita"]);
+const EVENTI = new Set(["cessioni", "nonconformita"]);
 
 const WORK_SAFETY_SUB_ITEMS = [
   { id: "organigramma", label: "Organigramma", icon: Network },
@@ -199,6 +205,7 @@ function Shell() {
   const showTracciabilita = company?.active_traceability !== false;
   const showGhiaccio = !!company?.has_ice_machine;
   const showOlio = !!company?.has_fryer;
+  const showCessioni = !!company?.sells_to_businesses;
   // L'acqua filtrata compare solo se l'azienda ha un impianto di trattamento:
   // si accende da Configurazione, come gli altri moduli opzionali.
   const showAcquaFiltrata = !!company?.has_water_filter;
@@ -207,6 +214,7 @@ function Shell() {
     ((t.id !== "tracciabilita" && t.id !== "preparazioni") || showTracciabilita) &&
     (t.id !== "ghiaccio" || showGhiaccio) &&
     (t.id !== "oliofrittura" || showOlio) &&
+    (t.id !== "cessioni" || showCessioni) &&
     (t.id !== "acquafiltrata" || showAcquaFiltrata)
   );
   const gruppiMenu = [
@@ -436,6 +444,7 @@ function Shell() {
         {tab === "manuale" && <ManualeHaccp />}
         {tab === "firme" && <ArchivioFirme ambito="consulente" />}
         {tab === "registrazione" && <RegistrazioneSanitaria />}
+        {tab === "cessioni" && <Cessioni />}
         {tab === "nonconformita" && <NonConformita />}
         {tab === "acquepotabili" && <AcquePotabili />}
       {tab === "acquafiltrata" && <AcquaFiltrata />}
