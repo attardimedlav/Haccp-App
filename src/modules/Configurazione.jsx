@@ -79,6 +79,7 @@ export default function Configurazione({ onVai, subTabIniziale }) {
   const [hasBlastChiller, setHasBlastChiller] = useState(false);
   const [hasIceMachine, setHasIceMachine] = useState(false);
   const [hasFryer, setHasFryer] = useState(false);
+  const [sellsToBusinesses, setSellsToBusinesses] = useState(false);
   const [hasHood, setHasHood] = useState(true);
   const [iceMachineDays, setIceMachineDays] = useState("30");
   const [manualSource, setManualSource] = useState("app");
@@ -159,6 +160,7 @@ export default function Configurazione({ onVai, subTabIniziale }) {
       setHasBlastChiller(!!company.has_blast_chiller);
       setHasIceMachine(!!company.has_ice_machine);
       setHasFryer(!!company.has_fryer);
+      setSellsToBusinesses(!!company.sells_to_businesses);
       setHasHood(company.has_hood !== false);
       setIceMachineDays(String(company.ice_machine_cleaning_days || 30));
       setManualSource(company.haccp_manual_source === "esterno" ? "esterno" : "app");
@@ -210,6 +212,7 @@ export default function Configurazione({ onVai, subTabIniziale }) {
     has_blast_chiller: hasBlastChiller,
     has_ice_machine: hasIceMachine,
     has_fryer: hasFryer,
+    sells_to_businesses: sellsToBusinesses,
     has_hood: hasHood,
     ice_machine_cleaning_days: Math.max(1, parseInt(iceMachineDays, 10) || 30),
     haccp_manual_source: manualSource,
@@ -502,6 +505,14 @@ export default function Configurazione({ onVai, subTabIniziale }) {
                     <label className="checkbox-row" style={{ marginTop: 8 }}>
                       <input type="checkbox" checked={hasHood} disabled={!isConsultant} onChange={(e) => setHasHood(e.target.checked)} />
                       L'attività ha una cappa aspirante (pulizia delle superfici e dei filtri nel piano pulizie)
+                    </label>
+                    {/* Il passo avanti dell'art. 18: si accende solo per chi cede ad
+                        altre imprese. Chi vende al consumatore finale quell'obbligo
+                        non ce l'ha, e una scheda in piu' da ignorare e' un invito a
+                        ignorare anche le altre. */}
+                    <label className="checkbox-row" style={{ marginTop: 8 }}>
+                      <input type="checkbox" checked={sellsToBusinesses} disabled={!isConsultant} onChange={(e) => setSellsToBusinesses(e.target.checked)} />
+                      L'attività cede prodotti ad altre imprese — bar, ristoranti, negozi, grossisti (registro delle cessioni)
                     </label>
                     {hasIceMachine && (
                       <label className="field-label" style={{ marginTop: 8, marginLeft: 26, display: "flex", alignItems: "center", gap: 8, flexDirection: "row" }}>
