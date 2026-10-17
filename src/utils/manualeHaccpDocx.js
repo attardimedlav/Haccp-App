@@ -183,7 +183,7 @@ function leggiFase(testo, classificazione) {
   return { tipo: "fase", nome, dettaglio, marcatore };
 }
 
-function diagramma(ciclo) {
+function diagramma(ciclo, numeroCcp) {
   const fasi = (ciclo.flow || []).map((x) => leggiFase(x, ciclo.classification));
   if (!fasi.length) return [];
   const cicloCritico = /CCP/i.test(ciclo.classification || "");
@@ -242,7 +242,7 @@ function diagramma(ciclo) {
         DIA.num, { sfondo: ccp ? "A83A2C" : VERDE_CHIARO }) +
       cellaDia(dentro, DIA.box,
         { sfondo: ccp ? "FBEDEC" : "F4F7F2", bordo: ccp ? "A83A2C" : "CBD9CE", spessore: ccp ? 12 : 6 }) +
-      cellaDia(par(ccp ? f.marcatore : "CP",
+      cellaDia(par(ccp ? (numeroCcp ? `CCP ${numeroCcp}` : "CCP") : "CP",
         { bold: ccp, size: 16, align: "center", after: 0, color: ccp ? "A83A2C" : "6E8B78" }), DIA.tag) +
       vuota(DIA.lato)
     ));
@@ -328,8 +328,24 @@ export function corpoManuale(dossier) {
     .filter((c) => vale(c, azienda))
     .map((c, i) => ({ ...c, numero: i + 1 }));
   const procedureAttive = procedure.filter((x) => vale(x, azienda));
-  const ccp = cicliAttivi.filter((c) => /^CCP/.test(c.classification));
-  const cp = cicliAttivi.filter((c) => !/^CCP/.test(c.classification));
+  // Il numero del CCP vale PER QUESTO MANUALE, non per il catalogo.
+  //
+  // In catalogo ogni ciclo porta la sua classificazione scritta a mano — "CCP
+  // 1", "CCP 2" — e finche' i cicli critici erano due funzionava. Con i cicli
+  // nuovi il risultato era che "CCP 1" indicava lo stoccaggio in un ciclo, la
+  // pastorizzazione del gelato in un altro e la vetrina della pasticceria in
+  // un terzo: tre cose diverse con lo stesso nome, dentro lo stesso documento,
+  // e un quadro riassuntivo che elencava quattro "CCP 1".
+  //
+  // Qui i punti critici si contano nell'ordine in cui compaiono e si numerano
+  // 1..n: il numero e' unico nel manuale, il quadro riassuntivo corrisponde ai
+  // diagrammi, e in ispezione "CCP 3" indica una cosa sola.
+  const ccp = cicliAttivi
+    .filter((c) => /^CCP/i.test(c.classification || ""))
+    .map((c, i) => ({ ...c, ccpNumero: i + 1 }));
+  const numeroCcp = new Map(ccp.map((c) => [c.id, c.ccpNumero]));
+  const etichettaCcp = (c) => `CCP ${numeroCcp.get(c.id) || ""}`.trim();
+  const cp = cicliAttivi.filter((c) => !/^CCP/i.test(c.classification || ""));
   const b = [];
 
   // ---------------- frontespizio ----------------
@@ -574,7 +590,7 @@ export function corpoManuale(dossier) {
   // un diagramma per pagina. Due per pagina stavano larghi solo quando i
   // cicli avevano poche fasi, e per tutti gli altri si spezzavano a metà.
   cicliAttivi.forEach((c) => {
-    const d = diagramma(c);
+    const d = diagramma(c, numeroCcp.get(c.id));
     if (!d.length) return;
     b.push(saltoPagina());
     d.forEach((x) => b.push(x));
@@ -653,7 +669,9 @@ export function corpoManuale(dossier) {
     // spezzata fra due pagine non si legge
     if (i > 0) b.push(saltoPagina());
     b.push(h2(`${c.numero ? "Ciclo " + c.numero : c.code} — ${c.name}`));
-    b.push(par("Classificazione: " + c.classification, { bold: true, size: 20, color: /^CCP/.test(c.classification) ? "A83A2C" : VERDE_CHIARO, after: 100 }));
+    const critico = /^CCP/i.test(c.classification || "");
+    b.push(par("Classificazione: " + (critico ? etichettaCcp(c) : c.classification),
+      { bold: true, size: 20, color: critico ? "A83A2C" : VERDE_CHIARO, after: 100 }));
     if (c.intro) b.push(p(c.intro));
     // nella riga di testo i marcatori non si scrivono: li porta il diagramma
     if ((c.flow || []).length) {
@@ -678,7 +696,7 @@ export function corpoManuale(dossier) {
       ccp.map((c) => {
         const r = (c.righe || []).filter((x) => vale(x, azienda));
         return [
-          `${c.classification} — ${c.name}`,
+          `${etichettaCcp(c)} — ${c.name}`,
           r.map((x) => x.control_measure).join(" | ").slice(0, 400),
           r.map((x) => x.monitoring).join(" | ").slice(0, 300),
           inApp ? "Registro nell'applicativo gestionale" : "Scheda cartacea allegata",
@@ -816,7 +834,7 @@ export function corpoManuale(dossier) {
   b.push(p("Arriva una partita di ricotta con il suo lotto, che viene registrato all'ingresso. Con quella ricotta si prepara una farcitura, che riceve un lotto interno e nella cui scheda compare il lotto della ricotta. Con la farcitura si producono i dolci della giornata, che nella loro scheda richiamano il lotto della farcitura. Se il caseificio richiama il lotto di ricotta, dalla sua scheda si arriva alla farcitura e da questa ai dolci: si ritirano quelli, e solo quelli."));
 
   b.push(h2("10.5 Conservazione dei documenti"));
-  b.push(p("I documenti di acquisto e le registrazioni di rintracciabilità si conservano per un periodo adeguato alla vita del prodotto. L'azienda adotta il criterio dei due anni dalla data di registrazione per i prodotti senza una durabilità definita, e comunque per tutta la durata di conservazione dichiarata più sei mesi per i prodotti confezionati."));
+  b.push(p("I documenti di acquisto e le registrazioni di rintracciabilità si conservano per un periodo non inferiore a dodici mesi e comunque adeguato alla vita commerciale del prodotto: per i prodotti confezionati, per tutta la durata di conservazione dichiarata e per i sei mesi successivi. È lo stesso criterio adottato per le altre registrazioni dell'autocontrollo."));
 
   b.push(h2("10.6 Ritiro e richiamo"));
   b.push(p("Quando l'azienda ha motivo di ritenere che un alimento non sia conforme ai requisiti di sicurezza, avvia immediatamente le procedure dell'art. 19 del Reg. (CE) n. 178/2002: ritira il prodotto dal mercato, ne informa l'Autorità competente e, se il prodotto può essere già arrivato al consumatore, lo richiama informando i consumatori in modo efficace e accurato."));
