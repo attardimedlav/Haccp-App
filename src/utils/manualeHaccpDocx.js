@@ -879,6 +879,23 @@ export function corpoManuale(dossier) {
   b.push(p("La dicitura «può contenere tracce di» descrive un rischio reale e residuo, accertato dopo aver fatto quanto possibile per evitarlo. Usarla su tutto per prudenza la rende inutile e priva di valore informativo per chi è allergico, e non mette al riparo da una contestazione.", { italic: true, size: 20 }));
   b.push(p("Le richieste del cliente allergico vengono gestite dal responsabile: se la lavorazione separata non è possibile in sicurezza, il personale lo dice chiaramente invece di rassicurare."));
 
+  // Perche' gli allergeni non sono un CCP: scritto, e non lasciato
+  // sottinteso.
+  //
+  // Per definizione sarebbero il candidato piu' forte — pericolo grave,
+  // invisibile al consumatore, che nessuna fase successiva elimina. La ragione
+  // per cui in una piccola impresa restano un punto di controllo e' che il
+  // controllo e' organizzativo e non ha un limite numerico da misurare, ed e'
+  // esattamente il caso in cui l'art. 5 del Reg. 852/2004 e la Comunicazione
+  // 2016/C 278/01 ammettono la semplificazione.
+  //
+  // Lasciarlo sottinteso e' il rischio vero: in un contenzioso la differenza
+  // fra una scelta motivata e una dimenticanza sta in questo capoverso.
+  b.push(h2("11.5 Perché il controllo degli allergeni non è classificato come punto critico"));
+  b.push(p("La presenza involontaria di un allergene ha tutte le caratteristiche di un pericolo da tenere sotto controllo critico: è grave per il consumatore sensibile, non è percepibile da chi acquista e nessuna fase successiva la elimina. L'azienda ha scelto di governarlo come punto di controllo, e la scelta è motivata."));
+  b.push(p("Il controllo degli allergeni non si esercita su un parametro misurabile con un limite critico — come una temperatura o un tempo — ma su un insieme di comportamenti: la separazione delle lavorazioni nel tempo, l'uso di utensili dedicati, la lettura delle etichette delle materie prime e la correttezza dell'informazione data al consumatore. È il caso tipico in cui l'art. 5 del Reg. (CE) n. 852/2004 e la Comunicazione della Commissione 2016/C 278/01 riconoscono che il pericolo è tenuto sotto controllo dai programmi di prerequisito e dalle buone prassi, e che le procedure basate sui principi HACCP vanno semplificate di conseguenza."));
+  b.push(p("La scelta comporta un impegno preciso, che l'azienda assume: la verifica dell'elenco degli allergeni a ogni variazione di ricetta e a ogni cambio di fornitore, la formazione del personale sul significato della richiesta di un cliente allergico, e il riesame di questo capitolo a ogni revisione del manuale. Se l'attività iniziasse a produrre alimenti destinati espressamente a persone allergiche o intolleranti — per esempio una linea senza glutine su richiesta — il controllo andrebbe riclassificato come punto critico, con limiti e verifiche propri."));
+
   b.push(h1("12. Allegati e moduli di registrazione"));
   b.push(p(inApp
     ? "Le registrazioni sono tenute nell'applicativo gestionale, che conserva anche i documenti di trasporto, le schede tecniche e gli attestati. I moduli cartacei corrispondenti sono allegati al manuale e si utilizzano in caso di indisponibilità del sistema."
