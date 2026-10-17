@@ -11,9 +11,23 @@ import { useAuth } from "../AuthContext";
 // Le due voci "abbattitore positivo" e "abbattitore negativo" che c'erano qui
 // producevano un impianto da leggere ogni sera e un avviso di registrazione
 // mancante che non voleva dire niente.
+// Ogni apparecchio che conserva o espone a temperatura controllata va qui:
+// e' l'elenco su cui si legge la temperatura ogni giorno, ed e' anche
+// l'elenco che il manuale dichiara come punto critico dello stoccaggio. Le
+// vetrine mancavano, e senza di loro la vetrina dei gelati e quella della
+// pasticceria - che sono il punto in cui il prodotto pronto puo' tornare
+// pericoloso - non avevano dove essere registrate.
+//
+// I valori sono una proposta: li cambia il consulente sulla targa
+// dell'apparecchio e sulla lavorazione di quell'azienda, perche' un pozzetto
+// da gelateria e una vetrina da bar non lavorano alla stessa temperatura.
 export const EQUIPMENT_TYPES = [
   { id: "frigorifero", label: "Frigorifero", min: 0, max: 4 },
   { id: "congelatore", label: "Congelatore", min: -22, max: -18 },
+  { id: "cella_frigorifera", label: "Cella frigorifera", min: 0, max: 4 },
+  { id: "vetrina_refrigerata", label: "Vetrina refrigerata", min: 0, max: 4 },
+  { id: "vetrina_gelati", label: "Vetrina gelati o pozzetto", min: -20, max: -14 },
+  { id: "vetrina_calda", label: "Vetrina o banco caldo", min: 60, max: 85 },
 ];
 
 // Restano riconosciute in lettura per le righe già salvate: un impianto
@@ -30,14 +44,34 @@ export default function Attrezzature() {
   const { items, add, remove, loading } = useTable("temperature_units", company?.id);
   const [label, setLabel] = useState("");
   const [type, setType] = useState(EQUIPMENT_TYPES[0].id);
+  // Il range proposto dal tipo, che resta modificabile: lo si legge sulla
+  // targa dell'apparecchio.
+  const [minTemp, setMinTemp] = useState(String(EQUIPMENT_TYPES[0].min));
+  const [maxTemp, setMaxTemp] = useState(String(EQUIPMENT_TYPES[0].max));
   const [busy, setBusy] = useState(false);
+  const [errore, setErrore] = useState("");
+
+  const cambiaTipo = (id) => {
+    setType(id);
+    const t = EQUIPMENT_TYPES.find((o) => o.id === id);
+    if (t) { setMinTemp(String(t.min)); setMaxTemp(String(t.max)); }
+  };
 
   const submit = async (e) => {
     e.preventDefault();
+    setErrore("");
     if (!label.trim()) return;
     const t = EQUIPMENT_TYPES.find((o) => o.id === type);
+    const minimo = Number(String(minTemp).replace(",", "."));
+    const massimo = Number(String(maxTemp).replace(",", "."));
+    if (Number.isNaN(minimo) || Number.isNaN(massimo)) {
+      setErrore("Il range va scritto in gradi, anche negativi."); return;
+    }
+    if (minimo >= massimo) {
+      setErrore("Il primo valore è il minimo del range e deve essere più basso del secondo."); return;
+    }
     setBusy(true);
-    await add({ label, equipment_type: t.id, min_temp: t.min, max_temp: t.max });
+    await add({ label, equipment_type: t.id, min_temp: minimo, max_temp: massimo });
     setLabel("");
     setBusy(false);
   };
@@ -52,18 +86,28 @@ export default function Attrezzature() {
       <div className="panel-head">
         <div>
           <h2>Attrezzature</h2>
-          <p className="sub">Elenco personalizzato di frigo, freezer e banchi di questa azienda. Il range di temperatura è impostato automaticamente in base al tipo scelto e non è modificabile a mano.</p>
+          <p className="sub">Frigoriferi, congelatori, celle e vetrine di questa azienda: tutto ciò che conserva o espone a temperatura controllata. Scegliendo il tipo il range si compila da solo, e si corregge sulla targa dell'apparecchio.</p>
         </div>
       </div>
       <form onSubmit={submit} className="row-form">
         <input type="text" placeholder="Nome (es. Frigo 3)" required value={label} onChange={(e) => setLabel(e.target.value)} className="note-input" />
-        <select value={type} onChange={(e) => setType(e.target.value)}>
+        <select value={type} onChange={(e) => cambiaTipo(e.target.value)}>
           {EQUIPMENT_TYPES.map((t) => (
             <option key={t.id} value={t.id}>{t.label} ({t.min}°C — {t.max}°C)</option>
           ))}
         </select>
+        <label className="field-label" style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          da
+          <input type="number" step="0.1" value={minTemp} onChange={(e) => setMinTemp(e.target.value)}
+            className="full-input" style={{ width: 80 }} aria-label="Temperatura minima" />
+          a
+          <input type="number" step="0.1" value={maxTemp} onChange={(e) => setMaxTemp(e.target.value)}
+            className="full-input" style={{ width: 80 }} aria-label="Temperatura massima" />
+          °C
+        </label>
         <button type="submit" className="btn-primary" disabled={busy}><Plus size={16} /> Aggiungi</button>
       </form>
+      {errore && <span className="file-error">{errore}</span>}
       {loading ? (
         <p className="sub">Caricamento…</p>
       ) : items.length === 0 ? (
