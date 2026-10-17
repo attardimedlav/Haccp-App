@@ -741,6 +741,27 @@ export function corpoManuale(dossier) {
   b.push(h1("9. Programmazione dei controlli analitici"));
   b.push(p("Le verifiche analitiche integrano il monitoraggio quotidiano e servono a dimostrare l'efficacia del sistema. Le analisi sono eseguite presso laboratori accreditati e i referti sono conservati agli atti."));
 
+  // Il criterio con cui si sceglie la frequenza, scritto.
+  //
+  // Il Reg. 2073/2005 fissa i limiti e non le frequenze: l'art. 4 lascia la
+  // scelta all'operatore e l'art. 5 permette di ridurre il numero dei campioni
+  // quando l'HACCP e' documentato ed efficace. Un piano leggero in una
+  // microimpresa e' quindi previsto dalla norma - ma solo se motivato.
+  //
+  // E' la stessa regola della sezione sugli allergeni: una semplificazione si
+  // difende solo se e' scritta. Senza questo capoverso, un piano con un
+  // tampone all'anno sembra una dimenticanza; con questo capoverso e' una
+  // scelta che l'impresa ha preso e che sa spiegare.
+  b.push(h2("9.1 Criterio adottato nella scelta delle frequenze"));
+  b.push(p("Il Reg. (CE) n. 2073/2005 stabilisce i criteri microbiologici — cioè i limiti — e non la cadenza dei campionamenti: l'art. 4 affida all'operatore la scelta della frequenza di campionamento, e l'art. 5 consente di ridurre il numero delle unità campionarie quando l'applicazione delle procedure basate sui principi HACCP è documentata ed efficace. La frequenza va quindi adattata alla natura e alle dimensioni dell'impresa."));
+  b.push(p("Il programma riportato di seguito tiene conto delle dimensioni ridotte dell'impresa, del numero contenuto di addetti, della semplicità e ripetitività delle lavorazioni, dell'assenza di produzione destinata ad altre imprese e del fatto che i criteri di igiene di processo sono tenuti sotto controllo dalle registrazioni quotidiane previste dal presente manuale. Un programma più oneroso di quanto l'impresa possa sostenere non verrebbe applicato, e un controllo programmato e non eseguito documenta che il sistema non è attuato."));
+  b.push(p("La riduzione è accompagnata da due impegni precisi, che l'impresa assume:"));
+  b.push(punto("dove si producono alimenti pronti che possono favorire la crescita di Listeria monocytogenes — creme, prodotti farciti, gelati — il campionamento delle aree di lavorazione e delle attrezzature è eseguito in ogni caso, come previsto dall'art. 5, comma 2 del Reg. (CE) n. 2073/2005;"));
+  b.push(punto("si esegue un campionamento straordinario quando cambia il processo, quando si avvia una produzione nuova, dopo una non conformità rilevata o una segnalazione, e in caso di esito non conforme la frequenza viene raddoppiata per l'anno successivo."));
+  b.push(p("Le superfici campionate sono le stesse a ogni campagna: l'andamento nel tempo dice più del singolo risultato. Per le superfici la normativa non fissa limiti numerici; i valori di riferimento sono quelli adottati nel presente piano d'intesa con il laboratorio incaricato, e la presenza di patogeni su una superficie a contatto con gli alimenti comporta comunque un'azione correttiva immediata.", { size: 20 }));
+  b.push(par("", { after: 140 }));
+  b.push(h2("9.2 Programma dei controlli"));
+
   // Il programma è quello che l'azienda ha davvero deciso e che l'app
   // sorveglia, non un elenco scritto una volta nel codice: un manuale che
   // promette tamponi biennali a chi non li ha mai programmati dichiara un
