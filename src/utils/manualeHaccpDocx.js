@@ -420,7 +420,7 @@ export function corpoManuale(dossier) {
 
   // ---------------- 1. definizioni ----------------
   b.push(h1("1. Definizioni"));
-  b.push(p("Ai fini del presente manuale, e in coerenza con il Codex Alimentarius e con la Circolare del Ministero della Sanità n. 21 del 28 luglio 1995, si intende per:"));
+  b.push(p("Ai fini del presente manuale, e in coerenza con le definizioni del Codex Alimentarius e dei regolamenti comunitari vigenti, si intende per:"));
   b.push(scheda([
     ["HACCP", "Metodo che permette di individuare pericoli specifici, di valutarli e di stabilire le misure preventive per controllarli."],
     ["Pericolo", "Agente biologico, chimico o fisico, o condizione di un alimento, in grado di provocare un effetto nocivo per la salute."],
@@ -456,11 +456,14 @@ export function corpoManuale(dossier) {
     "Regolamento (CE) n. 178/2002 — principi e requisiti generali della legislazione alimentare, rintracciabilità (art. 18), ritiro e richiamo (art. 19).",
     "Regolamento (CE) n. 852/2004 — igiene dei prodotti alimentari, con gli Allegati I e II.",
     "Regolamento (CE) n. 2073/2005 — criteri microbiologici applicabili ai prodotti alimentari.",
+    "Regolamento (UE) n. 931/2011 — requisiti di rintracciabilità per gli alimenti di origine animale.",
+    "Regolamento (UE) n. 2017/625 — controlli ufficiali sugli alimenti.",
     "Regolamento (CE) n. 1935/2004 e Regolamento (CE) n. 2023/2006 — materiali e oggetti a contatto con gli alimenti (MOCA).",
     "Regolamento (UE) n. 1169/2011 — informazioni sugli alimenti ai consumatori, Allegato II sugli allergeni e art. 44 per gli alimenti non preimballati.",
     "Comunicazione della Commissione 2016/C 278/01 — programmi di prerequisito e flessibilità per le piccole imprese.",
     "D.Lgs. 6 novembre 2007, n. 193 — sanzioni in materia di igiene degli alimenti.",
-    "D.Lgs. 15 dicembre 2017, n. 231 — sanzioni per la violazione del Reg. (UE) 1169/2011.",
+    "Direttiva 2011/91/UE — indicazioni che consentono di identificare la partita (lotto) alla quale appartiene una derrata alimentare.",
+    "D.Lgs. 15 dicembre 2017, n. 231 — sanzioni per la violazione del Reg. (UE) 1169/2011 e disciplina del lotto e degli alimenti non preimballati.",
     "D.Lgs. 23 febbraio 2023, n. 18 — qualità delle acque destinate al consumo umano.",
     "Circolare del Ministero della Sanità 11 gennaio 1991, n. 1 — oli e grassi impiegati per la frittura.",
     "Normativa regionale in materia di formazione degli addetti alla manipolazione degli alimenti.",
@@ -781,7 +784,7 @@ export function corpoManuale(dossier) {
   b.push(p("L'art. 18 del Reg. (CE) n. 178/2002 impone a ogni impresa alimentare di sapere, e di poter dimostrare all'Autorità di controllo, da chi ha ricevuto ogni alimento e a chi lo ha ceduto: è la regola detta «un passo indietro, un passo avanti». L'obbligo riguarda le imprese, non il consumatore finale: la vendita al banco non va tracciata nominativamente."));
   b.push(p("Il regolamento fissa l'obiettivo e non i mezzi: non prescrive un modulo, un programma o una forma particolare. Devono però esistere documenti che permettano di risalire al fornitore e di identificare la merce — documenti di trasporto, fatture, etichette, registrazioni interne — conservati e disponibili in tempi brevi."));
   b.push(p("Per gli alimenti di origine animale il Reg. (UE) n. 931/2011 aggiunge le informazioni minime che devono accompagnare la fornitura fra imprese: descrizione, volume o quantità, nome e indirizzo di chi spedisce e di chi riceve, data di spedizione e, quando previsto, il riferimento al lotto."));
-  b.push(p("Il lotto identifica la partita di prodotto preconfezionato ed è obbligatorio sulle confezioni destinate al consumatore, secondo il D.Lgs. 231/2017; sui prodotti venduti sfusi non è richiesto."));
+  b.push(p("Il lotto identifica la partita alla quale appartiene un alimento. L'obbligo di indicarlo è disciplinato dal Titolo III del D.Lgs. 231/2017, che recepisce la direttiva 2011/91/UE, e riguarda i prodotti preimballati; non si applica agli alimenti non preimballati, cioè a quelli venduti sfusi, su richiesta del consumatore o preimballati ai fini della vendita diretta. L'indicazione del lotto non è richiesta quando l'etichetta riporta già il termine minimo di conservazione o la data di scadenza con l'indicazione almeno del giorno e del mese."));
 
   b.push(h2("10.2 Che cosa la legge non impone, e perché l'azienda lo fa lo stesso"));
   b.push(p("Collegare i lotti delle materie prime in entrata ai prodotti preparati in laboratorio — quella che si chiama rintracciabilità interna — non è imposto dall'art. 18. Lo confermano gli Orientamenti della Commissione europea del 2010 sull'attuazione degli articoli 11, 12, 14, 17, 18, 19 e 20 del Reg. 178/2002, e l'Intesa Stato-Regioni del 28 luglio 2005, che all'art. 5.2 afferma espressamente che il regolamento non obbliga gli operatori a istituire un collegamento fra i prodotti in entrata e quelli in uscita.", { italic: false }));
@@ -822,7 +825,43 @@ export function corpoManuale(dossier) {
     ? "La non conformità e l'eventuale ritiro si registrano nella scheda Non conformità, che tiene anche i dati della comunicazione all'Autorità sanitaria."
     : "La non conformità si registra sul modulo M07 e la comunicazione all'Autorità sanitaria sul modulo M10 «Comunicazione di ritiro del prodotto»."));
 
-  b.push(h1("11. Allegati e moduli di registrazione"));
+  // ---------------- 11. allergeni ----------------
+  //
+  // Mancava un capitolo suo, e gli allergeni comparivano solo di sfuggita
+  // nell'analisi dei pericoli e fra gli allegati. E' la contestazione piu'
+  // frequente e l'unica con una sanzione amministrativa diretta (D.Lgs.
+  // 231/2017), e soprattutto e' l'unico pericolo che colpisce una persona
+  // sola e in modo immediato: la contaminazione microbiologica fa ammalare
+  // chi e' sfortunato, un allergene nascosto fa male a chi lo e' davvero.
+  //
+  // Il punto che quasi tutti i manuali sbagliano e' il "come": per gelateria,
+  // pasticceria, panetteria, pasta fresca e gastronomia la legge permette il
+  // cartello unico o il registro, ma pretende che l'informazione sia
+  // RICONDUCIBILE AL SINGOLO ALIMENTO. Un cartellone con l'elenco dei
+  // quattordici allergeni appeso al muro non soddisfa niente.
+  b.push(h1("11. Allergeni e informazione al consumatore"));
+
+  b.push(h2("11.1 Le sostanze da dichiarare"));
+  b.push(p("Sono le quattordici sostanze o prodotti elencati nell'Allegato II del Reg. (UE) n. 1169/2011: cereali contenenti glutine; crostacei; uova; pesce; arachidi; soia; latte; frutta a guscio; sedano; senape; semi di sesamo; anidride solforosa e solfiti oltre 10 mg/kg o 10 mg/l; lupini; molluschi. L'obbligo riguarda la sostanza e i prodotti che ne derivano, anche quando è presente in quantità minime come ingrediente di un ingrediente."));
+
+  b.push(h2("11.2 Come l'informazione viene data"));
+  b.push(p("Per gli alimenti non preimballati — quelli venduti sfusi, serviti al banco o somministrati — l'informazione sugli allergeni è obbligatoria ai sensi dell'art. 44 del Reg. (UE) n. 1169/2011 e del D.Lgs. 231/2017, e deve essere disponibile prima che il consumatore scelga."));
+  b.push(p("Per gelateria, pasticceria, panetteria, pasta fresca e gastronomia gli ingredienti possono essere riportati su un cartello unico o su un registro tenuto a disposizione del consumatore, ma le indicazioni sugli allergeni devono essere riconducibili al singolo alimento. Un cartello che elenchi genericamente i quattordici allergeni presenti nel laboratorio non assolve l'obbligo: dal cartello o dal registro deve risultare quali allergeni contiene ciascun prodotto.", { bold: false }));
+  b.push(p("Nelle collettività — ristorazione, mense, scuole, ospedali — l'informazione deve essere riconducibile a ciascun alimento prima del servizio, su menù, registro o cartello. Se si utilizzano strumenti digitali, devono comunque esistere documenti scritti facilmente reperibili dal personale e dall'Autorità di controllo."));
+  b.push(p(inApp
+    ? "L'azienda tiene l'elenco nella scheda Menu e allergeni, che per ogni preparazione riporta gli ingredienti e gli allergeni, e che si stampa per essere esposta o messa a disposizione del consumatore."
+    : "L'azienda tiene l'elenco su registro cartaceo, aggiornato a ogni variazione di ricetta e messo a disposizione del consumatore."));
+
+  b.push(h2("11.3 Da dove viene l'informazione"));
+  b.push(p("Gli allergeni di ogni preparazione si ricavano dalle etichette e dalle schede tecniche delle materie prime impiegate, che l'azienda conserva. È il motivo per cui la composizione delle preparazioni va scritta: senza sapere che cosa contiene un prodotto non è possibile dichiararne gli allergeni, e una dichiarazione data a memoria non è una dichiarazione."));
+  b.push(p("Quando un fornitore cambia la formulazione di un prodotto, l'elenco va aggiornato: è un controllo che si fa alla consegna, leggendo l'etichetta, e non una volta all'anno."));
+
+  b.push(h2("11.4 La contaminazione crociata da allergeni"));
+  b.push(p("In un laboratorio piccolo la separazione degli allergeni si ottiene nel tempo più che nello spazio: si lavorano per primi i prodotti che non li contengono e per ultimi quelli che li contengono, sanificando fra una lavorazione e l'altra. Utensili, taglieri, sac à poche e contenitori destinati ai prodotti senza glutine o senza frutta a guscio sono identificati e non si scambiano."));
+  b.push(p("La dicitura «può contenere tracce di» descrive un rischio reale e residuo, accertato dopo aver fatto quanto possibile per evitarlo. Usarla su tutto per prudenza la rende inutile e priva di valore informativo per chi è allergico, e non mette al riparo da una contestazione.", { italic: true, size: 20 }));
+  b.push(p("Le richieste del cliente allergico vengono gestite dal responsabile: se la lavorazione separata non è possibile in sicurezza, il personale lo dice chiaramente invece di rassicurare."));
+
+  b.push(h1("12. Allegati e moduli di registrazione"));
   b.push(p(inApp
     ? "Le registrazioni sono tenute nell'applicativo gestionale, che conserva anche i documenti di trasporto, le schede tecniche e gli attestati. I moduli cartacei corrispondenti sono allegati al manuale e si utilizzano in caso di indisponibilità del sistema."
     : "Le registrazioni sono tenute sui moduli cartacei allegati al presente manuale, conservati compilati in azienda e messi a disposizione degli organi di controllo."));
@@ -830,7 +869,7 @@ export function corpoManuale(dossier) {
   // Quando le schede si compilano nell'app, il manuale deve dire come: è la
   // prima cosa che un ispettore chiede quando non trova i fogli firmati.
   if (inApp) {
-    b.push(h2("11.1 " + TITOLO_PROCEDURA));
+    b.push(h2("12.1 " + TITOLO_PROCEDURA));
     testoProceduraRegistrazioni(azienda).forEach((bl) => {
       if (bl.t === "h") b.push(h3(bl.x));
       else if (bl.t === "b") b.push(punto(bl.x));
@@ -870,12 +909,12 @@ export function corpoManuale(dossier) {
   });
   b.push(griglia(["N.", "Modulo", "Frequenza di compilazione"], moduli.map(([n, m, f]) => [n, m, f]), [900, 5000, 3460]));
   b.push(par("", { after: 180 }));
-  b.push(p("Allergeni, formazione del personale e controlli analitici non hanno una scheda da compilare: gli allergeni sono riportati nell'elenco che l'operatore tiene esposto o a disposizione del consumatore ai sensi dell'art. 44 del Reg. (UE) n. 1169/2011, la formazione è documentata dagli attestati degli alimentaristi e i controlli analitici dai rapporti di prova del laboratorio, tutti conservati in azienda."));
+  b.push(p("Allergeni, formazione del personale e controlli analitici non hanno una scheda da compilare: gli allergeni sono riportati nell'elenco descritto al capitolo 11, che l'operatore tiene esposto o a disposizione del consumatore, la formazione è documentata dagli attestati degli alimentaristi e i controlli analitici dai rapporti di prova del laboratorio, tutti conservati in azienda."));
   b.push(par("", { after: 140 }));
   b.push(p("Si allegano inoltre: planimetria dei locali; documento di registrazione sanitaria; schede tecniche e di sicurezza dei prodotti di detergenza; schede tecniche o etichette dei prodotti alimentari acquistati con l'indicazione degli allergeni; dichiarazioni di conformità dei MOCA; attestati di formazione; rapporti di prova delle analisi; documentazione degli interventi di disinfestazione e di manutenzione."));
 
   // ---------------- 11. dati da completare ----------------
-  b.push(h1("12. Dati da completare a cura dell'azienda"));
+  b.push(h1("13. Dati da completare a cura dell'azienda"));
   b.push(p("I dati che seguono sono quelli che il manuale non può fissare in astratto e che il titolare completa alla prima emissione, aggiornandoli a ogni variazione."));
   b.push(scheda([
     ["Nominativi degli addetti", "________________________________________"],
@@ -886,7 +925,7 @@ export function corpoManuale(dossier) {
   ]));
 
   // ---------------- 12. verifica e firme ----------------
-  b.push(h1("13. Verifica, riesame e approvazione"));
+  b.push(h1("14. Verifica, riesame e approvazione"));
   [
     "Riesame mensile delle registrazioni da parte del responsabile dell'autocontrollo.",
     "Riesame completo del sistema almeno annuale, anticipato a ogni modifica di locali, attrezzature, lavorazioni o fornitori.",
