@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Trash2, AlertTriangle, CheckCircle2, Pencil, Check, X, Refrigerator, Info } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
+import { supabase } from "../supabaseClient";
 import { EQUIPMENT_TYPES_STORICI } from "./Attrezzature";
 
 // Temperature.
@@ -80,13 +81,47 @@ export default function Temperature() {
     setBusy(u.id);
     setErrore("");
     try {
-      await add({
+      const valore = grezzo === undefined || grezzo === "" ? null : parseFloat(String(grezzo).replace(",", "."));
+      const riga = await add({
         unit: u.label,
-        value: grezzo === undefined || grezzo === "" ? null : parseFloat(String(grezzo).replace(",", ".")),
+        value: valore,
         note: nota || "",
         operator: (operator || responsabile).trim(),
         in_range: inRange,
       });
+
+      // Una temperatura fuori range E' una non conformita', e il manuale
+      // dichiara al modulo M07 che ogni deviazione finisce nel registro delle
+      // non conformita'. Finora restava chiusa dentro questa scheda: in
+      // ispezione il registro delle non conformita' diceva "nessuna" mentre il
+      // registro delle temperature mostrava una deviazione, e due pezzi dello
+      // stesso sistema si contraddicevano.
+      //
+      // Non si chiede all'OSA di riscriverla: la riga nasce da sola, con
+      // dentro quello che ha gia' scritto. Resta APERTA, senza data di
+      // risoluzione, perche' un frigorifero fuori range non e' a posto finche'
+      // non ci torna dentro: la chiude chi verifica.
+      if (riga && inRange === false) {
+        const limiti = (u.min_temp != null && u.max_temp != null)
+          ? ` (limite ${u.min_temp}°C — ${u.max_temp}°C)` : "";
+        const letta = valore != null ? `${String(valore).replace(".", ",")}°C` : "valore non indicato";
+        const { error: errNc } = await supabase.from("non_conformities").insert({
+          company_id: company.id,
+          area: "Frigoriferi",
+          description: `Temperatura fuori range su ${u.label}: ${letta}${limiti}.`,
+          detected_date: oggiISO(),
+          responsible: (operator || responsabile).trim(),
+          corrective_action: nota || null,
+          source: "temperature",
+          source_id: riga.id,
+        });
+        // Se la riga non si crea, la lettura resta comunque registrata: il
+        // registro delle temperature e' il dato primario e non va perso per
+        // un errore sul registro collegato.
+        if (errNc && !/duplicate|unique/i.test(errNc.message)) {
+          setErrore("Lettura registrata, ma la non conformità collegata non è stata creata: " + errNc.message);
+        }
+      }
       setGradi({ ...gradi, [u.id]: "" });
       setFuori(null);
     } catch (err) {
