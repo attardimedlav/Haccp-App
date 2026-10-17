@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Thermometer, SprayCan, Bug, ChevronRight, ChevronDown, LogOut, ShieldCheck, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen, Snowflake, HardHat, FileText, Paperclip, Award, Wrench, Stethoscope, Network, UtensilsCrossed, GlassWater, Menu, X, Filter, FlaskConical, ChefHat, Flame, Truck, Send, BookOpen, LayoutDashboard, Layers , PenLine } from "lucide-react";
+import { Thermometer, SprayCan, Bug, ChevronRight, ChevronDown, LogOut, ShieldCheck, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen, Snowflake, HardHat, FileText, Paperclip, Award, Wrench, Stethoscope, Network, UtensilsCrossed, GlassWater, Menu, X, Filter, FlaskConical, ChefHat, Flame, Truck, Send, BookOpen, LayoutDashboard, Layers , PenLine, ClipboardCheck } from "lucide-react";
 import { AuthProvider, useAuth } from "./AuthContext";
 import { useTable, EVENTO_SCRITTURA } from "./hooks/useTable";
 import Login from "./Login";
@@ -21,6 +21,7 @@ import PrintHeader from "./PrintHeader";
 import RicercaDocumenti from "./RicercaDocumenti";
 import NonConformita from "./modules/NonConformita";
 import Cessioni from "./modules/Cessioni";
+import VerificaPulizia from "./modules/VerificaPulizia";
 import AcquePotabili from "./modules/AcquePotabili";
 import MieiClienti from "./modules/MieiClienti";
 import Documenti from "./modules/Documenti";
@@ -44,6 +45,10 @@ const MAIN_TABS = [
   { id: "infestanti", label: "Monitoraggio infestanti", icon: Bug },
   { id: "acquepotabili", label: "Acque potabili", icon: Droplet },
   { id: "acquafiltrata", label: "Acqua filtrata", icon: Filter },
+  // La verifica rapida sta accanto ai controlli analitici perche' e' il loro
+  // primo livello: il test sui residui proteici precede il tampone di
+  // laboratorio e ne condivide la scadenza.
+  { id: "verificapulizia", label: "Verifica rapida pulizia", icon: ClipboardCheck },
   { id: "controllianalitici", label: "Controlli analitici", icon: FlaskConical },
   { id: "manutenzione", label: "Manutenzione", icon: Wrench },
   { id: "preparazioni", label: "Preparazioni ed etichette", icon: ChefHat },
@@ -84,7 +89,7 @@ const QUOTIDIANI = new Set(["temperature", "sanificazione", "tracciabilita"]);
 // l'abbattimento si registra quando si abbatte, e la macchina del ghiaccio ha
 // cadenze proprie. Tenerli sotto "Ogni giorno" faceva credere all'OSA di avere
 // un arretrato tutte le sere.
-const PERIODICI = new Set(["infestanti", "acquepotabili", "acquafiltrata", "controllianalitici", "manutenzione", "preparazioni", "oliofrittura", "abbattimento", "ghiaccio"]);
+const PERIODICI = new Set(["infestanti", "acquepotabili", "acquafiltrata", "verificapulizia", "controllianalitici", "manutenzione", "preparazioni", "oliofrittura", "abbattimento", "ghiaccio"]);
 const EVENTI = new Set(["cessioni", "nonconformita"]);
 
 const WORK_SAFETY_SUB_ITEMS = [
@@ -445,6 +450,7 @@ function Shell() {
         {tab === "firme" && <ArchivioFirme ambito="consulente" />}
         {tab === "registrazione" && <RegistrazioneSanitaria />}
         {tab === "cessioni" && <Cessioni />}
+        {tab === "verificapulizia" && <VerificaPulizia />}
         {tab === "nonconformita" && <NonConformita />}
         {tab === "acquepotabili" && <AcquePotabili />}
       {tab === "acquafiltrata" && <AcquaFiltrata />}
