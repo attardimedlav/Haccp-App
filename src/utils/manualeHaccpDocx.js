@@ -13,6 +13,7 @@
 import { par, cella, tabella, riga, parImmagine, RID_IMMAGINE } from "../modules/CorsoFormazione";
 import { TITOLO_PROCEDURA, testoProceduraRegistrazioni } from "./proceduraRegistrazioni";
 import { etichettaFrequenza } from "./pianoPulizie";
+import { elencoGiorni } from "./chiusure";
 
 const VERDE = "1B2A22";
 const VERDE_CHIARO = "2F6F4E";
@@ -947,6 +948,9 @@ export function corpoManuale(dossier) {
   // registrati, e dove: altrimenti la spiegazione esiste ma nessuno sa di
   // doverla cercare.
   b.push(h2(`12.${inApp ? 2 : 1} Periodi di chiusura e attrezzature fuori servizio`));
+  if ((azienda.closing_weekdays || []).length) {
+    b.push(p(`L'attività osserva la chiusura settimanale di ${elencoGiorni(azienda.closing_weekdays)}: in quei giorni non si effettuano lavorazioni e non sono previste registrazioni.`));
+  }
   b.push(p("Nei giorni in cui l'attività è chiusa — ferie, chiusura stagionale, lavori — e per le attrezzature dichiarate fuori servizio non si effettuano le registrazioni previste dal presente manuale, perché non vi è alcuna lavorazione né alcuna temperatura da rilevare. L'assenza di registrazioni in quei giorni non costituisce un controllo omesso."));
   b.push(p(inApp
     ? "Ciascun periodo è registrato con la data di inizio, il motivo e la data di ripresa dell'attività, ed è riportato in coda alle schede di sanificazione e delle temperature, dove viene stampato insieme al registro. Un'attrezzatura dichiarata ferma resta visibile nell'elenco degli impianti, con indicazione del motivo e della data dal quale è spenta, e non viene conteggiata fra i controlli del giorno; alla ripresa del funzionamento il periodo viene chiuso e la rilevazione delle temperature riprende regolarmente."

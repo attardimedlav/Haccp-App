@@ -68,3 +68,67 @@ export function descrizionePeriodo(periodo) {
   if (!periodo.end_date) return `${motivo}, dal ${fmtGiorno(periodo.start_date)}`;
   return `${motivo}, dal ${fmtGiorno(periodo.start_date)} al ${fmtGiorno(periodo.end_date)}`;
 }
+
+
+// ----------------------------------------------------------------------
+// La chiusura settimanale.
+//
+// Il giorno di riposo è una proprietà dell'azienda, non un evento: un bar
+// chiuso il lunedì lo è tutti i lunedì, e chiedere al titolare di premere
+// «attività chiusa» ogni settimana è chiedergli di ricordarsi una cosa
+// che il sistema sa già — e che, dimenticata, lascia ogni lunedì un buco
+// nel registro e una fila di avvisi rossi il martedì.
+//
+// Si configura una volta in Configurazione → Azienda e vale per sempre.
+// Non è un periodo e non si "riapre": per questo qui si costruisce un
+// oggetto che ha la stessa forma di un periodo — così le schede lo
+// trattano come gli altri — ma marcato `settimanale`, che toglie il
+// pulsante di riapertura dove non ha senso.
+
+export const GIORNI = [
+  { n: 1, nome: "lunedì" },
+  { n: 2, nome: "martedì" },
+  { n: 3, nome: "mercoledì" },
+  { n: 4, nome: "giovedì" },
+  { n: 5, nome: "venerdì" },
+  { n: 6, nome: "sabato" },
+  { n: 0, nome: "domenica" },
+];
+
+const nomeGiorno = (n) => (GIORNI.find((g) => g.n === Number(n)) || {}).nome || "";
+
+// «lunedì», «lunedì e martedì», «lunedì, martedì e mercoledì».
+export function elencoGiorni(giorni) {
+  const nomi = GIORNI.filter((g) => (giorni || []).map(Number).includes(g.n)).map((g) => g.nome);
+  if (nomi.length === 0) return "";
+  if (nomi.length === 1) return nomi[0];
+  return nomi.slice(0, -1).join(", ") + " e " + nomi[nomi.length - 1];
+}
+
+// Il giorno della settimana si legge in ora locale: la data ISO di
+// mezzanotte interpretata come UTC sposterebbe indietro di un giorno chi
+// sta a est di Greenwich, e il lunedì diventerebbe domenica.
+function giornoDellaSettimana(iso) {
+  const p = String(iso).slice(0, 10).split("-");
+  return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2])).getDay();
+}
+
+export function chiusuraSettimanale(azienda, giorno = oggiISO()) {
+  const giorni = (azienda && azienda.closing_weekdays) || [];
+  if (!giorni.length) return null;
+  const n = giornoDellaSettimana(giorno);
+  if (!giorni.map(Number).includes(n)) return null;
+  return {
+    id: "settimanale-" + n,
+    settimanale: true,
+    start_date: String(giorno).slice(0, 10),
+    end_date: String(giorno).slice(0, 10),
+    reason: "Giorno di chiusura settimanale (" + nomeGiorno(n) + ")",
+  };
+}
+
+// Quella che vale oggi: una chiusura registrata batte il giorno di
+// riposo, perché dice di più (ferie, lavori) e ha una data di rientro.
+export function chiusuraOggi(chiusure, azienda, giorno = oggiISO()) {
+  return chiusuraDelGiorno(chiusure, giorno) || chiusuraSettimanale(azienda, giorno);
+}
