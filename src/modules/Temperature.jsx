@@ -1,10 +1,11 @@
 import React, { useState } from "react";
-import { Trash2, AlertTriangle, CheckCircle2, Pencil, Check, X, Refrigerator, Info, PowerOff, CalendarOff } from "lucide-react";
+import { Trash2, AlertTriangle, CheckCircle2, Pencil, Check, X, Refrigerator, Info, PowerOff, CalendarOff, Printer } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { supabase } from "../supabaseClient";
 import { EQUIPMENT_TYPES_STORICI } from "./Attrezzature";
 import BarraAttivitaChiusa, { StoricoPeriodi } from "./BarraAttivitaChiusa";
+import { stampaRegistroTemperature, meseCorrente } from "../utils/registriStampa";
 import {
   MOTIVI_SPEGNIMENTO, chiusuraOggi, fuoriServizioDelGiorno,
   descrizionePeriodo,
@@ -59,6 +60,10 @@ export default function Temperature() {
 
   // Impianto per cui si sta dichiarando lo spegnimento: { unitId, motivo, nota }
   const [spegnere, setSpegnere] = useState(null);
+
+  // Il mese da stampare: il controllo chiede «il registro di settembre»,
+  // non «tutto quello che avete».
+  const [mese, setMese] = useState(meseCorrente());
 
   React.useEffect(() => {
     if (responsabile) setOperator((prec) => (prec ? prec : responsabile));
@@ -425,6 +430,18 @@ export default function Temperature() {
           })}
         </ul>
       )}
+
+      <div className="row-form" style={{ margin: "14px 0 0", alignItems: "center" }}>
+        <label className="field-label" style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          Registro mensile da stampare
+          <input type="month" value={mese} onChange={(e) => setMese(e.target.value)} />
+        </label>
+        <button type="button" className="link-btn" onClick={() => stampaRegistroTemperature({
+          mese, azienda: company, impianti: units, letture: items, chiusure, spegnimenti,
+        })}>
+          <Printer size={14} /> Stampa il registro (M01)
+        </button>
+      </div>
 
       <StoricoPeriodi chiusure={chiusure} spegnimenti={spegnimenti} giorniChiusura={company?.closing_weekdays} />
 

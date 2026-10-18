@@ -1,8 +1,9 @@
 import React, { useState } from "react";
-import { Plus, Trash2, AlertTriangle, Paperclip, FileText, Download, Map, Target, Check, X, Info, Pencil } from "lucide-react";
+import { Plus, Trash2, AlertTriangle, Paperclip, FileText, Download, Map, Target, Check, X, Info, Pencil, Printer } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
+import { stampaRegistroInfestanti, meseCorrente } from "../utils/registriStampa";
 
 // Monitoraggio infestanti.
 //
@@ -86,6 +87,7 @@ export default function Infestanti() {
   const ogniGiorni = Number(company?.pest_round_days) || 7;
 
   const [vista, setVista] = useState("giri");
+  const [mese, setMese] = useState(meseCorrente());
   const [errore, setErrore] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -538,6 +540,18 @@ export default function Infestanti() {
             </div>
           ) : (
             <>
+              <div className="row-form" style={{ margin: "0 0 10px", alignItems: "center" }}>
+                <label className="field-label" style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  Registro mensile da stampare
+                  <input type="month" value={mese} onChange={function (e) { setMese(e.target.value); }} />
+                </label>
+                <button type="button" className="link-btn" onClick={function () {
+                  stampaRegistroInfestanti({ mese: mese, azienda: company, postazioni: postazioni, giri: giri, esiti: esiti });
+                }}>
+                  <Printer size={14} /> Stampa il registro (M09)
+                </button>
+              </div>
+
               <div className="quadro-azione" style={{ marginTop: 0, marginBottom: 12 }}>
                 <button type="button" className="btn-primary" onClick={function () { giroAperto ? setGiroAperto(false) : apriGiro(); }}>
                   <Plus size={15} /> {giroAperto ? "Annulla" : "Nuovo giro di monitoraggio"}

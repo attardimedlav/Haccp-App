@@ -1,9 +1,10 @@
 import React, { useState } from "react";
-import { Trash2, CheckCircle2, AlertTriangle, Info, Check, CalendarOff } from "lucide-react";
+import { Trash2, CheckCircle2, AlertTriangle, Info, Check, CalendarOff, Printer } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { statoRiga, etichettaFrequenza, fmtData, SOGLIA_AVVISO_GIORNI } from "../utils/pianoPulizie";
 import BarraAttivitaChiusa, { StoricoPeriodi } from "./BarraAttivitaChiusa";
+import { stampaRegistroSanificazione, meseCorrente } from "../utils/registriStampa";
 import { chiusuraOggi } from "../utils/chiusure";
 
 export const SAN_AREAS = ["Cucina", "Sala", "Bagni", "Magazzino", "Attrezzature", "Frigoriferi"];
@@ -53,6 +54,7 @@ export default function Sanificazione() {
   const [busy, setBusy] = useState("");
   const [errore, setErrore] = useState("");
   const [mostraStorico, setMostraStorico] = useState(false);
+  const [mese, setMese] = useState(meseCorrente());
 
   React.useEffect(() => {
     if (responsabile) setOperator((prec) => (prec ? prec : responsabile));
@@ -314,6 +316,18 @@ export default function Sanificazione() {
           </ul>
         )
       )}
+
+      <div className="row-form" style={{ margin: "14px 0 0", alignItems: "center" }}>
+        <label className="field-label" style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          Registro mensile da stampare
+          <input type="month" value={mese} onChange={(e) => setMese(e.target.value)} />
+        </label>
+        <button type="button" className="link-btn" onClick={() => stampaRegistroSanificazione({
+          mese, azienda: company, piano, interventi: items, chiusure,
+        })}>
+          <Printer size={14} /> Stampa il registro (M04)
+        </button>
+      </div>
 
       <StoricoPeriodi chiusure={chiusure} spegnimenti={[]} giorniChiusura={company?.closing_weekdays} />
 
