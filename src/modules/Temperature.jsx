@@ -1,9 +1,14 @@
 import React, { useState } from "react";
-import { Trash2, AlertTriangle, CheckCircle2, Pencil, Check, X, Refrigerator, Info } from "lucide-react";
+import { Trash2, AlertTriangle, CheckCircle2, Pencil, Check, X, Refrigerator, Info, PowerOff, CalendarOff } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { supabase } from "../supabaseClient";
 import { EQUIPMENT_TYPES_STORICI } from "./Attrezzature";
+import BarraAttivitaChiusa, { StoricoPeriodi } from "./BarraAttivitaChiusa";
+import {
+  MOTIVI_SPEGNIMENTO, chiusuraDelGiorno, fuoriServizioDelGiorno,
+  descrizionePeriodo,
+} from "../utils/chiusure";
 
 // Temperature.
 //
@@ -29,6 +34,9 @@ export default function Temperature() {
   const { company } = useAuth();
   const { items, add, remove, update, loading } = useTable("temperature_logs", company?.id);
   const { items: units, loading: unitsLoading } = useTable("temperature_units", company?.id);
+  const { items: chiusure, add: addChiusura, update: updateChiusura } = useTable("company_closures", company?.id);
+  const { items: spegnimenti, add: addSpegnimento, update: updateSpegnimento } =
+    useTable("equipment_downtime", company?.id);
 
   // Chi compila le schede è di norma il responsabile HACCP: il campo si apre
   // già scritto col suo nome e resta modificabile se a controllare è un altro.
@@ -47,6 +55,9 @@ export default function Temperature() {
   const [editValue, setEditValue] = useState("");
   const [editNote, setEditNote] = useState("");
   const [editInRange, setEditInRange] = useState(true);
+
+  // Impianto per cui si sta dichiarando lo spegnimento: { unitId, motivo, nota }
+  const [spegnere, setSpegnere] = useState(null);
 
   React.useEffect(() => {
     if (responsabile) setOperator((prec) => (prec ? prec : responsabile));
@@ -70,6 +81,48 @@ export default function Temperature() {
 
   const tipoDi = (u) =>
     u.equipment_type ? (EQUIPMENT_TYPES_STORICI.find((t) => t.id === u.equipment_type)?.label || "") : "";
+
+  // Un impianto spento non ha una temperatura da leggere: la vetrina dei
+  // gelati d'inverno, il banco caldo nei mesi in cui non si usa. Finche' il
+  // periodo e' aperto la riga non chiede niente e non entra nel conteggio,
+  // ma resta visibile e dice da quando e perche' e' ferma — e' quello che
+  // spiega, mesi dopo, un registro senza letture.
+  const fuoriServizio = (u) => fuoriServizioDelGiorno(spegnimenti, u.label);
+
+  const spegni = async (u, motivo, nota) => {
+    setBusy(u.id);
+    setErrore("");
+    try {
+      await addSpegnimento({
+        unit_id: u.id,
+        unit_label: u.label,
+        start_date: oggiISO(),
+        end_date: null,
+        reason: motivo,
+        note: (nota || "").trim() || null,
+      });
+      setSpegnere(null);
+    } catch (err) {
+      setErrore("Non è stato possibile registrare lo spegnimento: " + err.message);
+    } finally {
+      setBusy("");
+    }
+  };
+
+  // Si riaccende oggi, quindi il fuori servizio e' durato fino a ieri —
+  // tranne quando era cominciato oggi stesso.
+  const riaccendi = async (periodo) => {
+    setBusy(periodo.id);
+    try {
+      const ieri = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+      const inizio = String(periodo.start_date).slice(0, 10);
+      await updateSpegnimento(periodo.id, { end_date: ieri < inizio ? inizio : ieri });
+    } catch (err) {
+      setErrore("Non è stato possibile riaccendere l'impianto: " + err.message);
+    } finally {
+      setBusy("");
+    }
+  };
 
   const registra = async (u, inRange, nota) => {
     if (!(operator || responsabile).trim()) { setErrore("Indica chi esegue il controllo."); return; }
@@ -154,7 +207,11 @@ export default function Temperature() {
   };
 
   const deviations = items.filter((i) => !isInRange(i)).length;
-  const fatteOggi = units.filter((u) => letturaOggi(u)).length;
+  const chiusa = chiusuraDelGiorno(chiusure);
+  // Il denominatore sono gli impianti da cui oggi ci si aspetta una lettura:
+  // gli spenti non sono controlli mancanti.
+  const daControllare = units.filter((u) => !fuoriServizio(u));
+  const fatteOggi = daControllare.filter((u) => letturaOggi(u)).length;
 
   const groupedByUnit = units.map((u) => ({
     unit: u,
@@ -186,14 +243,23 @@ export default function Temperature() {
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {deviations > 0 && <div className="pill pill-alert"><AlertTriangle size={14} /> {deviations} fuori range</div>}
-          {units.length > 0 && (
-            <div className={"pill " + (fatteOggi === units.length ? "pill-ok" : "pill-warn")}>
-              {fatteOggi === units.length ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
-              Oggi {fatteOggi} di {units.length}
+          {chiusa ? (
+            <div className="pill pill-warn"><CalendarOff size={14} /> Attività chiusa</div>
+          ) : daControllare.length > 0 && (
+            <div className={"pill " + (fatteOggi === daControllare.length ? "pill-ok" : "pill-warn")}>
+              {fatteOggi === daControllare.length ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
+              Oggi {fatteOggi} di {daControllare.length}
             </div>
           )}
         </div>
       </div>
+
+      <BarraAttivitaChiusa
+        chiusure={chiusure}
+        add={addChiusura}
+        update={updateChiusura}
+        nomeControlli="le temperature"
+      />
 
       <div className="row-form" style={{ marginTop: 0, marginBottom: 12 }}>
         <label className="field-label" style={{ flex: "1 1 260px" }}>
@@ -217,9 +283,12 @@ export default function Temperature() {
             const tipo = tipoDi(u);
             const inDeviazione = log && !isInRange(log);
             const staAprendo = fuori && fuori.unitId === u.id;
+            const spenta = fuoriServizio(u);
+            const staSpegnendo = spegnere && spegnere.unitId === u.id;
 
             return (
-              <li key={u.id} className={"dish-row" + (inDeviazione ? " row-warn" : "")}>
+              <li key={u.id} className={"dish-row" + (inDeviazione ? " row-warn" : "")}
+                  style={spenta ? { opacity: 0.72 } : undefined}>
                 <div className="dish-top" style={{ marginBottom: 6 }}>
                   <div style={{ minWidth: 0 }}>
                     <Refrigerator size={13} style={{ marginRight: 6, verticalAlign: -2 }} color="#2F6F4E" />
@@ -235,7 +304,46 @@ export default function Temperature() {
                   )}
                 </div>
 
-                {log ? (
+                {spenta ? (
+                  <div className="traccia-meta">
+                    <span className="pill pill-warn"><PowerOff size={12} /> Spenta</span>
+                    <span className="doc-type-tag">{descrizionePeriodo(spenta)}</span>
+                    {spenta.note && <span className="doc-type-tag">{spenta.note}</span>}
+                    <button type="button" className="btn-primary" disabled={busy === spenta.id}
+                      onClick={() => riaccendi(spenta)}>
+                      <Check size={15} /> {busy === spenta.id ? "…" : "Riaccesa oggi"}
+                    </button>
+                  </div>
+                ) : staSpegnendo ? (
+                  <div className="nc-edit-block">
+                    <p className="field-label" style={{ margin: "0 0 8px" }}>
+                      Da oggi questo impianto è spento. Perché?
+                    </p>
+                    <div className="row-form" style={{ margin: "0 0 8px" }}>
+                      <select value={spegnere.motivo}
+                        onChange={(e) => setSpegnere({ ...spegnere, motivo: e.target.value })}>
+                        {MOTIVI_SPEGNIMENTO.map((m) => <option key={m} value={m}>{m}</option>)}
+                      </select>
+                      <input
+                        type="text" className="note-input" placeholder="Nota (facoltativa)"
+                        value={spegnere.nota}
+                        onChange={(e) => setSpegnere({ ...spegnere, nota: e.target.value })}
+                      />
+                    </div>
+                    <div className="row-form" style={{ margin: 0 }}>
+                      <button type="button" className="btn-primary" disabled={busy === u.id}
+                        onClick={() => spegni(u, spegnere.motivo, spegnere.nota)}>
+                        <Check size={15} /> {busy === u.id ? "…" : "Registra lo spegnimento"}
+                      </button>
+                      <button type="button" className="link-btn" onClick={() => setSpegnere(null)}>Annulla</button>
+                    </div>
+                    <p className="range-hint">
+                      Finché resta spento non comparirà fra i controlli da fare, ma la riga resta
+                      visibile e dice da quando: è quello che spiega i giorni senza letture. Premi
+                      «Riaccesa» il giorno in cui torna in funzione.
+                    </p>
+                  </div>
+                ) : log ? (
                   <div className="traccia-meta">
                     <span className={"pill " + (isInRange(log) ? "pill-ok" : "pill-alert")}>
                       {isInRange(log)
@@ -294,6 +402,13 @@ export default function Temperature() {
                       onChange={(e) => setGradi({ ...gradi, [u.id]: e.target.value })}
                       title="Valore letto, facoltativo quando è nel range"
                     />
+                    <button
+                      type="button" className="link-btn"
+                      title="L'impianto è spento: fine stagione, guasto, non utilizzato"
+                      onClick={() => { setErrore(""); setSpegnere({ unitId: u.id, motivo: MOTIVI_SPEGNIMENTO[0], nota: "" }); }}
+                    >
+                      <PowerOff size={14} /> Spenta
+                    </button>
                     {ultima && (
                       <span className="sub">ultima lettura {fmtDate(ultima.created_at)}</span>
                     )}
@@ -305,11 +420,15 @@ export default function Temperature() {
         </ul>
       )}
 
+      <StoricoPeriodi chiusure={chiusure} spegnimenti={spegnimenti} />
+
       <p className="login-info" style={{ marginTop: 12 }}>
         <Info size={14} style={{ flexShrink: 0, marginTop: 1 }} />
         Il valore in gradi è facoltativo quando la temperatura è nel range; diventa obbligatorio,
         insieme all'azione presa, quando è fuori range — è il dato su cui si decide del prodotto.
-        Gli impianti si aggiungono in Configurazione → Attrezzature.
+        Gli impianti si aggiungono in Configurazione → Attrezzature. Un impianto spento — la
+        vetrina dei gelati fuori stagione, un frigorifero guasto — si dichiara con «Spenta»: esce
+        dai controlli del giorno ma resta nell'elenco, con scritto da quando e perché.
       </p>
 
       <button type="button" className="link-btn" onClick={() => setMostraStorico(!mostraStorico)}>

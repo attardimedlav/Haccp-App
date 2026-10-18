@@ -31,7 +31,7 @@ const MATRICI = [
 
 const PERIODICITA = [3, 6, 12, 24, 36];
 
-const ESITI = ["Conforme", "Non conforme", "In attesa del referto"];
+const ESITI = ["Conforme", "Conforme con riserva", "Non conforme", "In attesa del referto"];
 
 const oggi = function () { return new Date().toISOString().slice(0, 10); };
 
@@ -73,6 +73,13 @@ function AttachmentLink(props) {
   React.useEffect(function () {
     if (props.path) getAttachmentUrl(props.path).then(setUrl);
   }, [props.path]);
+  // I referti che l'app ha scritto da se' non hanno un PDF da allegare: il
+  // documento di prova e' il verbale compilato dentro l'app, e scrivere
+  // "nessun referto allegato" su una riga a posto fa cercare una carta che
+  // non deve esistere.
+  if (!props.path && props.interno) {
+    return <span className="none-label">Verbale compilato nell'app, nella scheda Verifica rapida pulizia</span>;
+  }
   if (!props.path) return <span className="none-label">Nessun referto allegato</span>;
   if (!url) return <span className="none-label">Caricamento allegato…</span>;
   return (
@@ -450,7 +457,7 @@ export default function ControlliAnalitici() {
                           {r.values_note && <p className="pest-note" style={{ margin: "2px 0 0" }}>{r.values_note}</p>}
                           {r.operator && <p className="pest-note" style={{ margin: "2px 0 0" }}>Registrato da {r.operator}</p>}
                           {r.note && <p className="pest-note" style={{ margin: "2px 0 0" }}>{r.note}</p>}
-                          <AttachmentLink path={r.attachment_path} />
+                          <AttachmentLink path={r.attachment_path} interno={!!r.source} />
                         </li>
                       );
                     })}

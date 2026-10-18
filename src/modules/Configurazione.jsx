@@ -80,6 +80,7 @@ export default function Configurazione({ onVai, subTabIniziale }) {
   const [hasIceMachine, setHasIceMachine] = useState(false);
   const [hasFryer, setHasFryer] = useState(false);
   const [sellsToBusinesses, setSellsToBusinesses] = useState(false);
+  const [rteProduction, setRteProduction] = useState(false);
   const [hasHood, setHasHood] = useState(true);
   const [iceMachineDays, setIceMachineDays] = useState("30");
   const [manualSource, setManualSource] = useState("app");
@@ -161,6 +162,7 @@ export default function Configurazione({ onVai, subTabIniziale }) {
       setHasIceMachine(!!company.has_ice_machine);
       setHasFryer(!!company.has_fryer);
       setSellsToBusinesses(!!company.sells_to_businesses);
+      setRteProduction(!!company.rte_production);
       setHasHood(company.has_hood !== false);
       setIceMachineDays(String(company.ice_machine_cleaning_days || 30));
       setManualSource(company.haccp_manual_source === "esterno" ? "esterno" : "app");
@@ -213,6 +215,7 @@ export default function Configurazione({ onVai, subTabIniziale }) {
     has_ice_machine: hasIceMachine,
     has_fryer: hasFryer,
     sells_to_businesses: sellsToBusinesses,
+    rte_production: rteProduction,
     has_hood: hasHood,
     ice_machine_cleaning_days: Math.max(1, parseInt(iceMachineDays, 10) || 30),
     haccp_manual_source: manualSource,
@@ -513,6 +516,17 @@ export default function Configurazione({ onVai, subTabIniziale }) {
                     <label className="checkbox-row" style={{ marginTop: 8 }}>
                       <input type="checkbox" checked={sellsToBusinesses} disabled={!isConsultant} onChange={(e) => setSellsToBusinesses(e.target.checked)} />
                       L'attività cede prodotti ad altre imprese — bar, ristoranti, negozi, grossisti (registro delle cessioni)
+                    </label>
+                    {/* Questa casella decide la frequenza del tampone di
+                        laboratorio. Dove si producono alimenti pronti che
+                        favoriscono la crescita di Listeria, l'art. 5 c.2 del
+                        Reg. 2073/2005 chiede il campionamento delle aree di
+                        lavorazione: una cadenza biennale, la', e' difficile da
+                        difendere, e il manuale la dichiarerebbe a vuoto. Per
+                        tutti gli altri resta ogni due anni. */}
+                    <label className="checkbox-row" style={{ marginTop: 8 }}>
+                      <input type="checkbox" checked={rteProduction} disabled={!isConsultant} onChange={(e) => setRteProduction(e.target.checked)} />
+                      L'attività produce alimenti pronti al consumo che favoriscono la crescita di Listeria — creme, prodotti farciti, gelati, piatti freddi (tampone di laboratorio ogni anno invece di ogni due)
                     </label>
                     {hasIceMachine && (
                       <label className="field-label" style={{ marginTop: 8, marginLeft: 26, display: "flex", alignItems: "center", gap: 8, flexDirection: "row" }}>

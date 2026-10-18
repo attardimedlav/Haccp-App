@@ -161,10 +161,17 @@ export default function VerificaPulizia() {
         company_id: company.id,
         plan_id: piano.id,
         sample_date: data,
-        result: esito === "Non conforme" ? "Non conforme" : "Conforme",
+        // Lo stesso esito del verbale, parola per parola: se il verbale dice
+        // "Conforme con riserva" e il referto dice "Conforme", in ispezione
+        // sono due documenti che si contraddicono.
+        result: esito,
         values_note: riassunto,
         operator: consulente || null,
         note: `Verifica rapida sui residui proteici — ${compilate.length} punti. ${note.trim()}`.trim(),
+        // Da qui i Controlli analitici sanno che il documento di prova e' il
+        // verbale dentro l'app, e non chiedono un referto da allegare.
+        source: "verifica_pulizia",
+        source_id: verbale.id,
       });
     }
 

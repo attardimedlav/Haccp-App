@@ -1,8 +1,10 @@
 import React, { useState } from "react";
-import { Trash2, CheckCircle2, AlertTriangle, Info, Check } from "lucide-react";
+import { Trash2, CheckCircle2, AlertTriangle, Info, Check, CalendarOff } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { statoRiga, etichettaFrequenza, fmtData, SOGLIA_AVVISO_GIORNI } from "../utils/pianoPulizie";
+import BarraAttivitaChiusa, { StoricoPeriodi } from "./BarraAttivitaChiusa";
+import { chiusuraDelGiorno } from "../utils/chiusure";
 
 export const SAN_AREAS = ["Cucina", "Sala", "Bagni", "Magazzino", "Attrezzature", "Frigoriferi"];
 
@@ -42,6 +44,7 @@ export default function Sanificazione() {
   const { items, add, remove, loading } = useTable("sanitization_logs", companyId);
   const { items: sanitizers } = useTable("sanitizers", companyId);
   const { items: piano, loading: pianoLoading } = useTable("cleaning_plan", companyId);
+  const { items: chiusure, add: addChiusura, update: updateChiusura } = useTable("company_closures", companyId);
 
   const responsabile = (company?.haccp_manager || "").trim();
   const [operator, setOperator] = useState(responsabile);
@@ -120,6 +123,13 @@ export default function Sanificazione() {
   const quoteGiorno = righe.filter((r) => Number(r.frequency_days) === 1);
   const fatteOggi = quoteGiorno.filter((r) => fattoOggi(r)).length;
 
+  // Con l'attivita' chiusa le pulizie di fine turno non sono arretrate: non
+  // c'e' stato nessun turno. Il contatore smette di accusare una mancanza e
+  // dice com'e' andata davvero, e le righe periodiche in ritardo restano
+  // nascoste finche' si riapre — recuperarle a serranda abbassata non si
+  // puo', e un avviso che non si puo' soddisfare si impara a ignorare.
+  const chiusa = chiusuraDelGiorno(chiusure);
+
   return (
     <div className="panel">
       <div className="panel-head">
@@ -129,7 +139,9 @@ export default function Sanificazione() {
             Programma di pulizia e sanificazione dell'azienda: spunta ogni intervento eseguito.
           </p>
         </div>
-        {quoteGiorno.length > 0 && (
+        {chiusa ? (
+          <div className="pill pill-warn"><CalendarOff size={14} /> Attività chiusa</div>
+        ) : quoteGiorno.length > 0 && (
           <div className={"pill " + (fatteOggi === quoteGiorno.length ? "pill-ok" : "pill-warn")}>
             {fatteOggi === quoteGiorno.length ? <CheckCircle2 size={14} /> : <AlertTriangle size={14} />}
             Oggi {fatteOggi} di {quoteGiorno.length}
@@ -137,7 +149,14 @@ export default function Sanificazione() {
         )}
       </div>
 
-      {inRitardo.length > 0 && (
+      <BarraAttivitaChiusa
+        chiusure={chiusure}
+        add={addChiusura}
+        update={updateChiusura}
+        nomeControlli="le pulizie"
+      />
+
+      {!chiusa && inRitardo.length > 0 && (
         <div className="nc-edit-block" style={{ marginBottom: 12 }}>
           <p className="field-label" style={{ color: "#B3432E", margin: "0 0 6px" }}>
             <AlertTriangle size={13} /> Da recuperare:
@@ -292,6 +311,8 @@ export default function Sanificazione() {
           </ul>
         )
       )}
+
+      <StoricoPeriodi chiusure={chiusure} spegnimenti={[]} />
 
       <p className="login-info" style={{ marginTop: 14 }}>
         <Info size={14} style={{ flexShrink: 0, marginTop: 1 }} />
