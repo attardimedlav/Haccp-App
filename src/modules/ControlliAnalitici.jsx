@@ -51,12 +51,26 @@ function aggiungiMesi(iso, mesi) {
 // Lo stato di un piano si legge dall'ultimo campionamento fatto: se non ce
 // n'è nessuno il piano è scoperto, altrimenti vale la scadenza calcolata
 // sulla periodicità dichiarata.
-function statoPiano(piano, referti) {
+function statoPiano(piano, referti, inizioRapporto) {
   const suoi = referti
     .filter(function (r) { return r.plan_id === piano.id; })
     .sort(function (a, b) { return (a.sample_date || "") < (b.sample_date || "") ? 1 : -1; });
   const ultimo = suoi[0] || null;
-  if (!ultimo) return { cls: "pill-alert", label: "Mai eseguito", ultimo: null, suoi: suoi };
+
+  // Nessun prelievo ancora registrato non vuol dire in ritardo: il
+  // termine decorre dall'inizio del rapporto con l'azienda, e un cliente
+  // attivato il mese scorso con un piano annuale ha undici mesi davanti.
+  // Senza quella data non si puo' dire nulla, e si scrive soltanto che
+  // non risulta eseguito.
+  if (!ultimo) {
+    if (!inizioRapporto) return { cls: "pill-warn", label: "Nessun referto registrato", ultimo: null, suoi: suoi };
+    const prima = aggiungiMesi(String(inizioRapporto).slice(0, 10), piano.frequency_months);
+    if (!prima) return { cls: "pill-warn", label: "Nessun referto registrato", ultimo: null, suoi: suoi };
+    const mancano = Math.ceil((new Date(prima) - new Date(oggi())) / 86400000);
+    if (mancano < 0) return { cls: "pill-alert", label: "Mai eseguito — era previsto entro il " + fmt(prima), ultimo: null, suoi: suoi };
+    if (mancano <= 30) return { cls: "pill-warn", label: "Primo controllo entro il " + fmt(prima), ultimo: null, suoi: suoi };
+    return { cls: "pill-ok", label: "Primo controllo entro il " + fmt(prima), ultimo: null, suoi: suoi };
+  }
   if (ultimo.result === "Non conforme") {
     return { cls: "pill-alert", label: "Ultimo esito non conforme", ultimo: ultimo, suoi: suoi };
   }
@@ -211,9 +225,12 @@ export default function ControlliAnalitici() {
     }
   };
 
+  // Da quando si contano i mesi per un controllo mai eseguito.
+  const inizioRapporto = company?.subscription_start || company?.created_at || null;
+
   const attivi = piani.filter(function (p) { return p.active !== false; });
   const scoperti = attivi.filter(function (p) {
-    const s = statoPiano(p, referti);
+    const s = statoPiano(p, referti, inizioRapporto);
     return s.cls === "pill-alert" || s.cls === "pill-warn";
   }).length;
 
@@ -298,7 +315,7 @@ export default function ControlliAnalitici() {
       ) : (
         <ul className="dish-list">
           {attivi.map(function (piano) {
-            const stato = statoPiano(piano, referti);
+            const stato = statoPiano(piano, referti, inizioRapporto);
             const suoi = stato.suoi;
 
             return (

@@ -449,15 +449,31 @@ export default function Dashboard({ goTo, openWorkSafety }) {
     // scadenza che l'azienda ha scritto nel proprio manuale non la
     // ricorderebbe nessuno. Si avvisa quando e' gia' scaduta o quando
     // manca meno di un mese: prima sarebbe rumore, dopo sarebbe tardi.
+    // I "mai eseguito" si contano, non si elencano uno per uno: in un
+    // cliente nuovo sono tutte le righe del piano, sei avvisi identici
+    // che coprono quelli seri. E' la stessa scelta gia' fatta per le
+    // pulizie, dove una riga per area ha sostituito dieci righe singole.
+    const maiEseguiti = [];
+
+    // Da quando decorre il termine.
+    //
+    // «Mai eseguito» non e' un ritardo: se il cliente e' stato attivato
+    // oggi e il piano dice ogni dodici mesi, ha dodici mesi di tempo, e
+    // un avviso rosso il primo giorno dice il falso — e insegna a
+    // ignorare anche gli avvisi veri. Il termine parte dall'inizio del
+    // rapporto; senza quella data non si avvisa affatto, perche' non si
+    // puo' affermare che qualcosa sia in ritardo.
+    const inizioRapporto = company?.subscription_start || company?.created_at || null;
+
     analisiAttive.forEach((a) => {
       const suoi = referti.items.filter((r) => r.plan_id === a.id);
       const ultimo = suoi.reduce((m, r) => ((r.sample_date || "") > m ? r.sample_date : m), "");
       if (!ultimo) {
-        haccpIssues.push({
-          key: "analisi-" + a.id, tab: "controllianalitici", icon: FlaskConical,
-          titolo: "Controllo analitico mai eseguito",
-          dettaglio: a.label + (a.frequency_months ? " — previsto ogni " + a.frequency_months + " mesi" : ""),
-        });
+        if (!inizioRapporto) return;
+        const primaScadenza = new Date(inizioRapporto);
+        primaScadenza.setMonth(primaScadenza.getMonth() + (Number(a.frequency_months) || 12));
+        if (primaScadenza >= new Date()) return;
+        maiEseguiti.push(a.label + " (entro il " + primaScadenza.toLocaleDateString("it-IT") + ")");
         return;
       }
       const scad = new Date(ultimo);
@@ -477,6 +493,17 @@ export default function Dashboard({ goTo, openWorkSafety }) {
         });
       }
     });
+
+    if (maiEseguiti.length > 0) {
+      haccpIssues.push({
+        key: "analisi-mai", tab: "controllianalitici", icon: FlaskConical,
+        titolo: maiEseguiti.length === 1
+          ? "Controllo analitico mai eseguito, termine superato"
+          : `Controlli analitici mai eseguiti, termine superato — ${maiEseguiti.length} del piano`,
+        dettaglio: maiEseguiti.slice(0, 4).join(", ") +
+          (maiEseguiti.length > 4 ? ` e altri ${maiEseguiti.length - 4}` : ""),
+      });
+    }
 
     // Il manuale non ha una scadenza periodica: il Reg. (CE) 852/2004, art. 5
     // c. 4 lett. b, chiede di rivederlo quando cambiano il prodotto, il
