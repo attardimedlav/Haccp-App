@@ -974,7 +974,7 @@ export default function Configurazione({ onVai, subTabIniziale }) {
             </label>
             <ul className="reminder-list">
               {datiPromemoria.map((ev) => (
-                <li key={ev.key}>{ev.quando} — {ev.titolo.toLowerCase()}</li>
+                <li key={ev.key}>{ev.quando} — {ev.titolo}</li>
               ))}
             </ul>
             <button type="button" className="btn-primary" onClick={() => downloadReminderICS(datiCalendario)}>
