@@ -1,5 +1,5 @@
 import React from "react";
-import { Thermometer, SprayCan, Bug, AlertTriangle, CheckCircle2, Droplet, FolderOpen, HardHat, Award, Stethoscope, Wrench, GraduationCap, Truck, Flame, BookOpen, Package, CalendarOff } from "lucide-react";
+import { Thermometer, SprayCan, Bug, AlertTriangle, CheckCircle2, Droplet, FolderOpen, HardHat, Award, Stethoscope, Wrench, GraduationCap, Truck, Flame, BookOpen, Package, CalendarOff, FlaskConical } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { chiusuraOggi, fuoriServizioDelGiorno, descrizionePeriodo } from "../utils/chiusure";
 import { useAuth } from "../AuthContext";
@@ -58,6 +58,8 @@ export default function Dashboard({ goTo, openWorkSafety }) {
   const olio = useTable("frying_oil_logs", company?.id);
   const arrivi = useTable("traceability_records", company?.id);
   const manuali = useTable("haccp_manuals", company?.id);
+  const analisi = useTable("analysis_plan", company?.id);
+  const referti = useTable("analysis_results", company?.id);
   const chiusure = useTable("company_closures", company?.id);
   const spegnimenti = useTable("equipment_downtime", company?.id);
   const corsiHaccp = useTable("training_records", company?.id);
@@ -432,6 +434,49 @@ export default function Dashboard({ goTo, openWorkSafety }) {
         });
       }
     }
+
+    // Le righe del piano che valgono per questa azienda: quelle legate a
+    // una dotazione compaiono solo se la casella e' accesa.
+    const analisiAttive = analisi.items
+      .filter((a) => a.active !== false)
+      .filter((a) => !a.requires_flag || company?.[a.requires_flag]);
+
+    // Il piano dei controlli analitici.
+    //
+    // Non finisce nel calendario del telefono: prenotare il laboratorio
+    // non e' un gesto da fare al suono di una sveglia, e la campagna la
+    // organizza il consulente. Ma deve stare qui, perche' altrimenti una
+    // scadenza che l'azienda ha scritto nel proprio manuale non la
+    // ricorderebbe nessuno. Si avvisa quando e' gia' scaduta o quando
+    // manca meno di un mese: prima sarebbe rumore, dopo sarebbe tardi.
+    analisiAttive.forEach((a) => {
+      const suoi = referti.items.filter((r) => r.plan_id === a.id);
+      const ultimo = suoi.reduce((m, r) => ((r.sample_date || "") > m ? r.sample_date : m), "");
+      if (!ultimo) {
+        haccpIssues.push({
+          key: "analisi-" + a.id, tab: "controllianalitici", icon: FlaskConical,
+          titolo: "Controllo analitico mai eseguito",
+          dettaglio: a.label + (a.frequency_months ? " — previsto ogni " + a.frequency_months + " mesi" : ""),
+        });
+        return;
+      }
+      const scad = new Date(ultimo);
+      scad.setMonth(scad.getMonth() + (Number(a.frequency_months) || 12));
+      const giorni = Math.ceil((scad - new Date()) / 86400000);
+      if (giorni < 0) {
+        haccpIssues.push({
+          key: "analisi-" + a.id, tab: "controllianalitici", icon: FlaskConical,
+          titolo: "Controllo analitico scaduto",
+          dettaglio: a.label + " — era previsto entro il " + scad.toLocaleDateString("it-IT"),
+        });
+      } else if (giorni <= 30) {
+        haccpIssues.push({
+          key: "analisi-" + a.id, tab: "controllianalitici", icon: FlaskConical,
+          titolo: "Controllo analitico in scadenza",
+          dettaglio: a.label + " — da eseguire entro il " + scad.toLocaleDateString("it-IT"),
+        });
+      }
+    });
 
     // Il manuale non ha una scadenza periodica: il Reg. (CE) 852/2004, art. 5
     // c. 4 lett. b, chiede di rivederlo quando cambiano il prodotto, il
