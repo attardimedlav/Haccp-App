@@ -60,7 +60,7 @@ export default function VerificaPulizia() {
   const isConsultant = (consultantCompanies || []).length > 0;
 
   const { items: verbali, add, remove, loading } = useTable("surface_checks", company?.id);
-  const { items: punti } = useTable("surface_check_points", company?.id);
+  const { items: punti, reload: ricaricaPunti } = useTable("surface_check_points", company?.id);
   const { items: piani } = useTable("analysis_plan", company?.id);
 
   const [aperto, setAperto] = useState(false);
@@ -72,6 +72,7 @@ export default function VerificaPulizia() {
   const [oraFine, setOraFine] = useState("");
   const [presente, setPresente] = useState("");
   const [qualifica, setQualifica] = useState("");
+  const [qualificaIncaricato, setQualificaIncaricato] = useState("consulente esterna per l'igiene degli alimenti");
   const [lotto, setLotto] = useState("");
   const [scadenza, setScadenza] = useState("");
   const [motivo, setMotivo] = useState(MOTIVI[0]);
@@ -82,7 +83,12 @@ export default function VerificaPulizia() {
     PUNTI_PREDEFINITI.map((p) => ({ ...p, sample_time: "", color: "", outcome: "", action_taken: "" }))
   );
 
-  const consulente = company?.consultant_name || "";
+  // Chi esegue il campionamento e in che veste: il verbale vale come
+  // atto solo se lo dice, e nel 99% dei casi è sempre la stessa persona.
+  // Si propone compilato e resta modificabile, perché il giorno che va
+  // un collega il verbale deve poterlo dire.
+  const consulente = company?.consultant_name || "Dott.ssa Attardi Mary Stella";
+  const QUALIFICA_CONSULENTE = "consulente esterna per l'igiene degli alimenti";
 
   const cambiaRiga = (i, campo, valore) => {
     setRighe((prec) => prec.map((r, j) => {
@@ -107,6 +113,7 @@ export default function VerificaPulizia() {
 
   const azzera = () => {
     setData(oggi()); setOraInizio(adesso()); setOraFine(""); setPresente(""); setQualifica("");
+    setQualificaIncaricato(QUALIFICA_CONSULENTE);
     setLotto(""); setScadenza(""); setMotivo(MOTIVI[0]); setOraPulizia(""); setDetergente(""); setNote("");
     setRighe(PUNTI_PREDEFINITI.map((p) => ({ ...p, sample_time: "", color: "", outcome: "", action_taken: "" })));
   };
@@ -126,6 +133,7 @@ export default function VerificaPulizia() {
       time_start: oraInizio || null,
       time_end: oraFine || null,
       inspector: consulente || null,
+      inspector_role: (qualificaIncaricato || QUALIFICA_CONSULENTE).trim() || null,
       present_name: presente.trim() || null,
       present_role: qualifica.trim() || null,
       kit_lot: lotto.trim() || null,
@@ -152,6 +160,14 @@ export default function VerificaPulizia() {
       }))
     );
     if (errPunti) { setBusy(false); setErrore("Verbale salvato, ma i punti no: " + errPunti.message); return; }
+
+    // I punti sono stati scritti con una insert diretta, che non passa
+    // dall'elenco tenuto in memoria: senza questo ricaricamento la
+    // scheda continua a non conoscerli fino al prossimo refresh, e chi
+    // stampa il verbale subito dopo averlo salvato si ritrova la tabella
+    // dei punti vuota — succede davvero, perche' stampare subito e' il
+    // gesto naturale.
+    await ricaricaPunti();
 
     // L'esito entra da solo nei controlli analitici, sulla riga di piano che
     // gli corrisponde: e' li' che si calcola la scadenza della verifica
@@ -243,6 +259,13 @@ export default function VerificaPulizia() {
             <select value={motivo} onChange={(e) => setMotivo(e.target.value)}>
               {MOTIVI.map((m) => <option key={m} value={m}>{m}</option>)}
             </select>
+          </div>
+
+          <div className="row-form" style={{ margin: "0 0 8px" }}>
+            <input type="text" value={consulente} readOnly className="note-input"
+              aria-label="Incaricato del campionamento" title="Chi esegue il campionamento" />
+            <input type="text" placeholder="In qualità di (incaricato)" value={qualificaIncaricato}
+              onChange={(e) => setQualificaIncaricato(e.target.value)} className="note-input" />
           </div>
 
           <div className="row-form" style={{ margin: "0 0 8px" }}>
