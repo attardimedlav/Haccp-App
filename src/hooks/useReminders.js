@@ -151,7 +151,7 @@ export function elencoPromemoria(dati = {}) {
     const prossima = ultima ? piuMesi(new Date(ultima), mesi) : new Date();
     eventi.push({
       key: "vasca-" + v.id,
-      titolo: `Pulizia della vasca — ${v.name}`,
+      titolo: `Pulizia della vasca: ${v.name}`,
       quando: `Ogni ${mesi} mesi, dal ${prossima.toLocaleDateString("it-IT")}`,
       rrule: `FREQ=MONTHLY;INTERVAL=${mesi}`,
       inizio: primoGiornoUtile(azienda, ora, prossima),
@@ -167,7 +167,7 @@ export function elencoPromemoria(dati = {}) {
     const prossima = ultimo ? piuMesi(dataDa(ultimo), a.frequency_months) : new Date();
     eventi.push({
       key: "analisi-" + a.id,
-      titolo: `Controllo analitico — ${a.label}`,
+      titolo: `Controllo analitico: ${a.label}`,
       quando: `Ogni ${a.frequency_months} mesi, dal ${prossima.toLocaleDateString("it-IT")}`,
       rrule: `FREQ=MONTHLY;INTERVAL=${Number(a.frequency_months) || 12}`,
       inizio: primoGiornoUtile(azienda, ora, prossima),
@@ -182,7 +182,7 @@ export function elencoPromemoria(dati = {}) {
     if (!d || d < new Date(new Date().toDateString())) return;
     eventi.push({
       key: "manut-" + m.id,
-      titolo: `Manutenzione — ${m.equipment}`,
+      titolo: `Manutenzione: ${m.equipment}`,
       quando: `Il ${d.toLocaleDateString("it-IT")}`,
       rrule: null,
       inizio: primoGiornoUtile(azienda, ora, d),
