@@ -1,7 +1,7 @@
 import React from "react";
 import { Thermometer, SprayCan, Bug, AlertTriangle, CheckCircle2, Droplet, FolderOpen, HardHat, Award, Stethoscope, Wrench, GraduationCap, Truck, Flame, BookOpen, Package, CalendarOff } from "lucide-react";
 import { useTable } from "../hooks/useTable";
-import { chiusuraDelGiorno, fuoriServizioDelGiorno, descrizionePeriodo } from "../utils/chiusure";
+import { chiusuraOggi, fuoriServizioDelGiorno, descrizionePeriodo } from "../utils/chiusure";
 import { useAuth } from "../AuthContext";
 import { WATER_TANK_CONTROL_TYPE } from "./AcquePotabili";
 import { PLAN_TYPE } from "./Documenti";
@@ -94,7 +94,7 @@ export default function Dashboard({ goTo, openWorkSafety }) {
   // vista gli avvisi veri. Restano quelli documentali — attestati,
   // nomine, visite, fornitori, manuale — perche' quelli scadono lo
   // stesso e si possono sistemare anche a serranda abbassata.
-  const chiusa = chiusuraDelGiorno(chiusure.items);
+  const chiusa = chiusuraOggi(chiusure.items, company);
   const lateChecks = chiusa ? [] : lateChecksTutti;
   const deviations = showHaccp ? temp.items.filter((i) => !isTempInRange(i, units.items)).length : 0;
   const pestAlerts = showHaccp ? pest.items.filter((i) => i.outcome === "tracce").length : 0;
@@ -484,7 +484,7 @@ export default function Dashboard({ goTo, openWorkSafety }) {
           <button type="button" className="compliance-row compliance-row-warn" onClick={() => goTo("sanificazione")}>
             <CalendarOff size={15} color="#8A6514" />
             <span className="compliance-text">
-              <strong>Attività chiusa</strong>{" — "}{descrizionePeriodo(chiusa)}
+              <strong>Attività chiusa</strong>{" — "}{chiusa.settimanale ? chiusa.reason : descrizionePeriodo(chiusa)}
               {": i controlli del giorno non sono richiesti e i relativi avvisi restano sospesi fino alla riapertura."}
             </span>
           </button>

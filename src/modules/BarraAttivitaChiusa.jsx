@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { CalendarOff, Check, Info } from "lucide-react";
-import { MOTIVI_CHIUSURA, chiusuraDelGiorno, descrizionePeriodo, oggiISO } from "../utils/chiusure";
+import { MOTIVI_CHIUSURA, descrizionePeriodo, elencoGiorni, oggiISO } from "../utils/chiusure";
 
 // La fascia dell'attività chiusa, uguale nelle schede che la mostrano.
 //
@@ -13,14 +13,12 @@ import { MOTIVI_CHIUSURA, chiusuraDelGiorno, descrizionePeriodo, oggiISO } from 
 // resta vuota e si scrive il giorno del rientro. Obbligare a indicarla
 // subito significherebbe avere nel registro una data inventata.
 
-export default function BarraAttivitaChiusa({ chiusure, add, update, remove, nomeControlli }) {
+export default function BarraAttivitaChiusa({ chiusa, add, update, remove, nomeControlli, giorniChiusura }) {
   const [aperto, setAperto] = useState(false);
   const [inizio, setInizio] = useState(oggiISO());
   const [motivo, setMotivo] = useState(MOTIVI_CHIUSURA[0]);
   const [nota, setNota] = useState("");
   const [busy, setBusy] = useState(false);
-
-  const chiusa = chiusuraDelGiorno(chiusure);
 
   const apriChiusura = async () => {
     setBusy(true);
@@ -52,6 +50,37 @@ export default function BarraAttivitaChiusa({ chiusure, add, update, remove, nom
     }
   };
 
+  // Il giorno di riposo settimanale non si "riapre": torna da solo la
+  // settimana dopo. Niente pulsante, quindi, ma resta la possibilita' di
+  // dichiarare una chiusura vera — le ferie cominciate di lunedi' sono
+  // un'altra cosa e hanno una data di rientro.
+  if (chiusa && chiusa.settimanale) {
+    return (
+      <div className="nc-edit-block" style={{ marginBottom: 12, background: "#FBF4E6", borderColor: "#C79A3A" }}>
+        <div className="dish-top" style={{ marginBottom: 4 }}>
+          <div style={{ minWidth: 0 }}>
+            <CalendarOff size={14} style={{ marginRight: 6, verticalAlign: -2 }} color="#8A6514" />
+            <strong>Oggi l'attività è chiusa</strong>
+            <span className="lot-tag">{chiusa.reason}</span>
+          </div>
+          {!aperto && (
+            <button type="button" className="link-btn" onClick={() => setAperto(true)}>
+              <CalendarOff size={14} /> Chiusura più lunga (ferie, lavori)
+            </button>
+          )}
+        </div>
+        <p className="pest-note" style={{ margin: 0 }}>
+          <span>
+            {nomeControlli.charAt(0).toUpperCase() + nomeControlli.slice(1)} di oggi non si
+            registrano e non vengono sollecitate. Il giorno di chiusura si cambia in
+            Configurazione → Azienda.
+          </span>
+        </p>
+        {aperto && moduloChiusura()}
+      </div>
+    );
+  }
+
   if (chiusa) {
     return (
       <div className="nc-edit-block" style={{ marginBottom: 12, background: "#FBF4E6", borderColor: "#C79A3A" }}>
@@ -80,12 +109,22 @@ export default function BarraAttivitaChiusa({ chiusure, add, update, remove, nom
 
   if (!aperto) {
     return (
-      <button type="button" className="link-btn" style={{ marginBottom: 10 }} onClick={() => setAperto(true)}>
-        <CalendarOff size={14} /> Segna l'attività come chiusa
-      </button>
+      <div style={{ marginBottom: 10 }}>
+        <button type="button" className="link-btn" onClick={() => setAperto(true)}>
+          <CalendarOff size={14} /> Segna l'attività come chiusa
+        </button>
+        {giorniChiusura && giorniChiusura.length > 0 && (
+          <span className="sub" style={{ marginLeft: 10 }}>
+            chiusura settimanale: {elencoGiorni(giorniChiusura)}
+          </span>
+        )}
+      </div>
     );
   }
 
+  return moduloChiusura();
+
+  function moduloChiusura() {
   return (
     <div className="nc-edit-block" style={{ marginBottom: 12 }}>
       <p className="field-label" style={{ margin: "0 0 8px" }}>
@@ -118,6 +157,7 @@ export default function BarraAttivitaChiusa({ chiusure, add, update, remove, nom
       </p>
     </div>
   );
+  }
 }
 
 // Lo storico dei periodi senza registrazioni.
@@ -133,12 +173,14 @@ export default function BarraAttivitaChiusa({ chiusure, add, update, remove, nom
 // in PDF stampa la scheda così come si vede, quindi è il pezzo che fa
 // uscire la spiegazione insieme al registro invece di lasciarla
 // nell'app.
-export function StoricoPeriodi({ chiusure, spegnimenti }) {
+export function StoricoPeriodi({ chiusure, spegnimenti, giorniChiusura }) {
   const perData = (a, b) => (String(a.start_date) < String(b.start_date) ? 1 : -1);
   const righeChiusure = [...(chiusure || [])].sort(perData);
   const righeSpegnimenti = [...(spegnimenti || [])].sort(perData);
 
-  if (righeChiusure.length === 0 && righeSpegnimenti.length === 0) return null;
+  const settimanale = (giorniChiusura || []).length > 0 ? elencoGiorni(giorniChiusura) : "";
+
+  if (righeChiusure.length === 0 && righeSpegnimenti.length === 0 && !settimanale) return null;
 
   return (
     <div style={{ marginTop: 18 }}>
@@ -146,6 +188,13 @@ export function StoricoPeriodi({ chiusure, spegnimenti }) {
         Periodi senza registrazioni, e perché
       </h3>
       <ul className="log-list">
+        {settimanale && (
+          <li className="log-row">
+            <CalendarOff size={15} color="#8A6514" />
+            <span className="log-main"><strong>Chiusura settimanale</strong></span>
+            <span className="log-note">ogni {settimanale}</span>
+          </li>
+        )}
         {righeChiusure.map((c) => (
           <li key={c.id} className="log-row">
             <CalendarOff size={15} color="#8A6514" />
@@ -164,7 +213,7 @@ export function StoricoPeriodi({ chiusure, spegnimenti }) {
         ))}
       </ul>
       <p className="range-hint">
-        Nei periodi elencati non c'era nulla da registrare: l'attività era chiusa o
+        Nei periodi e nei giorni elencati non c'era nulla da registrare: l'attività era chiusa o
         l'attrezzatura era ferma. L'elenco si stampa insieme al registro ed è quello che
         spiega le righe mancanti.
       </p>

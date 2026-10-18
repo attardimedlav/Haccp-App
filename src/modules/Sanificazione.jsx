@@ -4,7 +4,7 @@ import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { statoRiga, etichettaFrequenza, fmtData, SOGLIA_AVVISO_GIORNI } from "../utils/pianoPulizie";
 import BarraAttivitaChiusa, { StoricoPeriodi } from "./BarraAttivitaChiusa";
-import { chiusuraDelGiorno } from "../utils/chiusure";
+import { chiusuraOggi } from "../utils/chiusure";
 
 export const SAN_AREAS = ["Cucina", "Sala", "Bagni", "Magazzino", "Attrezzature", "Frigoriferi"];
 
@@ -129,7 +129,7 @@ export default function Sanificazione() {
   // dice com'e' andata davvero, e le righe periodiche in ritardo restano
   // nascoste finche' si riapre — recuperarle a serranda abbassata non si
   // puo', e un avviso che non si puo' soddisfare si impara a ignorare.
-  const chiusa = chiusuraDelGiorno(chiusure);
+  const chiusa = chiusuraOggi(chiusure, company);
 
   return (
     <div className="panel">
@@ -151,7 +151,8 @@ export default function Sanificazione() {
       </div>
 
       <BarraAttivitaChiusa
-        chiusure={chiusure}
+        chiusa={chiusa}
+        giorniChiusura={company?.closing_weekdays}
         add={addChiusura}
         update={updateChiusura}
         remove={removeChiusura}
@@ -314,7 +315,7 @@ export default function Sanificazione() {
         )
       )}
 
-      <StoricoPeriodi chiusure={chiusure} spegnimenti={[]} />
+      <StoricoPeriodi chiusure={chiusure} spegnimenti={[]} giorniChiusura={company?.closing_weekdays} />
 
       <p className="login-info" style={{ marginTop: 14 }}>
         <Info size={14} style={{ flexShrink: 0, marginTop: 1 }} />

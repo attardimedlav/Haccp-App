@@ -6,7 +6,7 @@ import { supabase } from "../supabaseClient";
 import { EQUIPMENT_TYPES_STORICI } from "./Attrezzature";
 import BarraAttivitaChiusa, { StoricoPeriodi } from "./BarraAttivitaChiusa";
 import {
-  MOTIVI_SPEGNIMENTO, chiusuraDelGiorno, fuoriServizioDelGiorno,
+  MOTIVI_SPEGNIMENTO, chiusuraOggi, fuoriServizioDelGiorno,
   descrizionePeriodo,
 } from "../utils/chiusure";
 
@@ -211,7 +211,7 @@ export default function Temperature() {
   };
 
   const deviations = items.filter((i) => !isInRange(i)).length;
-  const chiusa = chiusuraDelGiorno(chiusure);
+  const chiusa = chiusuraOggi(chiusure, company);
   // Il denominatore sono gli impianti da cui oggi ci si aspetta una lettura:
   // gli spenti non sono controlli mancanti.
   const daControllare = units.filter((u) => !fuoriServizio(u));
@@ -259,7 +259,8 @@ export default function Temperature() {
       </div>
 
       <BarraAttivitaChiusa
-        chiusure={chiusure}
+        chiusa={chiusa}
+        giorniChiusura={company?.closing_weekdays}
         add={addChiusura}
         update={updateChiusura}
         remove={removeChiusura}
@@ -425,7 +426,7 @@ export default function Temperature() {
         </ul>
       )}
 
-      <StoricoPeriodi chiusure={chiusure} spegnimenti={spegnimenti} />
+      <StoricoPeriodi chiusure={chiusure} spegnimenti={spegnimenti} giorniChiusura={company?.closing_weekdays} />
 
       <p className="login-info" style={{ marginTop: 12 }}>
         <Info size={14} style={{ flexShrink: 0, marginTop: 1 }} />

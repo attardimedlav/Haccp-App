@@ -5,6 +5,7 @@ import { downloadReminderICS } from "../hooks/useReminders";
 import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
 import { fotoInFirma } from "../utils/firmaImmagine";
 import { getSubscriptionStatus, pillClassFor } from "../subscriptionStatus";
+import { GIORNI } from "../utils/chiusure";
 import Attrezzature from "./Attrezzature";
 import Sanificanti from "./Sanificanti";
 import PianoPulizie from "./PianoPulizie";
@@ -81,6 +82,7 @@ export default function Configurazione({ onVai, subTabIniziale }) {
   const [hasFryer, setHasFryer] = useState(false);
   const [sellsToBusinesses, setSellsToBusinesses] = useState(false);
   const [rteProduction, setRteProduction] = useState(false);
+  const [closingWeekdays, setClosingWeekdays] = useState([]);
   const [hasHood, setHasHood] = useState(true);
   const [iceMachineDays, setIceMachineDays] = useState("30");
   const [manualSource, setManualSource] = useState("app");
@@ -163,6 +165,7 @@ export default function Configurazione({ onVai, subTabIniziale }) {
       setHasFryer(!!company.has_fryer);
       setSellsToBusinesses(!!company.sells_to_businesses);
       setRteProduction(!!company.rte_production);
+      setClosingWeekdays(Array.isArray(company.closing_weekdays) ? company.closing_weekdays.map(Number) : []);
       setHasHood(company.has_hood !== false);
       setIceMachineDays(String(company.ice_machine_cleaning_days || 30));
       setManualSource(company.haccp_manual_source === "esterno" ? "esterno" : "app");
@@ -216,6 +219,7 @@ export default function Configurazione({ onVai, subTabIniziale }) {
     has_fryer: hasFryer,
     sells_to_businesses: sellsToBusinesses,
     rte_production: rteProduction,
+    closing_weekdays: closingWeekdays,
     has_hood: hasHood,
     ice_machine_cleaning_days: Math.max(1, parseInt(iceMachineDays, 10) || 30),
     haccp_manual_source: manualSource,
@@ -528,6 +532,40 @@ export default function Configurazione({ onVai, subTabIniziale }) {
                       <input type="checkbox" checked={rteProduction} disabled={!isConsultant} onChange={(e) => setRteProduction(e.target.checked)} />
                       L'attività produce alimenti pronti al consumo che favoriscono la crescita di Listeria — creme, prodotti farciti, gelati, piatti freddi (tampone di laboratorio ogni anno invece di ogni due)
                     </label>
+                    {/* Il giorno di riposo e' una proprieta' dell'azienda, non
+                        un evento: chiedere di dichiarare «attivita' chiusa»
+                        ogni lunedi' significa chiedere di ricordarsi una cosa
+                        che il sistema sa gia', e che dimenticata lascia ogni
+                        settimana un buco nel registro e una fila di avvisi il
+                        giorno dopo. Si scrive qui una volta. */}
+                    <div style={{ marginTop: 12 }}>
+                      <p className="field-label" style={{ margin: "0 0 6px" }}>
+                        Giorni di chiusura settimanale
+                      </p>
+                      <div className="row-form" style={{ margin: 0, flexWrap: "wrap" }}>
+                        {GIORNI.map((g) => (
+                          <label key={g.n} className="checkbox-row" style={{ marginRight: 12 }}>
+                            <input
+                              type="checkbox"
+                              checked={closingWeekdays.includes(g.n)}
+                              disabled={!isConsultant}
+                              onChange={(e) => setClosingWeekdays(
+                                e.target.checked
+                                  ? [...closingWeekdays, g.n]
+                                  : closingWeekdays.filter((x) => x !== g.n)
+                              )}
+                            />
+                            {g.nome}
+                          </label>
+                        ))}
+                      </div>
+                      <p className="range-hint">
+                        In questi giorni l'app non chiede temperature né pulizie e non manda avvisi:
+                        l'attività risulta chiusa da sola, e il giorno di riposo compare in coda ai
+                        registri a spiegare le righe mancanti. Le chiusure più lunghe — ferie,
+                        lavori — si dichiarano al momento dalle schede Temperature o Sanificazione.
+                      </p>
+                    </div>
                     {hasIceMachine && (
                       <label className="field-label" style={{ marginTop: 8, marginLeft: 26, display: "flex", alignItems: "center", gap: 8, flexDirection: "row" }}>
                         Pulizia e sanificazione ogni
