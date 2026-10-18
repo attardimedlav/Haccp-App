@@ -401,15 +401,15 @@ export function corpoManuale(dossier) {
     ["Titolare / Legale rappresentante", azienda.haccp_manager || ""],
     ["Responsabile del Piano di Autocontrollo", azienda.haccp_manager || ""],
   ]));
-  b.push(par("", { after: 240 }));
+  b.push(par("", { after: 160 }));
   b.push(h2("Matrice delle revisioni"));
   b.push(griglia(["Revisione", "Data", "Motivo della revisione", "Redatto", "Resp. HACCP"], [
     [revisione.numero || "00", data(revisione.data) || "__/__/____", revisione.motivo || "Prima emissione",
      revisione.redattoDa || azienda.consultant_name || "", azienda.haccp_manager || ""],
     [" ", " ", " ", " ", " "],
     [" ", " ", " ", " ", " "],
-  ], [1200, 1500, 3660, 1500, 1500], { altezza: 420 }));
-  b.push(par("", { after: 200 }));
+  ], [1200, 1500, 3660, 1500, 1500], { altezza: 340 }));
+  b.push(par("", { after: 140 }));
   b.push(p("Il piano di autocontrollo viene aggiornato, sostituendo parzialmente o totalmente la presente edizione, al verificarsi di una o più delle seguenti condizioni:"));
   [
     "sostituzione della figura del responsabile delle procedure di autocontrollo;",
@@ -759,6 +759,7 @@ export function corpoManuale(dossier) {
   b.push(punto("dove si producono alimenti pronti che possono favorire la crescita di Listeria monocytogenes — creme, prodotti farciti, gelati — il campionamento delle aree di lavorazione e delle attrezzature è eseguito in ogni caso, come previsto dall'art. 5, comma 2 del Reg. (CE) n. 2073/2005;"));
   b.push(punto("si esegue un campionamento straordinario quando cambia il processo, quando si avvia una produzione nuova, dopo una non conformità rilevata o una segnalazione, e in caso di esito non conforme la frequenza viene raddoppiata per l'anno successivo."));
   b.push(p("La verifica dell'efficacia della pulizia è organizzata su due livelli. Due volte l'anno il consulente esegue un controllo rapido sui residui proteici delle superfici, con lettura immediata e redazione di verbale: si effettua dopo detersione e risciacquo e prima della disinfezione, perché è la pulizia che si sta verificando, e un esito non conforme comporta la ripetizione della pulizia sul punto interessato e il riesame della procedura. Periodicamente, un tampone di laboratorio con esame microbiologico conferma che quella verifica stia misurando la cosa giusta."));
+  b.push(p(`Il tampone di laboratorio è eseguito ${azienda.rte_production ? "ogni anno, perché l'impresa produce alimenti pronti al consumo che possono favorire la crescita di Listeria monocytogenes e per essi il campionamento delle aree di lavorazione è previsto dall'art. 5, comma 2 del Reg. (CE) n. 2073/2005" : "ogni due anni: l'impresa non produce alimenti pronti al consumo che favoriscano la crescita di Listeria monocytogenes, e per le lavorazioni svolte la verifica rapida semestrale sui residui proteici è lo strumento con cui l'efficacia della sanificazione viene tenuta sotto controllo durante l'anno"}.`));
   b.push(p("Le superfici campionate sono le stesse a ogni tornata: l'andamento nel tempo dice più del singolo risultato. Per le superfici la normativa non fissa limiti numerici; i valori di riferimento sono quelli adottati nel presente piano d'intesa con il laboratorio incaricato, e la presenza di patogeni su una superficie a contatto con gli alimenti comporta comunque un'azione correttiva immediata.", { size: 20 }));
   b.push(par("", { after: 140 }));
   b.push(h2("9.2 Programma dei controlli"));
@@ -936,6 +937,23 @@ export function corpoManuale(dossier) {
     });
     b.push(par("", { after: 160 }));
   }
+
+  // I giorni vuoti, spiegati nel manuale.
+  //
+  // Un registro senza righe per due settimane, in ispezione, e' un controllo
+  // non eseguito: la differenza fra "non l'ho fatto" e "non c'era da farlo" la
+  // fa soltanto un documento che dice perche'. Il manuale deve quindi
+  // dichiarare che i periodi di chiusura e di fermo delle attrezzature sono
+  // registrati, e dove: altrimenti la spiegazione esiste ma nessuno sa di
+  // doverla cercare.
+  b.push(h2(`12.${inApp ? 2 : 1} Periodi di chiusura e attrezzature fuori servizio`));
+  b.push(p("Nei giorni in cui l'attività è chiusa — ferie, chiusura stagionale, lavori — e per le attrezzature dichiarate fuori servizio non si effettuano le registrazioni previste dal presente manuale, perché non vi è alcuna lavorazione né alcuna temperatura da rilevare. L'assenza di registrazioni in quei giorni non costituisce un controllo omesso."));
+  b.push(p(inApp
+    ? "Ciascun periodo è registrato con la data di inizio, il motivo e la data di ripresa dell'attività, ed è riportato in coda alle schede di sanificazione e delle temperature, dove viene stampato insieme al registro. Un'attrezzatura dichiarata ferma resta visibile nell'elenco degli impianti, con indicazione del motivo e della data dal quale è spenta, e non viene conteggiata fra i controlli del giorno; alla ripresa del funzionamento il periodo viene chiuso e la rilevazione delle temperature riprende regolarmente."
+    : "Ciascun periodo è annotato sul registro interessato, con la data di inizio, il motivo e la data di ripresa dell'attività, a cura del responsabile dell'autocontrollo."));
+  b.push(p("Alla ripresa dell'attività, prima dell'utilizzo, le attrezzature rimaste ferme sono pulite e sanificate e si verifica che raggiungano la temperatura di esercizio prevista; l'esito è registrato come primo controllo del periodo.", { size: 20 }));
+  b.push(par("", { after: 140 }));
+
   const moduli = [
     ["M01", "Registro temperature", "Una volta al giorno, alla stessa ora", null],
     ["M02", "Registro cambi olio di frittura", "A ogni sostituzione dell'olio", "has_fryer"],
