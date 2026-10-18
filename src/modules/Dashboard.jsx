@@ -1,5 +1,5 @@
 import React from "react";
-import { Thermometer, SprayCan, Bug, AlertTriangle, CheckCircle2, Droplet, FolderOpen, HardHat, Award, Stethoscope, Wrench, GraduationCap, Truck, Flame, BookOpen, Package, CalendarOff, FlaskConical } from "lucide-react";
+import { Thermometer, SprayCan, Bug, AlertTriangle, CheckCircle2, Droplet, FolderOpen, HardHat, Award, Stethoscope, Wrench, GraduationCap, Truck, Flame, BookOpen, Package, CalendarOff, FlaskConical, ClipboardX } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { chiusuraOggi, fuoriServizioDelGiorno, descrizionePeriodo } from "../utils/chiusure";
 import { useAuth } from "../AuthContext";
@@ -58,6 +58,7 @@ export default function Dashboard({ goTo, openWorkSafety }) {
   const olio = useTable("frying_oil_logs", company?.id);
   const arrivi = useTable("traceability_records", company?.id);
   const manuali = useTable("haccp_manuals", company?.id);
+  const nonConformita = useTable("non_conformities", company?.id);
   const analisi = useTable("analysis_plan", company?.id);
   const referti = useTable("analysis_results", company?.id);
   const chiusure = useTable("company_closures", company?.id);
@@ -74,8 +75,15 @@ export default function Dashboard({ goTo, openWorkSafety }) {
       })
     : [];
 
+  // La casella «vasca di accumulo» accesa ma nessuna vasca censita:
+  // l'avviso dell'ispezione semestrale chiedeva un controllo che non si
+  // poteva registrare, perche' il registro vuole una vasca a cui
+  // legarlo. Il primo passo non e' pulirla, e' censirla.
+  const vascaDaCensire = showHaccp && company?.has_water_tank &&
+    vasche.items.filter((v) => v.active !== false).length === 0;
+
   let tankCompliance = null;
-  if (showHaccp && company?.has_water_tank) {
+  if (showHaccp && company?.has_water_tank && !vascaDaCensire) {
     const tankItems = water.items.filter((i) => i.control_type === WATER_TANK_CONTROL_TYPE);
     tankCompliance = {
       id: "water_tank", tab: "acquepotabili", label: "Ispezione vasca di accumulo", days: 180, icon: Droplet,
@@ -433,6 +441,45 @@ export default function Dashboard({ goTo, openWorkSafety }) {
           dettaglio: "È l'unica documentazione da esibire in caso di controllo strumentale sull'olio in uso",
         });
       }
+    }
+
+    // Le non conformita' ancora aperte.
+    //
+    // Mancava del tutto, ed e' la cosa piu' urgente che un sistema di
+    // autocontrollo possa avere: una deviazione rilevata e non ancora
+    // chiusa. L'app la registrava — anche da sola, dalle temperature —
+    // ma poi nessuno la ricordava piu', e un registro delle non
+    // conformita' pieno di righe aperte e' peggio di uno vuoto, perche'
+    // documenta che il sistema rileva e non reagisce.
+    //
+    // Non si sospende a locale chiuso: una deviazione aperta resta
+    // aperta anche in ferie.
+    if (vascaDaCensire) {
+      haccpIssues.push({
+        key: "vasca-da-censire", tab: "acquepotabili", icon: Droplet,
+        titolo: "Vasca di accumulo non ancora censita",
+        dettaglio: "L'azienda dichiara un serbatoio ma nessuna vasca è registrata: finché non c'è, l'ispezione semestrale non si può annotare.",
+      });
+    }
+
+    // «Aperta» vuol dire senza data di risoluzione: la stessa
+    // definizione della scheda Non conformità e del suo contatore. Due
+    // posti che contano la stessa cosa in due modi diversi sono il
+    // difetto che si scopre sempre tardi e sempre davanti a qualcuno.
+    const aperte = nonConformita.items.filter((n) => !n.resolved_date);
+    if (aperte.length > 0) {
+      const piuVecchia = aperte.reduce(
+        (m, n) => ((n.detected_date || "") < (m.detected_date || "") ? n : m), aperte[0]);
+      const giorni = piuVecchia.detected_date
+        ? Math.floor((new Date() - new Date(piuVecchia.detected_date)) / 86400000) : 0;
+      haccpIssues.push({
+        key: "nc-aperte", tab: "nonconformita", icon: ClipboardX,
+        titolo: aperte.length === 1
+          ? "Non conformità aperta, senza azione correttiva"
+          : `Non conformità aperte: ${aperte.length}`,
+        dettaglio: `${piuVecchia.area}: ${String(piuVecchia.description || "").slice(0, 90)}` +
+          (giorni > 0 ? ` — rilevata ${giorni} ${giorni === 1 ? "giorno" : "giorni"} fa` : " — rilevata oggi"),
+      });
     }
 
     // Le righe del piano che valgono per questa azienda: quelle legate a
