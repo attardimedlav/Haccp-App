@@ -496,8 +496,19 @@ export default function Configurazione({ onVai, subTabIniziale }) {
                 <input type="text" placeholder="Codice ATECO" value={codiceAteco} onChange={(e) => setCodiceAteco(e.target.value)} className="full-input" />
                 <input type="text" placeholder="Tipologia di attività (es. Ristorazione, Bar...)" value={tipologiaAttivita} onChange={(e) => setTipologiaAttivita(e.target.value)} className="full-input" />
               </div>
+              {/* Il lucchetto sta QUI e non piu' sotto: le caselle che
+                  seguono — moduli attivi, dotazioni dell'acqua, pesce crudo —
+                  decidono che cosa il manuale dichiara e quali registri
+                  esistono. Se le cambia il titolare, manuale e app si
+                  disallineano e nessuno se ne accorge finche' non arriva un
+                  controllo. */}
+              {!isConsultant && (
+                <p className="sub" style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 14, marginBottom: 2 }}>
+                  <Lock size={13} /> Le voci che seguono descrivono com'è fatta l'attività e quali registri sono previsti: le imposta il tuo consulente HACCP insieme al manuale.
+                </p>
+              )}
               <label className="checkbox-row" style={{ marginTop: 12 }}>
-                <input type="checkbox" checked={activeHaccp} onChange={(e) => setActiveHaccp(e.target.checked)} />
+                <input type="checkbox" checked={activeHaccp} disabled={!isConsultant} onChange={(e) => setActiveHaccp(e.target.checked)} />
                 Attiva il modulo HACCP (autocontrollo alimentare)
               </label>
               <p className="sub" style={{ marginTop: 4, marginLeft: 26 }}>
@@ -506,24 +517,19 @@ export default function Configurazione({ onVai, subTabIniziale }) {
               {activeHaccp && (
                 <>
                   <label className="checkbox-row" style={{ marginTop: 8 }}>
-                    <input type="checkbox" checked={hasWaterTank} onChange={(e) => setHasWaterTank(e.target.checked)} />
+                    <input type="checkbox" checked={hasWaterTank} disabled={!isConsultant} onChange={(e) => setHasWaterTank(e.target.checked)} />
                     L'attività ha una vasca di accumulo dell'acqua
                   </label>
                   <label className="checkbox-row" style={{ marginTop: 8 }}>
-                    <input type="checkbox" checked={hasWaterFilter} onChange={(e) => setHasWaterFilter(e.target.checked)} />
+                    <input type="checkbox" checked={hasWaterFilter} disabled={!isConsultant} onChange={(e) => setHasWaterFilter(e.target.checked)} />
                     L'attività ha un impianto di filtrazione o trattamento dell'acqua (addolcitore, osmosi, filtri)
                   </label>
                   <label className="checkbox-row" style={{ marginTop: 8 }}>
-                    <input type="checkbox" checked={servesRawFish} onChange={(e) => setServesRawFish(e.target.checked)} />
+                    <input type="checkbox" checked={servesRawFish} disabled={!isConsultant} onChange={(e) => setServesRawFish(e.target.checked)} />
                     L'attività somministra pesce crudo (richiede abbattimento a norma)
                   </label>
 
                   <div style={{ marginTop: 14, paddingTop: 10, borderTop: "1px dashed #D8DED6" }}>
-                    {!isConsultant && (
-                      <p className="sub" style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-                        <Lock size={13} /> Le voci seguenti possono essere modificate solo dal tuo consulente HACCP.
-                      </p>
-                    )}
                     <label className="checkbox-row">
                       <input type="checkbox" checked={activeTraceability} disabled={!isConsultant} onChange={(e) => setActiveTraceability(e.target.checked)} />
                       Attiva Arrivo merci e tracciabilità (ricevimento merci con lettura automatica di bolle e fatture)
@@ -702,18 +708,18 @@ export default function Configurazione({ onVai, subTabIniziale }) {
                 </>
               )}
               <label className="checkbox-row" style={{ marginTop: 8 }}>
-                <input type="checkbox" checked={activeWorkSafety} onChange={(e) => setActiveWorkSafety(e.target.checked)} />
+                <input type="checkbox" checked={activeWorkSafety} disabled={!isConsultant} onChange={(e) => setActiveWorkSafety(e.target.checked)} />
                 Attiva il modulo Sicurezza sul lavoro (DVR, nomine e attestati — D.Lgs. 81/08)
               </label>
               {activeWorkSafety && (
                 <label className="checkbox-row" style={{ marginTop: 8, marginLeft: 26 }}>
-                  <input type="checkbox" checked={activeEquipmentChecks} onChange={(e) => setActiveEquipmentChecks(e.target.checked)} />
+                  <input type="checkbox" checked={activeEquipmentChecks} disabled={!isConsultant} onChange={(e) => setActiveEquipmentChecks(e.target.checked)} />
                   Attiva anche il tracciamento attrezzature e verifiche (patentini, messa a terra, manutenzioni)
                 </label>
               )}
               {activeWorkSafety && (
                 <label className="checkbox-row" style={{ marginTop: 8, marginLeft: 26 }}>
-                  <input type="checkbox" checked={activeMedicalSurveillance} onChange={(e) => setActiveMedicalSurveillance(e.target.checked)} />
+                  <input type="checkbox" checked={activeMedicalSurveillance} disabled={!isConsultant} onChange={(e) => setActiveMedicalSurveillance(e.target.checked)} />
                   Attiva anche la sorveglianza sanitaria (visite mediche periodiche dei dipendenti)
                 </label>
               )}
@@ -737,6 +743,14 @@ export default function Configurazione({ onVai, subTabIniziale }) {
                 Questo nome comparirà come scelta rapida nei campi operatore/responsabile delle schede.
               </p>
 
+              {/* Tutto il pezzo della firma è del consulente, non del
+                  titolare: la dichiarazione dice «il responsabile MI ha
+                  autorizzato», e letta dal responsabile stesso non vuol dire
+                  niente. Riguarda inoltre l'autorizzazione ad apporre la sua
+                  firma sui documenti, che è esattamente la cosa che non deve
+                  poter spuntare da sé. */}
+              {isConsultant ? (
+                <>
               <label className="checkbox-row" style={{ marginTop: 14, alignItems: "flex-start" }}>
                 <input
                   type="checkbox" checked={!!firmaConsensoAl}
@@ -793,6 +807,16 @@ export default function Configurazione({ onVai, subTabIniziale }) {
                 della data in cui l'autorizzazione è stata resa. Senza la dichiarazione qui sopra la
                 firma non si carica e non viene apposta.
               </p>
+                </>
+              ) : (
+                <p className="sub" style={{ display: "flex", alignItems: "flex-start", gap: 6, marginTop: 14 }}>
+                  <Lock size={13} style={{ flexShrink: 0, marginTop: 2 }} />
+                  <span>
+                    La firma del responsabile sui documenti generati dall'app è gestita dal tuo
+                    consulente HACCP, previa tua autorizzazione.
+                  </span>
+                </p>
+              )}
             </fieldset>
 
             <fieldset className="config-group">
