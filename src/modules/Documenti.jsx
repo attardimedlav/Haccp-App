@@ -100,7 +100,16 @@ export default function Documenti() {
                   <strong>{item.title}</strong>
                   <span className="lot-tag">{item.document_type}</span>
                 </div>
-                <button className="icon-btn" onClick={() => remove(item.id)} aria-label="Elimina"><Trash2 size={14} /></button>
+                {/* Qui dentro finiscono referti, certificati e planimetrie: un
+                    click solo, senza domande, e il documento non c'e' piu'.
+                    L'allegato e' la prova dell'analisi o del corso, e la
+                    prova non si cancella per sbaglio. */}
+                <button className="icon-btn" aria-label="Elimina"
+                  onClick={() => {
+                    if (window.confirm(`Eliminare «${item.title || item.document_type}»?\n\nIl documento allegato viene rimosso e non è recuperabile.`)) remove(item.id);
+                  }}>
+                  <Trash2 size={14} />
+                </button>
               </div>
               <div className="traccia-meta">
                 <span className="doc-type-tag">Revisionato il {new Date(item.review_date).toLocaleDateString("it-IT")}</span>

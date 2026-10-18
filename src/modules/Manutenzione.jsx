@@ -156,7 +156,12 @@ export default function Manutenzione() {
                     <strong>{item.equipment}</strong>
                     <span className="lot-tag">{item.intervention_type}</span>
                   </div>
-                  <button className="icon-btn" onClick={() => remove(item.id)} aria-label="Elimina"><Trash2 size={14} /></button>
+                  <button className="icon-btn" aria-label="Elimina"
+                    onClick={() => {
+                      if (window.confirm(`Eliminare l'intervento su «${item.equipment}» del ${new Date(item.intervention_date).toLocaleDateString("it-IT")}?`)) remove(item.id);
+                    }}>
+                    <Trash2 size={14} />
+                  </button>
                 </div>
                 <div className="traccia-meta">
                   <span className="doc-type-tag">{new Date(item.intervention_date).toLocaleDateString("it-IT")}</span>

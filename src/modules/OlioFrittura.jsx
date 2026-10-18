@@ -160,7 +160,12 @@ export default function OlioFrittura() {
                     <strong>{new Date(item.change_date).toLocaleDateString("it-IT")}</strong>
                     <span className="lot-tag">{item.reason}</span>
                   </div>
-                  <button className="icon-btn" onClick={() => remove(item.id)} aria-label="Elimina"><Trash2 size={14} /></button>
+                  <button className="icon-btn" aria-label="Elimina"
+                    onClick={() => {
+                      if (window.confirm(`Eliminare il cambio d'olio del ${new Date(item.change_date).toLocaleDateString("it-IT")}?\n\nÈ la documentazione da esibire in caso di controllo strumentale sull'olio in uso.`)) remove(item.id);
+                    }}>
+                    <Trash2 size={14} />
+                  </button>
                 </div>
                 <div className="traccia-meta">
                   {item.fryer && <span className="doc-type-tag">{item.fryer}</span>}

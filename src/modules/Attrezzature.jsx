@@ -40,7 +40,8 @@ export const EQUIPMENT_TYPES_STORICI = [
 ];
 
 export default function Attrezzature() {
-  const { company } = useAuth();
+  const { company, consultantCompanies } = useAuth();
+  const isConsultant = (consultantCompanies || []).length > 0;
   const { items, add, remove, loading } = useTable("temperature_units", company?.id);
   const [label, setLabel] = useState("");
   const [type, setType] = useState(EQUIPMENT_TYPES[0].id);
@@ -120,7 +121,17 @@ export default function Attrezzature() {
               <span className="log-main"><strong>{item.label}</strong></span>
               <span className="log-unit">{typeLabel(item)}</span>
               <span className="log-note">{item.min_temp}°C — {item.max_temp}°C</span>
-              <button className="icon-btn" onClick={() => remove(item.id)} aria-label="Elimina"><Trash2 size={14} /></button>
+              {/* Togliere un impianto fa sparire una riga dal registro delle
+                  temperature e una voce dal manuale: non e' un gesto da
+                  titolare, e non e' un gesto da fare con un click solo. */}
+              {isConsultant && (
+                <button className="icon-btn" aria-label="Elimina"
+                  onClick={() => {
+                    if (window.confirm(`Togliere «${item.label}» dagli impianti?\n\nLe letture già registrate restano, ma l'impianto non comparirà più fra quelli da controllare né nel manuale.`)) remove(item.id);
+                  }}>
+                  <Trash2 size={14} />
+                </button>
+              )}
             </li>
           ))}
         </ul>

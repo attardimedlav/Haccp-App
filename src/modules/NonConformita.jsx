@@ -19,7 +19,13 @@ function AttachmentLink({ path }) {
 }
 
 export default function NonConformita() {
-  const { company } = useAuth();
+  const { company, consultantCompanies } = useAuth();
+  // Una non conformita' registrata non si cancella: e' la prova che il
+  // sistema ha rilevato qualcosa e che qualcuno e' intervenuto. Toglierla
+  // lascia il registro piu' pulito e l'azienda piu' scoperta, perche' in
+  // ispezione un registro troppo pulito e' la prima cosa che insospettisce.
+  // Resta al consulente, per gli errori di battitura veri.
+  const isConsultant = (consultantCompanies || []).length > 0;
   const { items, add, remove, update, loading } = useTable("non_conformities", company?.id);
   // I lotti vengono dalla tracciabilità nuova: la vecchia tabella è vuota per
   // tutte le aziende, e finché si leggeva quella l'elenco restava vuoto.
@@ -231,7 +237,14 @@ export default function NonConformita() {
                       </span>
                     )}
                   </div>
-                  <button className="icon-btn" onClick={() => remove(item.id)} aria-label="Elimina"><Trash2 size={14} /></button>
+                  {isConsultant && (
+                    <button className="icon-btn" aria-label="Elimina"
+                      onClick={() => {
+                        if (window.confirm("Eliminare questa non conformità?\n\nResterà traccia solo nella scheda da cui è nata. Di norma una non conformità si chiude con l'azione correttiva, non si cancella.")) remove(item.id);
+                      }}>
+                      <Trash2 size={14} />
+                    </button>
+                  )}
                 </div>
                 <div className="traccia-meta">
                   <span className="doc-type-tag">Rilevata {new Date(item.detected_date).toLocaleDateString("it-IT")}</span>
