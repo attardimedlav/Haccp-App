@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { CheckCircle2, CalendarClock, Download, Wrench, Droplets, SprayCan, Settings2, RefreshCw, Lock, Users, BookOpen, Layers, ListOrdered, FileText, Paperclip, KeyRound, PenLine, Trash2, ClipboardCheck } from "lucide-react";
 import { useAuth } from "../AuthContext";
-import { downloadReminderICS } from "../hooks/useReminders";
+import { useTable } from "../hooks/useTable";
+import { downloadReminderICS, elencoPromemoria } from "../hooks/useReminders";
 import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
 import { fotoInFirma } from "../utils/firmaImmagine";
 import { getSubscriptionStatus, pillClassFor } from "../subscriptionStatus";
@@ -83,6 +84,19 @@ export default function Configurazione({ onVai, subTabIniziale }) {
   const [sellsToBusinesses, setSellsToBusinesses] = useState(false);
   const [rteProduction, setRteProduction] = useState(false);
   const [closingWeekdays, setClosingWeekdays] = useState([]);
+  const [reminderHour, setReminderHour] = useState(8);
+
+  // I dati che servono a costruire i promemoria del calendario: il piano
+  // di pulizia, le vasche, il piano analitico con i referti e le
+  // manutenzioni gia' programmate. Si leggono qui perche' e' qui che si
+  // scarica il file, e perche' un promemoria inventato dal codice invece
+  // che letto dall'azienda e' esattamente l'errore che aveva prima.
+  const piano = useTable("cleaning_plan", company?.id);
+  const vasche = useTable("water_tanks", company?.id);
+  const controlliVasche = useTable("water_controls", company?.id);
+  const analisi = useTable("analysis_plan", company?.id);
+  const referti = useTable("analysis_results", company?.id);
+  const manutenzioni = useTable("maintenance_logs", company?.id);
   const [hasHood, setHasHood] = useState(true);
   const [iceMachineDays, setIceMachineDays] = useState("30");
   const [manualSource, setManualSource] = useState("app");
@@ -166,6 +180,7 @@ export default function Configurazione({ onVai, subTabIniziale }) {
       setSellsToBusinesses(!!company.sells_to_businesses);
       setRteProduction(!!company.rte_production);
       setClosingWeekdays(Array.isArray(company.closing_weekdays) ? company.closing_weekdays.map(Number) : []);
+      setReminderHour(Number(company.reminder_hour) || 8);
       setHasHood(company.has_hood !== false);
       setIceMachineDays(String(company.ice_machine_cleaning_days || 30));
       setManualSource(company.haccp_manual_source === "esterno" ? "esterno" : "app");
@@ -220,6 +235,7 @@ export default function Configurazione({ onVai, subTabIniziale }) {
     sells_to_businesses: sellsToBusinesses,
     rte_production: rteProduction,
     closing_weekdays: closingWeekdays,
+    reminder_hour: Number(reminderHour) || 8,
     has_hood: hasHood,
     ice_machine_cleaning_days: Math.max(1, parseInt(iceMachineDays, 10) || 30),
     haccp_manual_source: manualSource,
@@ -395,6 +411,21 @@ export default function Configurazione({ onVai, subTabIniziale }) {
   };
 
   const subStatus = getSubscriptionStatus(company);
+
+  // L'elenco mostrato e il file scaricato nascono dalla stessa funzione:
+  // due elenchi separati, col tempo, finirebbero per dire cose diverse.
+  // Si legge l'ora dal campo in pagina, non da quella salvata, cosi'
+  // l'elenco cambia mentre la si modifica.
+  const datiCalendario = {
+    azienda: { ...(company || {}), closing_weekdays: closingWeekdays, reminder_hour: Number(reminderHour) || 8 },
+    piano: piano.items,
+    vasche: vasche.items,
+    controlliVasche: controlliVasche.items,
+    analisi: analisi.items,
+    referti: referti.items,
+    manutenzioni: manutenzioni.items,
+  };
+  const datiPromemoria = elencoPromemoria(datiCalendario);
 
   return (
     <div className="panel">
@@ -932,13 +963,29 @@ export default function Configurazione({ onVai, subTabIniziale }) {
                 <p className="sub">Scarica il file e aprilo con l'app Calendario del telefono (Google, Apple o Outlook). Il calendario avvisa da solo, anche ad app chiusa — non serve un server.</p>
               </div>
             </div>
+            <label className="field-label" style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
+              Ora dell'avviso
+              <input
+                type="number" min="0" max="23" value={reminderHour} disabled={!isConsultant}
+                onChange={(e) => setReminderHour(e.target.value)}
+                className="full-input" style={{ width: 80 }}
+              />
+              <span className="sub">si salva con la configurazione</span>
+            </label>
             <ul className="reminder-list">
-              <li>Ogni giorno alle 8:00 — temperature e sanificazione</li>
-              <li>Ogni lunedì alle 8:00 — monitoraggio infestanti</li>
+              {datiPromemoria.map((ev) => (
+                <li key={ev.key}>{ev.quando} — {ev.titolo.toLowerCase()}</li>
+              ))}
             </ul>
-            <button type="button" className="btn-primary" onClick={() => downloadReminderICS(name)}>
+            <button type="button" className="btn-primary" onClick={() => downloadReminderICS(datiCalendario)}>
               <Download size={16} /> Scarica promemoria (.ics)
             </button>
+            <p className="range-hint">
+              Gli avvisi nascono dai dati di questa azienda: la periodicità del giro infestanti, le
+              fasce del piano di pulizia, le vasche, il piano analitico e le manutenzioni già
+              programmate. Nei giorni di chiusura non suona nulla. Se cambi una frequenza, riscarica
+              il file e sostituisci il precedente.
+            </p>
           </div>
         </>
       )}
