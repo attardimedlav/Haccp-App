@@ -1,6 +1,7 @@
 import React from "react";
-import { Thermometer, SprayCan, Bug, AlertTriangle, CheckCircle2, Droplet, FolderOpen, HardHat, Award, Stethoscope, Wrench, GraduationCap, Truck, Flame, BookOpen, Package } from "lucide-react";
+import { Thermometer, SprayCan, Bug, AlertTriangle, CheckCircle2, Droplet, FolderOpen, HardHat, Award, Stethoscope, Wrench, GraduationCap, Truck, Flame, BookOpen, Package, CalendarOff } from "lucide-react";
 import { useTable } from "../hooks/useTable";
+import { chiusuraDelGiorno, fuoriServizioDelGiorno, descrizionePeriodo } from "../utils/chiusure";
 import { useAuth } from "../AuthContext";
 import { WATER_TANK_CONTROL_TYPE } from "./AcquePotabili";
 import { PLAN_TYPE } from "./Documenti";
@@ -57,6 +58,8 @@ export default function Dashboard({ goTo, openWorkSafety }) {
   const olio = useTable("frying_oil_logs", company?.id);
   const arrivi = useTable("traceability_records", company?.id);
   const manuali = useTable("haccp_manuals", company?.id);
+  const chiusure = useTable("company_closures", company?.id);
+  const spegnimenti = useTable("equipment_downtime", company?.id);
   const corsiHaccp = useTable("training_records", company?.id);
 
   // Tutti gli indicatori di questo blocco riguardano solo il modulo HACCP: se
@@ -80,7 +83,19 @@ export default function Dashboard({ goTo, openWorkSafety }) {
   }
 
 
-  const lateChecks = compliance.filter((c) => c.status !== "ok");
+  const lateChecksTutti = compliance.filter((c) => c.status !== "ok");
+
+  // Attivita' chiusa: niente da fare, niente da sollecitare.
+  //
+  // Gli avvisi della Panoramica servono a far fare una cosa oggi. Se il
+  // locale e' chiuso per ferie non c'e' nessun turno da chiudere, e un
+  // elenco rosso di controlli impossibili non e' una sollecitazione: e'
+  // rumore che al rientro si scorre senza leggere, e che fa perdere di
+  // vista gli avvisi veri. Restano quelli documentali — attestati,
+  // nomine, visite, fornitori, manuale — perche' quelli scadono lo
+  // stesso e si possono sistemare anche a serranda abbassata.
+  const chiusa = chiusuraDelGiorno(chiusure.items);
+  const lateChecks = chiusa ? [] : lateChecksTutti;
   const deviations = showHaccp ? temp.items.filter((i) => !isTempInRange(i, units.items)).length : 0;
   const pestAlerts = showHaccp ? pest.items.filter((i) => i.outcome === "tracce").length : 0;
 
@@ -272,13 +287,18 @@ export default function Dashboard({ goTo, openWorkSafety }) {
     // lettura registrata l'intera scheda risultava aggiornata, e un frigorifero
     // saltato non compariva da nessuna parte — che è proprio il caso in cui
     // l'avviso serve.
-    const senzaLettura = units.items.filter((u) =>
+    // Un impianto spento non ha una temperatura da leggere: la vetrina dei
+    // gelati fuori stagione non e' un controllo saltato, e tenerla
+    // nell'elenco insegnerebbe a ignorare l'elenco.
+    const impiantiAttivi = units.items.filter(
+      (u) => !fuoriServizioDelGiorno(spegnimenti.items, u.label));
+    const senzaLettura = impiantiAttivi.filter((u) =>
       !temp.items.some((t) => t.unit === u.label && String(t.created_at).slice(0, 10) === oggi));
-    if (units.items.length > 0 && senzaLettura.length > 0) {
+    if (impiantiAttivi.length > 0 && senzaLettura.length > 0) {
       haccpIssues.push({
         key: "temp-oggi", tab: "temperature", icon: Thermometer,
         titolo: "Temperature non registrate oggi",
-        dettaglio: senzaLettura.length + " impianti su " + units.items.length + ": " +
+        dettaglio: senzaLettura.length + " impianti su " + impiantiAttivi.length + ": " +
           senzaLettura.map((u) => u.label).join(", "),
       });
     }
@@ -428,6 +448,14 @@ export default function Dashboard({ goTo, openWorkSafety }) {
     }
   }
 
+  // Quali avvisi tacciono a locale chiuso: quelli che chiedono una
+  // registrazione del giorno o il recupero di una pulizia. Si riconoscono
+  // dalla chiave, che e' gia' il loro identificativo.
+  const OPERATIVO = /^(temp-oggi|pulizie-|infestanti-|vasca-|olio|arrivi-lotto)/;
+  const haccpIssuesVisibili = chiusa
+    ? haccpIssues.filter((it) => !OPERATIVO.test(it.key))
+    : haccpIssues;
+
   const safetyAlertCount =
     safetyIssues.length + (senzaVisita.length > 0 ? 1 : 0) + (senzaFormazione.length > 0 ? 1 : 0);
 
@@ -451,7 +479,19 @@ export default function Dashboard({ goTo, openWorkSafety }) {
         </div>
       </div>
 
-      {(lateChecks.length > 0 || safetyAlertCount > 0 || haccpIssues.length > 0) && (
+      {chiusa && (
+        <div className="compliance-banner" style={{ marginBottom: 10 }}>
+          <button type="button" className="compliance-row compliance-row-warn" onClick={() => goTo("sanificazione")}>
+            <CalendarOff size={15} color="#8A6514" />
+            <span className="compliance-text">
+              <strong>Attività chiusa</strong>{" — "}{descrizionePeriodo(chiusa)}
+              {": i controlli del giorno non sono richiesti e i relativi avvisi restano sospesi fino alla riapertura."}
+            </span>
+          </button>
+        </div>
+      )}
+
+      {(lateChecks.length > 0 || safetyAlertCount > 0 || haccpIssuesVisibili.length > 0) && (
         <div className="compliance-banner">
           {lateChecks.map((c) => (
             <button key={c.id} className="compliance-row" onClick={() => goTo(c.tab)}>
@@ -465,7 +505,7 @@ export default function Dashboard({ goTo, openWorkSafety }) {
               </span>
             </button>
           ))}
-          {haccpIssues.map((it) => (
+          {haccpIssuesVisibili.map((it) => (
             <button key={it.key} className="compliance-row" onClick={() => goTo(it.tab)}>
               <AlertTriangle size={15} color="#B3432E" />
               <it.icon size={15} />
