@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Trash2, Thermometer } from "lucide-react";
+import { Plus, Trash2, Thermometer, Lock } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 
@@ -87,7 +87,17 @@ export default function Attrezzature() {
       <div className="panel-head">
         <div>
           <h2>Attrezzature</h2>
-          <p className="sub">Frigoriferi, congelatori, celle e vetrine di questa azienda: tutto ciò che conserva o espone a temperatura controllata. Scegliendo il tipo il range si compila da solo, e si corregge sulla targa dell'apparecchio.</p>
+          <p className="sub">Frigoriferi, congelatori, celle e vetrine di questa azienda: tutto ciò che conserva o espone a temperatura controllata. Scegliendo il tipo il range si compila da solo{isConsultant ? ", e si corregge sulla targa dell'apparecchio." : "."}</p>
+          {!isConsultant && (
+            <p className="sub" style={{ display: "flex", alignItems: "flex-start", gap: 6, marginTop: 6 }}>
+              <Lock size={13} style={{ flexShrink: 0, marginTop: 2 }} />
+              <span>
+                Puoi aggiungere un impianto nuovo con i limiti previsti per il suo tipo. I limiti di
+                temperatura sono quelli dichiarati nel manuale: per cambiarli, scrivi al tuo
+                consulente HACCP.
+              </span>
+            </p>
+          )}
         </div>
       </div>
       <form onSubmit={submit} className="row-form">
@@ -97,12 +107,20 @@ export default function Attrezzature() {
             <option key={t.id} value={t.id}>{t.label} ({t.min}°C — {t.max}°C)</option>
           ))}
         </select>
+        {/* I limiti li scrive il consulente, perche' sono gli stessi che il
+            manuale dichiara come limiti critici: allargarli qui vorrebbe dire
+            che l'app smette di segnalare deviazioni che il manuale considera
+            tali, e i due documenti direbbero cose diverse. Il titolare puo'
+            aggiungere un impianto nuovo — il frigorifero lo compra lui — ma
+            con i valori previsti per quel tipo. */}
         <label className="field-label" style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
           da
-          <input type="number" step="0.1" value={minTemp} onChange={(e) => setMinTemp(e.target.value)}
+          <input type="number" step="0.1" value={minTemp} disabled={!isConsultant}
+            onChange={(e) => setMinTemp(e.target.value)}
             className="full-input" style={{ width: 80 }} aria-label="Temperatura minima" />
           a
-          <input type="number" step="0.1" value={maxTemp} onChange={(e) => setMaxTemp(e.target.value)}
+          <input type="number" step="0.1" value={maxTemp} disabled={!isConsultant}
+            onChange={(e) => setMaxTemp(e.target.value)}
             className="full-input" style={{ width: 80 }} aria-label="Temperatura massima" />
           °C
         </label>
