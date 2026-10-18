@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from "react";
-import { Plus, Trash2, Info, AlertTriangle, CheckCircle2, ClipboardCheck } from "lucide-react";
+import { Plus, Trash2, Info, AlertTriangle, CheckCircle2, ClipboardCheck, Printer } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { supabase } from "../supabaseClient";
+import { stampaVerbalePulizia } from "../utils/verbalePulizia";
 
 // Verifica rapida della pulizia — il verbale del test sui residui proteici.
 //
@@ -24,12 +25,16 @@ const PUNTI_PREDEFINITI = [
   { point_label: "Maniglia del frigorifero", material: "Acciaio inox" },
 ];
 
-const COLORI = ["Verde", "Giallo", "Viola"];
+// I colori sono quelli del foglietto PRO-Clean: verde, GRIGIO, viola.
+// Avevo scritto "Giallo", che il kit non produce: un verbale che nomina
+// un colore inesistente si smonta da solo davanti a chi il kit lo
+// conosce.
+const COLORI = ["Verde", "Grigio", "Viola"];
 // Il colore e' una scala: verde pulito, giallo residuo, viola residuo
 // abbondante. L'esito si propone da solo e resta correggibile, perche' su una
 // superficie appena sanificata un giallo chiaro puo' valere piu' di un viola
 // su una maniglia.
-const ESITO_DA_COLORE = { Verde: "Conforme", Giallo: "Attenzione", Viola: "Non conforme" };
+const ESITO_DA_COLORE = { Verde: "Conforme", Grigio: "Attenzione", Viola: "Non conforme" };
 
 const MOTIVI = [
   "Verifica programmata",
@@ -189,6 +194,17 @@ export default function VerificaPulizia() {
     [verbali]
   );
 
+  // Il numero del verbale: progressivo nell'anno, come sul modulo
+  // cartaceo. Si calcola, non si memorizza: un contatore salvato si
+  // disallinea il giorno che un verbale viene cancellato.
+  const numeroDi = (v) => {
+    const anno = String(v.check_date || "").slice(0, 4);
+    const stessoAnno = verbali
+      .filter((x) => String(x.check_date || "").slice(0, 4) === anno)
+      .sort((a, b) => (a.check_date > b.check_date ? 1 : a.check_date < b.check_date ? -1 : (a.created_at > b.created_at ? 1 : -1)));
+    return stessoAnno.findIndex((x) => x.id === v.id) + 1;
+  };
+
   const pillEsito = (e) =>
     e === "Non conforme" ? { color: "#B3432E" } : e === "Conforme con riserva" ? { color: "#8A7320" } : undefined;
 
@@ -321,12 +337,19 @@ export default function VerificaPulizia() {
                     <strong>Verifica del {fmtData(v.check_date)}</strong>
                     <span className="doc-type-tag" style={pillEsito(v.outcome)}>{v.outcome}</span>
                   </div>
-                  {isConsultant && (
-                    <button className="icon-btn" aria-label="Elimina"
-                      onClick={() => { if (window.confirm("Eliminare questo verbale?")) remove(v.id); }}>
-                      <Trash2 size={14} />
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <button type="button" className="link-btn"
+                      title="Stampa il verbale completo, con l'allegato del produttore"
+                      onClick={() => stampaVerbalePulizia(v, suoi, company, numeroDi(v))}>
+                      <Printer size={14} /> Stampa il verbale
                     </button>
-                  )}
+                    {isConsultant && (
+                      <button className="icon-btn" aria-label="Elimina"
+                        onClick={() => { if (window.confirm("Eliminare questo verbale?")) remove(v.id); }}>
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="traccia-meta">
                   {v.inspector && <span className="doc-type-tag">{v.inspector}</span>}
