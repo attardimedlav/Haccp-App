@@ -196,6 +196,36 @@ export default function VerificaPulizia() {
       });
     }
 
+    // Una verifica non superata e' una non conformita', e il verbale lo
+    // dichiara: «registrazione nel modulo di non conformita' del
+    // manuale». Finche' quella riga non nasceva da sola, il documento
+    // prometteva una cosa che nessuno faceva — ed e' la promessa a vuoto
+    // che in ispezione pesa piu' della mancanza.
+    //
+    // Resta APERTA, senza data di risoluzione: la chiude chi verifica
+    // che la ripulitura abbia funzionato.
+    if (esito === "Non conforme") {
+      const puntiNc = compilate
+        .filter((r) => (r.outcome || ESITO_DA_COLORE[r.color]) === "Non conforme")
+        .map((r) => r.point_label.trim())
+        .filter(Boolean);
+      const azioni = compilate.map((r) => r.action_taken).filter((x) => x && x.trim()).join("; ");
+      const { error: errNc } = await supabase.from("non_conformities").insert({
+        company_id: company.id,
+        area: "Attrezzature",
+        description: `Verifica rapida della pulizia non superata del ${data.split("-").reverse().join("/")}: ${
+          puntiNc.length ? puntiNc.join(", ") : "uno o più punti"} oltre il limite del test sui residui proteici.`,
+        detected_date: data,
+        responsible: consulente || null,
+        corrective_action: azioni || null,
+        source: "verifica_pulizia",
+        source_id: verbale.id,
+      });
+      if (errNc && !/duplicate|unique/i.test(errNc.message)) {
+        setErrore("Verbale salvato, ma la non conformità collegata non è stata creata: " + errNc.message);
+      }
+    }
+
     setBusy(false);
     setAperto(false);
     azzera();

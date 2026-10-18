@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Info, FlaskConical, Check, X } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
+import { supabase } from "../supabaseClient";
 import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
 
 // Controlli analitici.
@@ -204,7 +205,7 @@ export default function ControlliAnalitici() {
     try {
       let attachment_path = null;
       if (file) attachment_path = await uploadAttachment(companyId, file);
-      await addReferto({
+      const riga = await addReferto({
         plan_id: piano.id,
         sample_date: dataPrelievo,
         report_date: dataReferto || null,
@@ -216,6 +217,34 @@ export default function ControlliAnalitici() {
         operator: (operatore || responsabile).trim() || null,
         note: notaReferto.trim() || null,
       });
+
+      // Un referto non conforme e' il caso piu' serio di tutti: dice che
+      // un controllo di laboratorio ha trovato qualcosa. Deve aprire una
+      // non conformita' da sola, perche' e' li' che si scrivono l'azione
+      // presa e la verifica, ed e' quello che un'ispezione cerca dopo
+      // aver letto il referto. Resta aperta: la chiude chi accerta il
+      // rientro, di norma con un nuovo campionamento.
+      if (esito === "Non conforme") {
+        const areaNc = /acqua|ghiaccio/i.test(piano.label) ? "Magazzino"
+          : /alimento|prodotto/i.test(piano.label) ? "Alimenti" : "Attrezzature";
+        const { error: errNc } = await supabase.from("non_conformities").insert({
+          company_id: companyId,
+          area: areaNc,
+          description: "Referto non conforme — " + piano.label +
+            ", prelievo del " + fmt(dataPrelievo) +
+            (numeroReferto.trim() ? " (referto n. " + numeroReferto.trim() + ")" : "") +
+            (laboratorio.trim() ? ", laboratorio " + laboratorio.trim() : "") +
+            (valori.trim() ? ". Valori: " + valori.trim() : "") + ".",
+          detected_date: dataReferto || dataPrelievo,
+          responsible: (operatore || responsabile).trim() || null,
+          source: "analisi",
+          source_id: riga && riga.id ? riga.id : null,
+        });
+        if (errNc && !/duplicate|unique/i.test(errNc.message)) {
+          setErroreReferto("Referto salvato, ma la non conformità collegata non è stata creata: " + errNc.message);
+        }
+      }
+
       setRefertoPer(null);
       setFile(null);
     } catch (err) {

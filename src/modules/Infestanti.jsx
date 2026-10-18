@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Plus, Trash2, AlertTriangle, Paperclip, FileText, Download, Map, Target, Check, X, Info, Pencil, Printer } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
+import { supabase } from "../supabaseClient";
 import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
 import { stampaRegistroInfestanti, meseCorrente } from "../utils/registriStampa";
 
@@ -230,6 +231,37 @@ export default function Infestanti() {
           note: (s.note || "").trim() || null,
         });
       }
+      // Consumo di esca, cattura o postazione mancante non sono
+      // annotazioni: sono eventi che chiedono un'azione, e il manuale —
+      // come il registro M09 stampato — rimanda al modulo delle non
+      // conformita'. La riga nasce qui, una per giro con l'elenco delle
+      // postazioni interessate: una per postazione riempirebbe il
+      // registro di righe che raccontano lo stesso episodio.
+      const allarmi = attive
+        .map(function (p) {
+          const s = scelte[p.id] || { outcome: "integra" };
+          return ESITI_ALLARME.indexOf(s.outcome) >= 0
+            ? p.code + " (" + (ESITI.find(function (e) { return e.id === s.outcome; }) || {}).label + ")"
+            : null;
+        })
+        .filter(Boolean);
+
+      if (allarmi.length > 0) {
+        const { error: errNc } = await supabase.from("non_conformities").insert({
+          company_id: companyId,
+          area: "Magazzino",
+          description: "Monitoraggio infestanti del " + fmt(dataGiro) + ": " + allarmi.join("; ") +
+            ". Verificare la tenuta delle barriere e, se necessario, far intervenire la ditta di disinfestazione.",
+          detected_date: dataGiro,
+          responsible: operatore.trim(),
+          source: "infestanti",
+          source_id: giro.id,
+        });
+        if (errNc && !/duplicate|unique/i.test(errNc.message)) {
+          setErrore("Giro registrato, ma la non conformità collegata non è stata creata: " + errNc.message);
+        }
+      }
+
       await reloadGiri();
       await reloadEsiti();
       setGiroAperto(false);
