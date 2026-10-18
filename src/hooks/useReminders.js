@@ -87,7 +87,7 @@ const FASCE = [
 // file e a mostrarne l'elenco in configurazione: se fossero due elenchi
 // diversi, uno dei due col tempo direbbe il falso.
 export function elencoPromemoria(dati = {}) {
-  const { azienda, piano = [], analisi = [], referti = [], vasche = [], controlliVasche = [], manutenzioni = [] } = dati;
+  const { azienda, piano = [], vasche = [], controlliVasche = [], manutenzioni = [] } = dati;
   const ora = Number(azienda?.reminder_hour) || 8;
   const oraTesto = `${pad2(ora)}:00`;
   const eventi = [];
@@ -159,21 +159,15 @@ export function elencoPromemoria(dati = {}) {
     });
   });
 
-  // 5. Il piano dei controlli analitici: la scadenza si calcola
-  //    dall'ultimo prelievo, come fa la scheda Controlli analitici.
-  analisi.filter((a) => a.active !== false).forEach((a) => {
-    const suoi = referti.filter((r) => r.plan_id === a.id);
-    const ultimo = suoi.reduce((m, r) => ((r.sample_date || "") > m ? r.sample_date : m), "");
-    const prossima = ultimo ? piuMesi(dataDa(ultimo), a.frequency_months) : new Date();
-    eventi.push({
-      key: "analisi-" + a.id,
-      titolo: `Controllo analitico: ${a.label}`,
-      quando: `Ogni ${a.frequency_months} mesi, dal ${prossima.toLocaleDateString("it-IT")}`,
-      rrule: `FREQ=MONTHLY;INTERVAL=${Number(a.frequency_months) || 12}`,
-      inizio: primoGiornoUtile(azienda, ora, prossima),
-      descrizione: (a.parameters || "") + (a.sampling_point ? " — " + a.sampling_point : ""),
-    });
-  });
+  // 5. I controlli analitici NON entrano nel calendario.
+  //
+  // Prenotare il laboratorio non è un gesto che si fa alle otto del
+  // mattino perché suona il telefono: la campagna la organizza il
+  // consulente, e l'OSA deve solo sapere a che punto è. Una sveglia per
+  // una cosa che non si può fare al momento è la sveglia che insegna a
+  // spegnere anche le altre. Le scadenze del piano analitico restano
+  // dove servono, cioè fra gli avvisi della Panoramica, che si guardano
+  // quando si apre l'app e non pretendono niente subito.
 
   // 6. Le manutenzioni già programmate: una data sola, non una
   //    ricorrenza, perché la prossima la fissa il tecnico.
