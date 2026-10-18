@@ -47,7 +47,14 @@ export function htmlVerbalePulizia(verbale, punti, azienda, numero) {
       <td class="c">${p.color ? SIGLA_COLORE[p.color] || esc(p.color) : ""}</td>
       <td class="c">${p.outcome ? SIGLA_ESITO[p.outcome] || esc(p.outcome) : ""}</td>
       <td>${esc(p.action_taken || "")}</td>
-    </tr>`).join("");
+    </tr>`).join("") ||
+    // Un verbale senza punti non esiste: se l'elenco arriva vuoto, il
+    // documento deve dirlo a chiare lettere invece di mostrare una
+    // tabella vuota, che si legge come «campionamento non eseguito».
+    `<tr><td colspan="7" style="text-align:center;padding:10pt">
+       <strong>Nessun punto di campionamento registrato.</strong><br>
+       Riaprire la scheda e stampare di nuovo il verbale.
+     </td></tr>`;
 
   const att = (v) => (azienda?.tipologia_attivita || "").toLowerCase().includes(v);
 
@@ -111,7 +118,7 @@ export function htmlVerbalePulizia(verbale, punti, azienda, numero) {
 
 <h2>2. Incaricato, kit e motivo del campionamento</h2>
 <table>
-  <tr><td class="et">Incaricato</td><td colspan="3">${esc(verbale.inspector || azienda?.consultant_name || "")} — ATTARDIMEDLAV, consulenza in igiene degli alimenti</td></tr>
+  <tr><td class="et">Incaricato</td><td colspan="3">${esc(verbale.inspector || azienda?.consultant_name || "Dott.ssa Attardi Mary Stella")}, ${esc(verbale.inspector_role || "consulente esterna per l'igiene degli alimenti")} — ATTARDIMEDLAV</td></tr>
   <tr><td class="et">Kit</td><td colspan="3">PRO-Clean — test rapido colorimetrico per residui proteici (Hygiena, distribuito da Tecnafood srl) — istruzioni del produttore riportate a pagina 2</td></tr>
   <tr><td class="et">Lotto del kit</td><td>${esc(verbale.kit_lot || "")}</td>
       <td class="et">Scadenza</td><td>${verbale.kit_expiry ? data(verbale.kit_expiry) : ""}</td></tr>
@@ -150,7 +157,11 @@ export function htmlVerbalePulizia(verbale, punti, azienda, numero) {
 
 <table class="firme">
   <tr><th>L'incaricato del campionamento</th><th>L'OSA, per presa visione e ricevuta di copia</th></tr>
-  <tr><td>${esc(verbale.inspector || azienda?.consultant_name || "")}</td><td>${esc(azienda?.haccp_manager || "")}</td></tr>
+  <tr>
+    <td>${esc(verbale.inspector || azienda?.consultant_name || "Dott.ssa Attardi Mary Stella")}<br>
+        <span style="font-size:7.5pt;color:#3F5147">${esc(verbale.inspector_role || "consulente esterna per l'igiene degli alimenti")}</span></td>
+    <td>${esc(azienda?.haccp_manager || "")}</td>
+  </tr>
 </table>
 
 <p class="piede">Verifica interna nell'ambito dell'autocontrollo: non sostituisce le analisi di laboratorio accreditato previste dal piano analitico del manuale HACCP. Verbale in due copie: una resta all'OSA ed è conservata con le registrazioni del manuale, una all'incaricato. I dispositivi usati sono smaltiti dall'incaricato.</p>
