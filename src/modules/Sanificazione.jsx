@@ -44,7 +44,8 @@ export default function Sanificazione() {
   const { items, add, remove, loading } = useTable("sanitization_logs", companyId);
   const { items: sanitizers } = useTable("sanitizers", companyId);
   const { items: piano, loading: pianoLoading } = useTable("cleaning_plan", companyId);
-  const { items: chiusure, add: addChiusura, update: updateChiusura } = useTable("company_closures", companyId);
+  const { items: chiusure, add: addChiusura, update: updateChiusura, remove: removeChiusura } =
+    useTable("company_closures", companyId);
 
   const responsabile = (company?.haccp_manager || "").trim();
   const [operator, setOperator] = useState(responsabile);
@@ -153,6 +154,7 @@ export default function Sanificazione() {
         chiusure={chiusure}
         add={addChiusura}
         update={updateChiusura}
+        remove={removeChiusura}
         nomeControlli="le pulizie"
       />
 

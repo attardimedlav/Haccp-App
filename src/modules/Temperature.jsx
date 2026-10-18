@@ -34,8 +34,9 @@ export default function Temperature() {
   const { company } = useAuth();
   const { items, add, remove, update, loading } = useTable("temperature_logs", company?.id);
   const { items: units, loading: unitsLoading } = useTable("temperature_units", company?.id);
-  const { items: chiusure, add: addChiusura, update: updateChiusura } = useTable("company_closures", company?.id);
-  const { items: spegnimenti, add: addSpegnimento, update: updateSpegnimento } =
+  const { items: chiusure, add: addChiusura, update: updateChiusura, remove: removeChiusura } =
+    useTable("company_closures", company?.id);
+  const { items: spegnimenti, add: addSpegnimento, update: updateSpegnimento, remove: removeSpegnimento } =
     useTable("equipment_downtime", company?.id);
 
   // Chi compila le schede è di norma il responsabile HACCP: il campo si apre
@@ -116,7 +117,10 @@ export default function Temperature() {
     try {
       const ieri = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
       const inizio = String(periodo.start_date).slice(0, 10);
-      await updateSpegnimento(periodo.id, { end_date: ieri < inizio ? inizio : ieri });
+      // Spenta e riaccesa in giornata: non c'e' stato nessun giorno di
+      // fermo, e il periodo si toglie invece di restare aperto su oggi.
+      if (inizio > ieri) await removeSpegnimento(periodo.id);
+      else await updateSpegnimento(periodo.id, { end_date: ieri });
     } catch (err) {
       setErrore("Non è stato possibile riaccendere l'impianto: " + err.message);
     } finally {
@@ -258,6 +262,7 @@ export default function Temperature() {
         chiusure={chiusure}
         add={addChiusura}
         update={updateChiusura}
+        remove={removeChiusura}
         nomeControlli="le temperature"
       />
 

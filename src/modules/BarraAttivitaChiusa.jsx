@@ -13,7 +13,7 @@ import { MOTIVI_CHIUSURA, chiusuraDelGiorno, descrizionePeriodo, oggiISO } from 
 // resta vuota e si scrive il giorno del rientro. Obbligare a indicarla
 // subito significherebbe avere nel registro una data inventata.
 
-export default function BarraAttivitaChiusa({ chiusure, add, update, nomeControlli }) {
+export default function BarraAttivitaChiusa({ chiusure, add, update, remove, nomeControlli }) {
   const [aperto, setAperto] = useState(false);
   const [inizio, setInizio] = useState(oggiISO());
   const [motivo, setMotivo] = useState(MOTIVI_CHIUSURA[0]);
@@ -33,16 +33,20 @@ export default function BarraAttivitaChiusa({ chiusure, add, update, nomeControl
     }
   };
 
-  // Si riapre oggi, quindi l'ultimo giorno di chiusura e' ieri. Se la
-  // chiusura era cominciata proprio oggi — ci ho ripensato, riapro — la
-  // fine resta il giorno d'inizio: un periodo non puo' finire prima di
-  // cominciare.
+  // Si riapre oggi, quindi l'ultimo giorno di chiusura e' ieri.
+  //
+  // Se la chiusura era cominciata proprio oggi — segnata per sbaglio, o
+  // ci si e' ripensati — di giorni chiusi non ce n'e' stato nessuno: il
+  // periodo si toglie invece di chiuderlo a oggi, perche' un periodo che
+  // finisce oggi copre ancora oggi e l'attivita' resterebbe chiusa dopo
+  // aver premuto «riaperta».
   const riapri = async () => {
     setBusy(true);
     try {
       const ieri = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
       const inizioChiusura = String(chiusa.start_date).slice(0, 10);
-      await update(chiusa.id, { end_date: ieri < inizioChiusura ? inizioChiusura : ieri });
+      if (inizioChiusura > ieri && remove) await remove(chiusa.id);
+      else await update(chiusa.id, { end_date: ieri });
     } finally {
       setBusy(false);
     }
@@ -56,6 +60,7 @@ export default function BarraAttivitaChiusa({ chiusure, add, update, nomeControl
             <CalendarOff size={14} style={{ marginRight: 6, verticalAlign: -2 }} color="#8A6514" />
             <strong>Attività chiusa</strong>
             <span className="lot-tag">{descrizionePeriodo(chiusa)}</span>
+            {chiusa.note && <span className="doc-type-tag">{chiusa.note}</span>}
           </div>
           <button type="button" className="btn-primary" disabled={busy} onClick={riapri}>
             <Check size={15} /> {busy ? "…" : "Attività riaperta oggi"}
@@ -69,7 +74,6 @@ export default function BarraAttivitaChiusa({ chiusure, add, update, nomeControl
             prima, che è l'ultimo giorno in cui il locale era chiuso.
           </span>
         </p>
-        {chiusa.note && <p className="pest-note" style={{ margin: "4px 0 0" }}><span>{chiusa.note}</span></p>}
       </div>
     );
   }
