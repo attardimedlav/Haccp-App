@@ -104,10 +104,17 @@ function coda(azienda, fuori) {
   </table>`;
 }
 
+// Una firma sola, quella dell'OSA.
+//
+// Prima c'era anche una casella «Verifica del consulente»: è sbagliata,
+// perche' questi sono registri che l'operatore compila da se'. Una
+// casella di firma per il consulente dichiara una verifica che non c'e'
+// stata, e in ispezione un documento che promette un controllo e lo
+// lascia in bianco pesa piu' della sua assenza.
 function firme(azienda) {
   return `<table class="firme">
-    <tr><th style="width:50%">Il responsabile del piano di autocontrollo</th><th>Verifica del consulente</th></tr>
-    <tr><td>${esc(azienda?.haccp_manager || "")}</td><td>${esc(azienda?.consultant_name || "")}</td></tr>
+    <tr><th>Il responsabile del piano di autocontrollo, per conferma delle registrazioni</th></tr>
+    <tr><td>${esc(azienda?.haccp_manager || "")}<br><span class="nota">firma ____________________________</span></td></tr>
   </table>`;
 }
 
