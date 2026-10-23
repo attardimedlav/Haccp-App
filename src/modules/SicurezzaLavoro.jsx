@@ -89,10 +89,18 @@ export const ROLE_OPTIONS = [
   "Altro",
 ];
 
+// I documenti che accompagnano il DVR e che in ispezione si chiedono sempre
+// insieme alle nomine. Stanno tutti nella stessa sottosezione "Nomine"
+// perché e' lo stesso fascicolo: chi lo esibisce lo sfoglia di seguito, non
+// cerca in due posti. Le voci sono quelle previste dal D.Lgs. 81/08; la
+// riunione periodica e' obbligatoria solo sopra i 15 lavoratori, per questo
+// nell'elenco e' indicata come "se prevista".
 export const ALLEGATO_TYPE_OPTIONS = [
-  "Planimetria",
-  "Verbale riunione periodica",
-  "Verbale di sopralluogo del medico competente",
+  "Verbale di informazione e formazione dei lavoratori (art. 36)",
+  "Verbale di consegna dei DPI (art. 77)",
+  "Verbale della riunione periodica, se prevista (art. 35)",
+  "Verbale di sopralluogo annuale del medico competente (art. 25)",
+  "Planimetria dei luoghi di lavoro",
   "Altro",
 ];
 
@@ -1410,29 +1418,15 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
 
       {(subTab === "dvr" || subTab === "allegati" || subTab === "nominedoc") && (
         <>
-          {/* Allegati al DVR ha due linguette: i documenti caricati e le nomine.
-              Le nomine sono le stesse righe degli incarichi (work_safety_appointments):
-              qui se ne vede e se ne cura solo il documento, la formazione resta
-              nella scheda Attestati. */}
-          {(subTab === "allegati" || subTab === "nominedoc") && (
-            <div className="config-subtabs">
-              <button
-                type="button"
-                className={"config-subtab" + (subTab === "allegati" ? " active" : "")}
-                onClick={() => setSubTab("allegati")}
-              >
-                <Paperclip size={15} /> Allegati
-              </button>
-              <button
-                type="button"
-                className={"config-subtab" + (subTab === "nominedoc" ? " active" : "")}
-                onClick={() => setSubTab("nominedoc")}
-              >
-                <FileSignature size={15} /> Nomine
-                {nomineSenzaDocumento > 0 && <span className="pill pill-warn" style={{ marginLeft: 6 }}>{nomineSenzaDocumento} senza documento</span>}
-              </button>
-            </div>
-          )}
+          {/* Dal 23/10/2026 "Allegati al DVR" ha una sola sottosezione, Nomine:
+              prima erano due linguette e il fascicolo da esibire stava diviso
+              fra le due. Le nomine sono le stesse righe degli incarichi
+              (work_safety_appointments): qui se ne vede e se ne cura solo il
+              documento, la formazione resta nella scheda Attestati. Sotto le
+              nomine stanno gli altri verbali — informazione dei lavoratori,
+              consegna dei DPI, riunione periodica, sopralluogo annuale del
+              medico competente — che in ispezione si chiedono insieme. L'id
+              "nominedoc" resta valido perché lo usa la ricerca documenti. */}
           {/* I documenti accessori si preparano qui, dove poi finiscono: nomine,
               designazioni e verbali generati dall'app si registrano da soli fra
               gli allegati al DVR e fra le nomine. Tenerli in una scheda a parte
@@ -1463,11 +1457,29 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
             </>
           )}
 
-          {subTab === "nominedoc" && elencoNomine()}
+          {(subTab === "allegati" || subTab === "nominedoc") && (
+            <>
+              <div className="tr-head" style={{ marginTop: 14 }}>
+                <span className="appt-section-label"><FileSignature size={15} /> Nomine</span>
+                {nomineSenzaDocumento > 0 && (
+                  <span className="pill pill-warn">{nomineSenzaDocumento} senza documento</span>
+                )}
+              </div>
+              {elencoNomine()}
+              <div className="tr-head" style={{ marginTop: 22 }}>
+                <span className="appt-section-label"><Paperclip size={15} /> Altri verbali e allegati</span>
+              </div>
+              <p className="sub" style={{ margin: "4px 0 12px" }}>
+                Informazione dei lavoratori, consegna dei DPI, riunione periodica se prevista,
+                sopralluogo annuale del medico competente, planimetrie: tutto ciò che accompagna
+                il DVR e che in ispezione si esibisce insieme alle nomine.
+              </p>
+            </>
+          )}
 
-          {subTab !== "nominedoc" && (<>
+          <>
           <form onSubmit={submitDoc(subTab === "dvr" ? "dvr" : "allegato")} className="traccia-form">
-            {subTab === "allegati" && (
+            {(subTab === "allegati" || subTab === "nominedoc") && (
               <select
                 value={ALLEGATO_TYPE_OPTIONS.includes(docTitle) ? docTitle : "Altro"}
                 onChange={(e) => setDocTitle(e.target.value === "Altro" ? "" : e.target.value)}
@@ -1502,10 +1514,10 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
           {(subTab === "dvr" ? dvrLoading : dvrLoading) ? (
             <p className="sub">Caricamento…</p>
           ) : (subTab === "dvr" ? dvrItems : allegatiItems).length === 0 ? (
-            <div className="empty"><p>{subTab === "dvr" ? "Nessuna versione del DVR registrata." : "Nessun allegato registrato."}</p></div>
+            <div className="empty"><p>{subTab === "dvr" ? "Nessuna versione del DVR registrata." : "Nessun altro verbale o allegato registrato."}</p></div>
           ) : (
             <ul className="dish-list">
-              {subTab === "allegati" && allegatiItems.map((item) => (
+              {subTab !== "dvr" && allegatiItems.map((item) => (
                 <AllegatoDvr
                   key={item.id}
                   item={item}
@@ -1549,7 +1561,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
               ))}
             </ul>
           )}
-          </>)}
+          </>
         </>
       )}
 
