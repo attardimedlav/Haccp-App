@@ -6,7 +6,9 @@ import { useAuth } from "../AuthContext";
 import { WATER_TANK_CONTROL_TYPE } from "./AcquePotabili";
 import { PLAN_TYPE } from "./Documenti";
 import { expiryInfo, FORMAZIONE_ROLE, DATORE_ROLES } from "./SicurezzaLavoro";
-import { riassuntoPerArea } from "../utils/pianoPulizie";
+import { riassuntoPerArea, righeValide } from "../utils/pianoPulizie";
+import { allineaPianoStandard } from "../utils/pianoStandardDb";
+import { SAN_AREAS } from "./Sanificazione";
 
 const CHECK_PERIODICITY = [
 ];
@@ -44,6 +46,19 @@ export default function Dashboard({ goTo, openWorkSafety }) {
   // Il piano di pulizia e i giri sulle postazioni: le scadenze nascono da
   // qui, non piu da un controllo generico per area.
   const piano = useTable("cleaning_plan", company?.id);
+  // Il piano standard si allinea anche da qui, che è la prima pagina che
+  // si apre: un cliente nuovo trova il piano già pronto e chi aveva le
+  // voci della prima versione le trova sostituite da quelle raggruppate.
+  const pianoAllineato = React.useRef(null);
+  React.useEffect(() => {
+    const id = company?.id;
+    if (!id || pianoAllineato.current === id) return;
+    pianoAllineato.current = id;
+    allineaPianoStandard(id, SAN_AREAS, true).then((esito) => {
+      if (esito.cambiato) piano.reload();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [company?.id]);
   const giriInfestanti = useTable("pest_rounds", company?.id);
   const vasche = useTable("water_tanks", company?.id);
   const water = useTable("water_controls", company?.id);
@@ -333,7 +348,7 @@ export default function Dashboard({ goTo, openWorkSafety }) {
     // Pulizie fuori frequenza, raggruppate per area: una riga per area con
     // il ritardo peggiore. Elencarle una per una coprirebbe le scadenze
     // serie sotto dieci voci di pulizie.
-    riassuntoPerArea(piano.items, san.items).forEach((a) => haccpIssues.push({
+    riassuntoPerArea(righeValide(piano.items, company), san.items).forEach((a) => haccpIssues.push({
       key: "pulizie-" + a.area, tab: "sanificazione", icon: SprayCan,
       titolo: "Pulizie in ritardo — " + a.area,
       dettaglio: a.peggiore

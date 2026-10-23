@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
-import { supabase } from "../supabaseClient";
+import { allineaPianoStandard } from "../utils/pianoStandardDb";
 import { Plus, Trash2, Check, X, Pencil, AlertTriangle, Info, SprayCan } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { SAN_AREAS } from "./Sanificazione";
-import { FREQUENZE, etichettaFrequenza, statoPiano, fmtData, vociStandardMancanti, VOCI_STANDARD_VECCHIE } from "../utils/pianoPulizie";
+import { FREQUENZE, etichettaFrequenza, statoPiano, fmtData, vociStandardMancanti } from "../utils/pianoPulizie";
 
 // Piano di pulizia e sanificazione.
 //
@@ -44,33 +44,12 @@ export default function PianoPulizie() {
   const seminato = useRef(null);
   const [caricoStandard, setCaricoStandard] = useState(false);
 
-  // Si rilegge il piano dal database prima di inserire: allo scambio di
-  // azienda l'elenco a schermo puo' essere ancora quello del cliente di
-  // prima, e confrontare con quello creerebbe doppioni.
   const caricaStandard = async function (soloSeVuoto) {
     if (!companyId) return;
     setCaricoStandard(true); setErrore("");
-    const { data: attuale, error: errLettura } = await supabase
-      .from("cleaning_plan").select("*").eq("company_id", companyId);
-    if (errLettura) { setErrore("Errore nel leggere il piano: " + errLettura.message); setCaricoStandard(false); return; }
-    // Le voci della prima versione, una per superficie, si tolgono e si
-    // sostituiscono con quelle raggruppate.
-    const vecchie = (attuale || []).filter(function (r) { return VOCI_STANDARD_VECCHIE.indexOf(r.operation) >= 0; });
-    if (vecchie.length) {
-      const { error: errVecchie } = await supabase
-        .from("cleaning_plan").delete().eq("company_id", companyId)
-        .in("id", vecchie.map(function (r) { return r.id; }));
-      if (errVecchie) { setErrore("Errore nel sostituire il piano: " + errVecchie.message); setCaricoStandard(false); return; }
-    }
-    const rimaste = (attuale || []).filter(function (r) { return vecchie.indexOf(r) < 0; });
-    const haVociBase = rimaste.some(function (r) { return SAN_AREAS.indexOf(r.area) >= 0 && !r.requires_flag; });
-    const mancanti = vociStandardMancanti(rimaste);
-    if ((soloSeVuoto && haVociBase) || !mancanti.length) { if (vecchie.length) await reload(); setCaricoStandard(false); return; }
-    const { error } = await supabase
-      .from("cleaning_plan")
-      .insert(mancanti.map(function (v) { return { ...v, company_id: companyId }; }));
-    if (error) setErrore("Errore nel caricare il piano standard: " + error.message);
-    await reload();
+    const esito = await allineaPianoStandard(companyId, SAN_AREAS, soloSeVuoto);
+    if (esito.errore) setErrore(esito.errore);
+    if (esito.cambiato) await reload();
     setCaricoStandard(false);
   };
 
@@ -94,7 +73,7 @@ export default function PianoPulizie() {
   const attiva = function (r) {
     return !r.requires_flag || !!(company && company[r.requires_flag]);
   };
-  const scoperte = stati.filter(function (s) { return s.cls === "pill-alert"; }).length;
+  const scoperte = stati.filter(function (s) { return s.cls === "pill-alert" && attiva(s.riga); }).length;
 
   const svuota = function () {
     setArea(SAN_AREAS[0]); setOperazione(""); setGiorni(1);
