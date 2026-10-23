@@ -211,16 +211,57 @@ export function buildReminderICS(dati = {}) {
   return lines.join("\r\n");
 }
 
-export function downloadReminderICS(dati) {
+// Consegna del file .ics.
+//
+// Il collegamento "data:" con l'attributo download funziona sul computer ma
+// non sull'iPhone: Safari e Chrome per iOS ignorano il download e non
+// succede nulla. Sui dispositivi Apple il file si apre come Blob di tipo
+// text/calendar: Safari mostra subito l'elenco degli eventi con "Aggiungi
+// tutti". Chrome e le altre app su iOS non aprono i Blob: lì si usa il
+// pannello Condividi, da cui si sceglie Calendario o "Salva in File".
+function isIOS() {
+  const ua = navigator.userAgent || "";
+  return /iPad|iPhone|iPod/.test(ua) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
+function isSafariIOS() {
+  const ua = navigator.userAgent || "";
+  return isIOS() && /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS|GSA/.test(ua);
+}
+
+export async function downloadReminderICS(dati) {
   // Compatibilità con la vecchia chiamata, che passava il solo nome:
   // meglio due promemoria generici che un errore in faccia all'utente.
   const payload = typeof dati === "string" ? { azienda: { name: dati } } : (dati || {});
   const ics = buildReminderICS(payload);
-  const dataUri = "data:text/calendar;charset=utf-8," + encodeURIComponent(ics);
+  const nome = "promemoria-haccp.ics";
+  const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
+
+  if (isIOS()) {
+    if (isSafariIOS()) {
+      window.location.href = URL.createObjectURL(blob);
+      return;
+    }
+    try {
+      const file = new File([blob], nome, { type: "text/calendar" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: "Promemoria HACCP" });
+        return;
+      }
+    } catch (e) {
+      if (e && e.name === "AbortError") return;
+    }
+    window.alert("Per aggiungere i promemoria al calendario apri questa pagina con Safari.");
+    return;
+  }
+
+  const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
-  link.href = dataUri;
-  link.download = "promemoria-haccp.ics";
+  link.href = url;
+  link.download = nome;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
