@@ -14,6 +14,10 @@ import { par, cella, tabella, riga, parImmagine, RID_IMMAGINE } from "../modules
 import { TITOLO_PROCEDURA, testoProceduraRegistrazioni } from "./proceduraRegistrazioni";
 import { etichettaFrequenza } from "./pianoPulizie";
 import { elencoGiorni } from "./chiusure";
+// L'elenco dei moduli di registrazione sta in un posto solo: lo stesso che
+// stampa l'allegato cartaceo. Cosi' i codici citati qui e quelli scritti sul
+// foglio in mano all'operatore non possono divergere.
+import { elencoModuli, codiceModulo } from "./moduliElenco";
 
 const VERDE = "1B2A22";
 const VERDE_CHIARO = "2F6F4E";
@@ -841,20 +845,22 @@ export function corpoManuale(dossier) {
   b.push(h2("10.3 Come è organizzata in questa azienda"));
   b.push(p(inApp
     ? "Le merci in arrivo si registrano nella scheda Arrivo merci e tracciabilità, con fornitore, prodotto, lotto, data di consegna e documento di riferimento. Ogni lavorazione fatta in laboratorio si registra nella scheda Preparazioni, che genera un numero di lotto interno e tiene il collegamento con i lotti delle materie prime impiegate e con gli eventuali semilavorati già registrati. Dalla preparazione si stampa il cartellino da applicare al prodotto."
-    : "Le merci in arrivo si registrano sul modulo M05 «Arrivo merci e tracciabilità», con fornitore, prodotto, lotto, data di consegna e documento di riferimento. Ogni lavorazione fatta in laboratorio si registra sul modulo M15 «Scheda di produzione», che porta il numero di lotto interno, i lotti delle materie prime impiegate e gli eventuali semilavorati, e si completa con il cartellino da applicare al prodotto."));
+    : `Le merci in arrivo si registrano sul modulo ${codiceModulo(azienda, "arrivomerci")} «Arrivo merci e tracciabilità» quando il documento di consegna non riporta il lotto; negli altri casi è sufficiente conservare la bolla o la fattura, che il lotto lo riportano già. Ogni preparato messo in conservazione porta un cartellino con la denominazione del prodotto, la data di produzione e il termine entro cui va impiegato: i lotti delle materie prime impiegate restano sui documenti di acquisto conservati in azienda, e non si riscrivono a mano a ogni lavorazione.`));
   // Il passo avanti si scrive solo dove esiste davvero: dichiarare un
   // registro delle cessioni in un bar che vende al banco significa prometterlo
   // vuoto per sempre.
   if (azienda.sells_to_businesses) {
     b.push(p(inApp
       ? "I prodotti ceduti ad altre imprese — bar, ristoranti, negozi, mense, grossisti — si registrano nella scheda Cessioni ad altre imprese, con data, destinatario, prodotto, lotto, quantità e documento di accompagnamento. È il passo avanti richiesto dall'art. 18: da un lotto si risale a chi lo ha ricevuto."
-      : "I prodotti ceduti ad altre imprese — bar, ristoranti, negozi, mense, grossisti — si registrano sul modulo M16 «Registro delle cessioni ad altre imprese», con data, destinatario, prodotto, lotto, quantità e documento di accompagnamento. È il passo avanti richiesto dall'art. 18: da un lotto si risale a chi lo ha ricevuto."));
+      : `I prodotti ceduti ad altre imprese — bar, ristoranti, negozi, mense, grossisti — si registrano sul modulo ${codiceModulo(azienda, "cessioni")} «Registro delle cessioni ad altre imprese», con data, destinatario, prodotto, lotto, quantità e documento di accompagnamento. È il passo avanti richiesto dall'art. 18: da un lotto si risale a chi lo ha ricevuto.`));
     b.push(p("Le vendite al consumatore finale non si registrano: l'obbligo riguarda le cessioni fra imprese."));
   } else {
     b.push(p("L'azienda cede i propri prodotti esclusivamente al consumatore finale: il passo avanti previsto dall'art. 18 non richiede registrazioni nominative, perché l'obbligo riguarda le cessioni ad altre imprese. Se l'attività iniziasse a fornire altri operatori, la registrazione delle cessioni va attivata."));
   }
   b.push(p("Il numero di lotto interno è costruito dalla data di produzione e da un progressivo della giornata: non contiene informazioni da interpretare, serve solo a ritrovare la scheda."));
-  b.push(p("I preparati conservati portano un cartellino con denominazione, lotto, data di produzione e termine entro cui vanno impiegati. Un contenitore senza cartellino non si usa e non si conserva: si elimina."));
+  b.push(p(inApp
+    ? "I preparati conservati portano un cartellino con denominazione, lotto interno, data di produzione e termine entro cui vanno impiegati, stampato dalla scheda Preparazioni. Un contenitore senza cartellino non si usa e non si conserva: si elimina."
+    : "I preparati conservati portano un cartellino con la denominazione del prodotto, la data di produzione e il termine entro cui vanno impiegati. Un contenitore senza cartellino non si usa e non si conserva: si elimina."));
 
   b.push(h2("10.4 Un esempio: dalla materia prima al prodotto servito"));
   b.push(p("Arriva una partita di ricotta con il suo lotto, che viene registrato all'ingresso. Con quella ricotta si prepara una farcitura, che riceve un lotto interno e nella cui scheda compare il lotto della ricotta. Con la farcitura si producono i dolci della giornata, che nella loro scheda richiamano il lotto della farcitura. Se il caseificio richiama il lotto di ricotta, dalla sua scheda si arriva alla farcitura e da questa ai dolci: si ritirano quelli, e solo quelli."));
@@ -867,7 +873,7 @@ export function corpoManuale(dossier) {
   b.push(p("Il prodotto interessato viene isolato e identificato con la dicitura «Merce non conforme — non utilizzare», tenuto a disposizione dell'Autorità di controllo, che ne stabilisce la destinazione."));
   b.push(p(inApp
     ? "La non conformità e l'eventuale ritiro si registrano nella scheda Non conformità, che tiene anche i dati della comunicazione all'Autorità sanitaria."
-    : "La non conformità si registra sul modulo M07 e la comunicazione all'Autorità sanitaria sul modulo M10 «Comunicazione di ritiro del prodotto»."));
+    : `La non conformità si registra sul modulo ${codiceModulo(azienda, "nonconformita")} e la comunicazione all'Autorità sanitaria sul modulo ${codiceModulo(azienda, "ritiro")} «Comunicazione di ritiro del prodotto».`));
 
   // ---------------- 11. allergeni ----------------
   //
@@ -958,37 +964,8 @@ export function corpoManuale(dossier) {
   b.push(p("Alla ripresa dell'attività, prima dell'utilizzo, le attrezzature rimaste ferme sono pulite e sanificate e si verifica che raggiungano la temperatura di esercizio prevista; l'esito è registrato come primo controllo del periodo.", { size: 20 }));
   b.push(par("", { after: 140 }));
 
-  const moduli = [
-    ["M01", "Registro temperature", "Una volta al giorno, alla stessa ora", null],
-    ["M02", "Registro cambi olio di frittura", "A ogni sostituzione dell'olio", "has_fryer"],
-    ["M03", "Acque potabili", "A ogni intervento", null],
-    ["M04", "Calendario delle pulizie e sanificazioni", "Secondo il programma di sanificazione", null],
-    ["M05", "Arrivo merci e tracciabilità", "A ogni consegna priva di lotto sul documento", null],
-    ["M06", "Schede di registrazione fornitori", "All'inserimento e all'aggiornamento", null],
-    ["M07", "Registrazione non conformità", "A ogni evento", null],
-    ["M08", "Manutenzione impianti e attrezzature", "A ogni intervento", null],
-    ["M09", "Monitoraggio insetti e roditori", "Settimanale", null],
-    ["M10", "Comunicazione di ritiro del prodotto", "All'occorrenza", null],
-    ["M11", "Macchina del ghiaccio — interventi straordinari e della ditta esterna", "All'occorrenza; ispezione e pulizia ordinaria sono nel programma di sanificazione (M04)", "has_ice_machine"],
-    // Tre registri e non uno: "abbattimento" nel parlare comune indica tre
-    // processi diversi — raffreddare in fretta un cotto, congelare per
-    // conservare, bonificare il pesce crudo dall'Anisakis — e un unico
-    // "registro degli abbattimenti" li confonde proprio dove la confusione
-    // costa: il pesce crudo e' un obbligo di legge con parametri fissi, gli
-    // altri due no. Vedi PRO 19, PRO 20 e PRO 21.
-    ["M12", "Registro del raffreddamento rapido dei prodotti cotti", "A ogni ciclo", "has_blast_chiller"],
-    ["M13", "Registro di congelamento e scongelamento", "A ogni partita congelata e a ogni uscita dal congelatore", "has_blast_chiller"],
-    ["M14", "Registro della bonifica preventiva del pesce crudo", "A ogni trattamento e a ogni scongelamento", "serves_raw_fish"],
-    // La scheda di produzione e' l'anello che tiene insieme la catena: da un
-    // prodotto finito ai lotti delle materie prime con cui e' stato fatto.
-    // Nell'app e' la scheda Preparazioni; su carta mancava.
-    ["M15", "Scheda di produzione e cartellino del preparato", "A ogni lotto prodotto in laboratorio", "__tracciabilita"],
-    ["M16", "Registro delle cessioni ad altre imprese", "A ogni consegna a un'altra impresa", "sells_to_businesses"],
-  ].filter(([, , , flag]) => {
-    if (flag === "__tracciabilita") return azienda.active_traceability !== false;
-    return !flag || azienda[flag];
-  });
-  b.push(griglia(["N.", "Modulo", "Frequenza di compilazione"], moduli.map(([n, m, f]) => [n, m, f]), [900, 5000, 3460]));
+  const moduli = elencoModuli(azienda);
+  b.push(griglia(["N.", "Modulo", "Frequenza di compilazione"], moduli.map((m) => [m.codice, m.titolo, m.frequenza]), [900, 5000, 3460]));
   b.push(par("", { after: 180 }));
   b.push(p("Allergeni, formazione del personale e controlli analitici non hanno una scheda da compilare: gli allergeni sono riportati nell'elenco descritto al capitolo 11, che l'operatore tiene esposto o a disposizione del consumatore, la formazione è documentata dagli attestati degli alimentaristi e i controlli analitici dai rapporti di prova del laboratorio, tutti conservati in azienda."));
   b.push(par("", { after: 140 }));
