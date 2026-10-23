@@ -92,7 +92,13 @@ function griglia(intestazione, righe, larghezze, o = {}) {
 // Quattro colonne: il numero, il riquadro della fase, l'etichetta CP/CCP e
 // la colonna laterale, dove finisce il ramo NO di una decisione. La somma
 // resta quella di prima, cosi' il diagramma occupa la stessa larghezza.
-const DIA = { num: 520, box: 4100, tag: 780, lato: 1580 };
+// Due misure, non una. Nei cicli senza decisioni la colonna laterale non
+// ha niente da contenere, e lasciarla li' spingeva tutto il diagramma a
+// sinistra con mezza pagina bianca a destra: il foglio che si stacca e si
+// affigge in laboratorio sembrava un ritaglio. Quando non serve, lo spazio
+// torna al riquadro della fase, che diventa largo e leggibile da lontano.
+const DIA = { num: 620, box: 5240, tag: 1000, lato: 2500 };
+const DIA_SEMPLICE = { num: 620, box: 7740, tag: 1000, lato: 0 };
 const GIALLO = "FBF4DA";      // il rombo della decisione
 const GIALLO_BORDO = "C9A227";
 const GRIGIO = "F2F2F0";      // l'azione correttiva, fuori dal flusso
@@ -128,14 +134,17 @@ function cellaDia(contenuto, larghezza, o = {}) {
 // cantSplit: un riquadro non si spezza fra due pagine. Deve precedere
 // trHeight, altrimenti vale solo il secondo.
 function rigaDia(celle, o = {}) {
+  // hRule exact taglia il contenuto che non ci sta: va bene per il tratto
+  // di collegamento, che e' vuoto, non per un riquadro con dentro del testo.
+  // Per quelli si usa atLeast: il riquadro non scende sotto quell'altezza ma
+  // cresce se la fase ha una riga in piu'.
   const pr = `<w:trPr><w:cantSplit/>` +
-    (o.altezza ? `<w:trHeight w:val="${o.altezza}" w:hRule="exact"/>` : "") +
+    (o.altezza ? `<w:trHeight w:val="${o.altezza}" w:hRule="${o.minima ? "atLeast" : "exact"}"/>` : "") +
     `</w:trPr>`;
   return `<w:tr>${pr}${celle}</w:tr>`;
 }
 
-function tabellaDia(righe) {
-  const L = [DIA.num, DIA.box, DIA.tag, DIA.lato];
+function tabellaDia(righe, L) {
   const senza = ["top", "left", "bottom", "right", "insideH", "insideV"]
     .map((b) => `<w:${b} w:val="none" w:sz="0" w:space="0" w:color="auto"/>`).join("");
   return (
@@ -192,23 +201,38 @@ function diagramma(ciclo, numeroCcp) {
   const fasi = (ciclo.flow || []).map((x) => leggiFase(x, ciclo.classification));
   if (!fasi.length) return [];
   const cicloCritico = /CCP/i.test(ciclo.classification || "");
+  // La colonna laterale esiste solo se c'e' almeno una decisione da cui far
+  // uscire il ramo NO. Altrimenti sparisce e il riquadro si allarga.
+  const conDecisioni = fasi.some((f) => f.tipo === "decisione");
+  const D = conDecisioni ? DIA : DIA_SEMPLICE;
+  const colonne = conDecisioni ? [D.num, D.box, D.tag, D.lato] : [D.num, D.box, D.tag];
   const righe = [];
+  // I riquadri si distribuiscono sull'altezza del foglio invece di
+  // accatastarsi in cima lasciando mezza pagina bianca: e' la pagina che si
+  // stacca e si affigge in laboratorio, e da due metri si deve leggere.
+  // Un ciclo di quattro fasi avra' riquadri alti, uno di dodici riquadri
+  // stretti; i limiti tengono il risultato dentro il ragionevole.
+  const conteggioFasi = fasi.filter((f) => f.tipo === "fase").length || 1;
+  const altezzaFase = Math.max(640, Math.min(1500,
+    Math.round((12400 - fasi.length * 120) / Math.max(fasi.length, 1))));
   const vuota = (l, o) => cellaDia(par("", { size: 2, after: 0 }), l, o || {});
+  // La cella di coda: una cella vera dove la colonna c'e', niente dove non c'e'.
+  const coda = (contenuto) => (conDecisioni ? (contenuto || vuota(D.lato)) : "");
 
   // intestazione piena: numero, nome e classificazione del ciclo
   righe.push(rigaDia(
     cellaDia(par(`${ciclo.numero ? "Ciclo " + ciclo.numero : ciclo.code}    ${ciclo.name}`, { bold: true, size: 21, color: "FFFFFF", after: 0 }),
-      DIA.num + DIA.box, { sfondo: VERDE, span: 2 }) +
+      D.num + D.box, { sfondo: VERDE, span: 2 }) +
     cellaDia(par(cicloCritico ? "CCP" : "CP", { bold: true, size: 16, color: "FFFFFF", align: "center", after: 0 }),
-      DIA.tag, { sfondo: VERDE }) +
-    vuota(DIA.lato)
+      D.tag, { sfondo: VERDE }) +
+    coda()
   ));
 
   // il tratto di collegamento: la colonna dei numeri resta colorata e tiene
   // la linea, le altre restano vuote
   const tratto = () => righe.push(rigaDia(
-    vuota(DIA.num, { sfondo: VERDE_CHIARO, pad: 0 }) +
-    vuota(DIA.box, { pad: 0 }) + vuota(DIA.tag, { pad: 0 }) + vuota(DIA.lato, { pad: 0 }),
+    vuota(D.num, { sfondo: VERDE_CHIARO, pad: 0 }) +
+    vuota(D.box, { pad: 0 }) + vuota(D.tag, { pad: 0 }) + coda(vuota(D.lato, { pad: 0 })),
     { altezza: 120 }
   ));
 
@@ -221,16 +245,17 @@ function diagramma(ciclo, numeroCcp) {
       // prosegue comunque: il ramo SI' e' la riga sotto, il ramo NO esce di
       // lato e non torna nella catena.
       righe.push(rigaDia(
-        vuota(DIA.num, { sfondo: VERDE_CHIARO, pad: 0 }) +
+        vuota(D.num, { sfondo: VERDE_CHIARO, pad: 0 }) +
         cellaDia(
-          par("◇  " + f.nome, { bold: true, size: 19, align: "center", after: 40 }) +
+          par("◇  " + f.nome, { bold: true, size: 20, align: "center", after: 40 }) +
           par("SÌ  ↓", { size: 15, align: "center", color: "6E8B78", after: 0 }),
-          DIA.box, { sfondo: GIALLO, bordo: GIALLO_BORDO, spessore: 8 }) +
-        cellaDia(par(f.ramo ? "NO  →" : "", { size: 15, align: "center", after: 0, color: "8A7320" }), DIA.tag) +
-        (f.ramo
+          D.box, { sfondo: GIALLO, bordo: GIALLO_BORDO, spessore: 8 }) +
+        cellaDia(par(f.ramo ? "NO  →" : "", { size: 15, align: "center", after: 0, color: "8A7320" }), D.tag) +
+        coda(f.ramo
           ? cellaDia(par(f.ramo, { size: 16, after: 0, color: "4A4A46", interlinea: 220 }),
-              DIA.lato, { sfondo: GRIGIO, bordo: GRIGIO_BORDO, spessore: 6, padLat: 110 })
-          : vuota(DIA.lato))
+              D.lato, { sfondo: GRIGIO, bordo: GRIGIO_BORDO, spessore: 6, padLat: 110 })
+          : vuota(D.lato)),
+        { altezza: altezzaFase, minima: true }
       ));
       return;
     }
@@ -243,17 +268,22 @@ function diagramma(ciclo, numeroCcp) {
       par(f.nome, { bold: true, size: 20, after: f.dettaglio ? 50 : 0 }) +
       (f.dettaglio ? par(f.dettaglio, { size: 17, color: "4A5A50", after: 0, interlinea: 240 }) : "");
     righe.push(rigaDia(
-      cellaDia(par(String(n), { bold: true, size: 20, color: "FFFFFF", align: "center", after: 0 }),
-        DIA.num, { sfondo: ccp ? "A83A2C" : VERDE_CHIARO }) +
-      cellaDia(dentro, DIA.box,
+      cellaDia(par(String(n), { bold: true, size: 21, color: "FFFFFF", align: "center", after: 0 }),
+        D.num, { sfondo: ccp ? "A83A2C" : VERDE_CHIARO }) +
+      cellaDia(dentro, D.box,
         { sfondo: ccp ? "FBEDEC" : "F4F7F2", bordo: ccp ? "A83A2C" : "CBD9CE", spessore: ccp ? 12 : 6 }) +
+      // L'etichetta del punto critico e' una pastiglia piena, non una
+      // scritta: su una pagina di riquadri verdi e' l'unica cosa che deve
+      // saltare all'occhio da lontano.
       cellaDia(par(ccp ? (numeroCcp ? `CCP ${numeroCcp}` : "CCP") : "CP",
-        { bold: ccp, size: 16, align: "center", after: 0, color: ccp ? "A83A2C" : "6E8B78" }), DIA.tag) +
-      vuota(DIA.lato)
+        { bold: ccp, size: 16, align: "center", after: 0, color: ccp ? "FFFFFF" : "6E8B78" }),
+        D.tag, ccp ? { sfondo: "A83A2C", pad: 60, padLat: 40 } : {}) +
+      coda(),
+      { altezza: altezzaFase, minima: true }
     ));
   });
 
-  return [tabellaDia(righe)];
+  return [tabellaDia(righe, colonne)];
 }
 
 // La firma del responsabile, quando e' stata depositata in Configurazione.
@@ -281,6 +311,24 @@ export function vale(voce, azienda) {
   const flag = voce?.requires_flag;
   if (!flag) return true;
   return !!azienda?.[flag];
+}
+
+// Quali cicli entrano in questo manuale, con il loro numero progressivo e,
+// per quelli critici, il numero del CCP.
+//
+// Sta qui e si esporta perche' la deve usare anche chi disegna i diagrammi
+// fuori dal generatore: se il disegno numerasse i cicli per conto suo, il
+// foglio appeso in laboratorio direbbe "Ciclo 4 — CCP 2" e il testo del
+// manuale "Ciclo 3 — CCP 1". Una regola sola, in un posto solo.
+export function cicliDelManuale(cicli, azienda) {
+  let n = 0;
+  return (cicli || [])
+    .filter((c) => vale(c, azienda))
+    .map((c, i) => {
+      const critico = /^CCP/i.test(c.classification || "");
+      if (critico) n += 1;
+      return { ...c, numero: i + 1, ccpNumero: critico ? n : null };
+    });
 }
 
 // --- controllo di coerenza prima di generare ----------------------------
@@ -320,6 +368,7 @@ export function corpoManuale(dossier) {
     procedure = [],
     piano = [],
     analisi = [],
+    diagrammi = {},
   } = dossier;
 
   const inApp = azienda.haccp_records_mode !== "cartaceo";
@@ -330,9 +379,7 @@ export function corpoManuale(dossier) {
   // biblioteca e nel manuale non compaiono piu': lo stesso ciclo in una
   // pasticceria e' il terzo e in un bar il primo, e stampare un codice fisso
   // obbligava a spiegare al cliente perche' il suo manuale salta dei numeri.
-  const cicliAttivi = cicli
-    .filter((c) => vale(c, azienda))
-    .map((c, i) => ({ ...c, numero: i + 1 }));
+  const cicliAttivi = cicliDelManuale(cicli, azienda);
   const procedureAttive = procedure.filter((x) => vale(x, azienda));
   // Il numero del CCP vale PER QUESTO MANUALE, non per il catalogo.
   //
@@ -346,9 +393,7 @@ export function corpoManuale(dossier) {
   // Qui i punti critici si contano nell'ordine in cui compaiono e si numerano
   // 1..n: il numero e' unico nel manuale, il quadro riassuntivo corrisponde ai
   // diagrammi, e in ispezione "CCP 3" indica una cosa sola.
-  const ccp = cicliAttivi
-    .filter((c) => /^CCP/i.test(c.classification || ""))
-    .map((c, i) => ({ ...c, ccpNumero: i + 1 }));
+  const ccp = cicliAttivi.filter((c) => c.ccpNumero);
   const numeroCcp = new Map(ccp.map((c) => [c.id, c.ccpNumero]));
   const etichettaCcp = (c) => `CCP ${numeroCcp.get(c.id) || ""}`.trim();
   const cp = cicliAttivi.filter((c) => !/^CCP/i.test(c.classification || ""));
@@ -609,7 +654,22 @@ export function corpoManuale(dossier) {
   b.push(legendaFlusso());
   // un diagramma per pagina. Due per pagina stavano larghi solo quando i
   // cicli avevano poche fasi, e per tutti gli altri si spezzavano a metà.
+  //
+  // Dal 23/10/2026 il diagramma, quando si può, è un disegno: lo prepara
+  // diagrammaCiclo.js su un canvas e arriva qui già pronto dentro
+  // dossier.diagrammi, indicizzato per id del ciclo. Con le celle di una
+  // tabella le frecce, il rombo e il ramo che si stacca non si disegnano, e
+  // il diagramma restava una lista messa in cornice. Se il disegno non c'è
+  // — nessun canvas, prova fuori dal browser — resta la tabella di prima:
+  // il manuale esce comunque, che è la cosa che conta.
   cicliAttivi.forEach((c) => {
+    const dis = diagrammi[c.id];
+    if (dis) {
+      b.push(saltoPagina());
+      b.push(parImmagine(RID_IMMAGINE(dis.indice), dis.larghezzaCm, dis.altezzaCm,
+        { nome: "Diagramma di flusso — " + (c.name || ""), align: "center", after: 0 }));
+      return;
+    }
     const d = diagramma(c, numeroCcp.get(c.id));
     if (!d.length) return;
     b.push(saltoPagina());
