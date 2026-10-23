@@ -4,7 +4,7 @@ import { Plus, Trash2, Check, X, Pencil, AlertTriangle, Info, SprayCan } from "l
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { SAN_AREAS } from "./Sanificazione";
-import { FREQUENZE, etichettaFrequenza, statoPiano, fmtData, vociStandardMancanti } from "../utils/pianoPulizie";
+import { FREQUENZE, etichettaFrequenza, statoPiano, fmtData, vociStandardMancanti, VOCI_STANDARD_VECCHIE } from "../utils/pianoPulizie";
 
 // Piano di pulizia e sanificazione.
 //
@@ -53,9 +53,19 @@ export default function PianoPulizie() {
     const { data: attuale, error: errLettura } = await supabase
       .from("cleaning_plan").select("*").eq("company_id", companyId);
     if (errLettura) { setErrore("Errore nel leggere il piano: " + errLettura.message); setCaricoStandard(false); return; }
-    const haVociBase = (attuale || []).some(function (r) { return SAN_AREAS.indexOf(r.area) >= 0 && !r.requires_flag; });
-    const mancanti = vociStandardMancanti(attuale);
-    if ((soloSeVuoto && haVociBase) || !mancanti.length) { setCaricoStandard(false); return; }
+    // Le voci della prima versione, una per superficie, si tolgono e si
+    // sostituiscono con quelle raggruppate.
+    const vecchie = (attuale || []).filter(function (r) { return VOCI_STANDARD_VECCHIE.indexOf(r.operation) >= 0; });
+    if (vecchie.length) {
+      const { error: errVecchie } = await supabase
+        .from("cleaning_plan").delete().eq("company_id", companyId)
+        .in("id", vecchie.map(function (r) { return r.id; }));
+      if (errVecchie) { setErrore("Errore nel sostituire il piano: " + errVecchie.message); setCaricoStandard(false); return; }
+    }
+    const rimaste = (attuale || []).filter(function (r) { return vecchie.indexOf(r) < 0; });
+    const haVociBase = rimaste.some(function (r) { return SAN_AREAS.indexOf(r.area) >= 0 && !r.requires_flag; });
+    const mancanti = vociStandardMancanti(rimaste);
+    if ((soloSeVuoto && haVociBase) || !mancanti.length) { if (vecchie.length) await reload(); setCaricoStandard(false); return; }
     const { error } = await supabase
       .from("cleaning_plan")
       .insert(mancanti.map(function (v) { return { ...v, company_id: companyId }; }));

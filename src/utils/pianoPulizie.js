@@ -204,40 +204,32 @@ const CLORO = "Disinfettante a base di cloro";
 const DIS = "Detergente disincrostante";
 const ADD = "Addetto di turno";
 
+// Raggruppate: l'OSA vuole poche righe da spuntare, non una per ogni
+// superficie. Cinque voci al giorno, tre a settimana, poche di fondo.
 export const PIANO_STANDARD = [
-  // Cucina
-  { area: "Cucina", operation: "Piani di lavoro e taglieri", frequency_days: 1, product: SAN, method: "Rimozione dei residui, lavaggio con detergente, sanificazione e risciacquo; a fine lavorazione e a ogni cambio di prodotto." },
-  { area: "Cucina", operation: "Utensili, stoviglie e contenitori", frequency_days: 1, product: SAN, method: "Lavaggio in lavastoviglie ad alta temperatura o a mano con detergente e sanificazione." },
-  { area: "Cucina", operation: "Lavelli e rubinetteria", frequency_days: 1, product: DIS },
-  { area: "Cucina", operation: "Pavimenti della cucina", frequency_days: 1, product: CLORO, method: "Spazzatura, lavaggio con detergente e disinfezione a fine turno." },
-  { area: "Cucina", operation: "Pattumiere e area rifiuti", frequency_days: 1, product: CLORO, method: "Svuotamento a fine turno, lavaggio e disinfezione dei contenitori." },
-  { area: "Cucina", operation: "Piano cottura, forni e piastre", frequency_days: 1, product: DET },
-  { area: "Cucina", operation: "Pareti piastrellate, porte e maniglie", frequency_days: 7, product: SAN },
-  { area: "Cucina", operation: "Cappa aspirante: superfici esterne", frequency_days: 7, product: DET, requires_flag: "has_hood" },
-  { area: "Cucina", operation: "Cappa aspirante: lavaggio dei filtri", frequency_days: 30, product: DET, method: "Smontaggio dei filtri, sgrassatura per immersione, risciacquo e asciugatura prima del rimontaggio.", requires_flag: "has_hood" },
-  { area: "Cucina", operation: "Friggitrice: cambio olio e pulizia della vasca", frequency_days: 7, product: DET, method: "Sostituzione dell'olio quando alterato e comunque alla frequenza indicata; svuotamento, sgrassatura e asciugatura della vasca.", requires_flag: "has_fryer" },
-  { area: "Cucina", operation: "Soffitti, lampade e zone alte", frequency_days: 90, product: DET },
-  // Sala
-  { area: "Sala", operation: "Tavoli, sedie e banco", frequency_days: 1, product: SAN },
-  { area: "Sala", operation: "Pavimenti della sala", frequency_days: 1, product: CLORO },
-  { area: "Sala", operation: "Vetrine espositive e banchi frigo", frequency_days: 7, product: SAN },
-  { area: "Sala", operation: "Vetri, infissi e arredi", frequency_days: 30, product: DET },
-  // Bagni
-  { area: "Bagni", operation: "Sanitari, lavabi e pavimenti dei servizi", frequency_days: 1, product: CLORO, method: "Pulizia e disinfezione; controllo e reintegro di sapone liquido, carta e salviette monouso." },
-  { area: "Bagni", operation: "Spogliatoi e armadietti", frequency_days: 7, product: SAN },
-  { area: "Bagni", operation: "Pareti, porte e piastrelle dei servizi", frequency_days: 7, product: CLORO },
-  // Magazzino
-  { area: "Magazzino", operation: "Pavimenti del magazzino", frequency_days: 7, product: CLORO },
-  { area: "Magazzino", operation: "Scaffalature e ripiani", frequency_days: 30, product: SAN, method: "Svuotamento a rotazione dei ripiani, pulizia e controllo delle scadenze e dell'integrità delle confezioni." },
-  // Attrezzature
-  { area: "Attrezzature", operation: "Affettatrice, tritacarne e piccole attrezzature", frequency_days: 1, product: SAN, method: "Smontaggio delle parti a contatto con l'alimento dopo l'uso, lavaggio, sanificazione e risciacquo." },
-  { area: "Attrezzature", operation: "Lavastoviglie: pulizia filtri e vasca", frequency_days: 7, product: DIS },
+  // Ogni giorno
+  { area: "Cucina", operation: "Cucina: piani di lavoro, taglieri, utensili, lavelli e piano cottura", frequency_days: 1, product: SAN, method: "Rimozione dei residui, lavaggio con detergente, sanificazione e risciacquo a fine lavorazione." },
+  { area: "Cucina", operation: "Pavimenti e contenitori dei rifiuti", frequency_days: 1, product: CLORO, method: "Svuotamento dei rifiuti, spazzatura, lavaggio e disinfezione a fine turno." },
+  { area: "Sala", operation: "Sala: tavoli, banco e pavimenti", frequency_days: 1, product: SAN },
+  { area: "Bagni", operation: "Servizi igienici e spogliatoi", frequency_days: 1, product: CLORO, method: "Pulizia e disinfezione; reintegro di sapone liquido, carta e salviette monouso." },
+  { area: "Attrezzature", operation: "Affettatrice, lavastoviglie e piccole attrezzature", frequency_days: 1, product: SAN, method: "Smontaggio delle parti a contatto con l'alimento, lavaggio, sanificazione e risciacquo." },
+  // Ogni settimana
+  { area: "Frigoriferi", operation: "Frigoriferi, vetrine e banchi frigo", frequency_days: 7, product: SAN, method: "Spostamento degli alimenti, sanificazione di ripiani e guarnizioni, controllo delle temperature." },
+  { area: "Cucina", operation: "Pareti, porte, maniglie e vetri", frequency_days: 7, product: DET },
+  { area: "Magazzino", operation: "Magazzino: scaffalature e pavimenti", frequency_days: 7, product: SAN, method: "Pulizia a rotazione dei ripiani e controllo di scadenze e confezioni." },
+  // Pulizie di fondo
+  { area: "Frigoriferi", operation: "Celle e congelatori: sbrinamento e pulizia completa", frequency_days: 90, product: SAN },
+  { area: "Cucina", operation: "Soffitti, lampade, infissi e zone alte", frequency_days: 90, product: DET },
+  // Solo se l'azienda ha l'attrezzatura
+  { area: "Cucina", operation: "Cappa aspirante: superfici e filtri", frequency_days: 30, product: DET, method: "Sgrassatura delle superfici; smontaggio e lavaggio dei filtri per immersione.", requires_flag: "has_hood" },
+  { area: "Cucina", operation: "Friggitrice: cambio olio e pulizia della vasca", frequency_days: 7, product: DET, requires_flag: "has_fryer" },
   { area: "Attrezzature", operation: "Abbattitore: pulizia e sanificazione della cella", frequency_days: 7, product: SAN, requires_flag: "has_blast_chiller" },
-  // Frigoriferi
-  { area: "Frigoriferi", operation: "Frigoriferi: superfici interne e guarnizioni", frequency_days: 7, product: SAN, method: "Spostamento degli alimenti, rimozione dei residui, sanificazione di ripiani e guarnizioni, controllo delle temperature al riavvio." },
-  { area: "Frigoriferi", operation: "Congelatori: sbrinamento e pulizia completa", frequency_days: 90, product: SAN },
-  { area: "Frigoriferi", operation: "Celle frigorifere: pulizia completa", frequency_days: 30, product: SAN },
 ];
+
+// Le voci della prima versione del piano standard, una per superficie:
+// troppe per l'OSA. Dove sono ancora presenti si sostituiscono con quelle
+// raggruppate. Restano fuori quelle con lo stesso nome nella nuova lista.
+export const VOCI_STANDARD_VECCHIE = ["Piani di lavoro e taglieri", "Utensili, stoviglie e contenitori", "Lavelli e rubinetteria", "Pavimenti della cucina", "Pattumiere e area rifiuti", "Piano cottura, forni e piastre", "Pareti piastrellate, porte e maniglie", "Cappa aspirante: superfici esterne", "Cappa aspirante: lavaggio dei filtri", "Soffitti, lampade e zone alte", "Tavoli, sedie e banco", "Pavimenti della sala", "Vetrine espositive e banchi frigo", "Vetri, infissi e arredi", "Sanitari, lavabi e pavimenti dei servizi", "Spogliatoi e armadietti", "Pareti, porte e piastrelle dei servizi", "Pavimenti del magazzino", "Scaffalature e ripiani", "Affettatrice, tritacarne e piccole attrezzature", "Lavastoviglie: pulizia filtri e vasca", "Frigoriferi: superfici interne e guarnizioni", "Congelatori: sbrinamento e pulizia completa", "Celle frigorifere: pulizia completa"];
 
 function chiave(r) {
   return (r.area || "") + "|" + (r.operation || "").trim().toLowerCase();
