@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { FileDown, Award, AlertTriangle, X, CheckCircle2, Trash2, Paperclip, ExternalLink } from "lucide-react";
+import { FileDown, Award, AlertTriangle, X, CheckCircle2, Trash2, Paperclip, ExternalLink, Lock } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
@@ -202,7 +202,11 @@ const BLU = "1F3864";
 // stampano, si fanno firmare, si scansionano e la scansione torna qui — così
 // in ispezione il fascicolo del corso è completo in un posto solo, invece di
 // essere metà in Cardine e metà nella cartella di chi ha scansionato.
-function DocumentoCorso({ etichetta, conteggio, onScarica, tipo, corsoId, companyId, allegati, onCambiato }) {
+// puoiTogliere: solo il consulente stacca una copia firmata gia' allegata.
+// Il titolare la allega — e' lui che ha il foglio firmato in mano — ma una
+// volta dentro il fascicolo resta: un documento firmato che sparisce e' un
+// buco in ispezione.
+function DocumentoCorso({ etichetta, conteggio, onScarica, tipo, corsoId, companyId, allegati, onCambiato, puoiTogliere = true }) {
   const [busy, setBusy] = React.useState(false);
   const [errore, setErrore] = React.useState("");
   const miei = allegati.filter((a) => a.kind === tipo);
@@ -252,10 +256,16 @@ function DocumentoCorso({ etichetta, conteggio, onScarica, tipo, corsoId, compan
             <button type="button" className="link-btn" onClick={() => apri(a)}>
               <ExternalLink size={13} /> {a.file_name || "copia firmata"}
             </button>
-            <button type="button" className="icon-btn" aria-label="Togli l'allegato"
-              onClick={() => onCambiato("togli", a)}>
-              <Trash2 size={13} />
-            </button>
+            {puoiTogliere && (
+              <button type="button" className="icon-btn" aria-label="Togli l'allegato"
+                onClick={() => {
+                  if (window.confirm("Togliere «" + (a.file_name || "la copia firmata") + "» dal fascicolo del corso?")) {
+                    onCambiato("togli", a);
+                  }
+                }}>
+                <Trash2 size={13} />
+              </button>
+            )}
           </div>
         ))
       )}
@@ -391,7 +401,11 @@ function corpoAttestati(d) {
 // --- scheda del corso --------------------------------------------------------
 
 function SchedaCorso({ corso, sessioni, partecipanti, formazioneRole, onChiudi, onAggiornato }) {
-  const { company } = useAuth();
+  const { company, consultantCompanies } = useAuth();
+  // Il corso lo organizza, lo compila e lo chiude il consulente. Al titolare
+  // resta il fascicolo da esibire: progetto formativo, registro presenze,
+  // verbale di verifica finale e attestati, con le copie firmate.
+  const isConsultant = (consultantCompanies || []).length > 0;
   const { items: nomine, add: addNomina, remove: rimuoviNomina, reload: reloadNomine } = useTable("work_safety_appointments", company?.id);
   const {
     items: attestati, add: addAttestato, update: aggiornaAttestato,
@@ -778,16 +792,39 @@ function SchedaCorso({ corso, sessioni, partecipanti, formazioneRole, onChiudi, 
         <button type="button" className="icon-btn" onClick={onChiudi} aria-label="Chiudi"><X size={16} /></button>
       </div>
 
+      {!isConsultant && (
+        <p className="sub" style={{ display: "flex", gap: 6, alignItems: "flex-start", margin: "0 0 4px" }}>
+          <Lock size={13} style={{ flexShrink: 0, marginTop: 2 }} />
+          <span>
+            Il corso lo organizza e lo chiude il consulente. Qui trovi i documenti del fascicolo —
+            progetto formativo, registro presenze, verbale di verifica finale e attestati —
+            da scaricare, far firmare e riallegare firmati.
+          </span>
+        </p>
+      )}
+
       <p className="corso-sezione">Verifica finale</p>
-      <div className="row-form" style={{ marginTop: 0 }}>
-        <label className="field-label">Data della verifica
-          <input type="date" value={dataVerifica} onChange={(e) => setDataVerifica(e.target.value)} disabled={concluso} />
-        </label>
-        <input type="text" className="note-input" placeholder="Legale rappresentante (firma gli attestati)"
-          value={legale} onChange={(e) => setLegale(e.target.value)} />
-      </div>
-      <input type="text" className="full-input" placeholder="Note sul verbale (facoltative)"
-        value={note} onChange={(e) => setNote(e.target.value)} />
+      {isConsultant ? (
+        <>
+          <div className="row-form" style={{ marginTop: 0 }}>
+            <label className="field-label">Data della verifica
+              <input type="date" value={dataVerifica} onChange={(e) => setDataVerifica(e.target.value)} disabled={concluso} />
+            </label>
+            <input type="text" className="note-input" placeholder="Legale rappresentante (firma gli attestati)"
+              value={legale} onChange={(e) => setLegale(e.target.value)} />
+          </div>
+          <input type="text" className="full-input" placeholder="Note sul verbale (facoltative)"
+            value={note} onChange={(e) => setNote(e.target.value)} />
+        </>
+      ) : (
+        <ul className="corso-moduli-elenco">
+          <li><strong>Data della verifica</strong><span className="log-note"> · {dataBreve(dataVerifica) || "non ancora fissata"}</span></li>
+          <li><strong>Firma gli attestati</strong><span className="log-note"> · {legale || "legale rappresentante non indicato"}</span></li>
+          {String(note || "").trim() && (
+            <li><strong>Note sul verbale</strong><span className="log-note"> · {note}</span></li>
+          )}
+        </ul>
+      )}
 
       <p className="corso-sezione">Frequenza ed esiti</p>
       <p className="sub" style={{ margin: "0 0 10px" }}>
@@ -800,19 +837,27 @@ function SchedaCorso({ corso, sessioni, partecipanti, formazioneRole, onChiudi, 
           <li key={x.id} className={x.ammesso ? "" : "fuori-soglia"}>
             <span className="corso-nome">{x.person_name}</span>
             <span className="log-cf">{x.tax_code || "senza codice fiscale"}</span>
-            <label className="field-label" style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              ore
-              <input type="number" min="0" step="0.5" className="num" value={ore[x.id] ?? ""}
-                disabled={concluso}
-                onChange={(e) => setOre({ ...ore, [x.id]: e.target.value })} />
-            </label>
+            {isConsultant ? (
+              <label className="field-label" style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                ore
+                <input type="number" min="0" step="0.5" className="num" value={ore[x.id] ?? ""}
+                  disabled={concluso}
+                  onChange={(e) => setOre({ ...ore, [x.id]: e.target.value })} />
+              </label>
+            ) : (
+              <span className="log-note">{ore[x.id] ?? "—"} ore</span>
+            )}
             <span className="corso-perc">{x.percentuale}</span>
             {x.ammesso ? (
-              <select value={esiti[x.id]} disabled={concluso}
-                onChange={(e) => setEsiti({ ...esiti, [x.id]: e.target.value })}>
-                <option value="Idoneo">Idoneo</option>
-                <option value="Non idoneo">Non idoneo</option>
-              </select>
+              isConsultant ? (
+                <select value={esiti[x.id]} disabled={concluso}
+                  onChange={(e) => setEsiti({ ...esiti, [x.id]: e.target.value })}>
+                  <option value="Idoneo">Idoneo</option>
+                  <option value="Non idoneo">Non idoneo</option>
+                </select>
+              ) : (
+                <span className={"pill " + (esiti[x.id] === "Idoneo" ? "pill-ok" : "pill-warn")}>{esiti[x.id] || "—"}</span>
+              )
             ) : (
               <span className="pill pill-alert">Non ammesso</span>
             )}
@@ -821,7 +866,7 @@ function SchedaCorso({ corso, sessioni, partecipanti, formazioneRole, onChiudi, 
       </ul>
 
       <p className="corso-sezione">Programma del corso</p>
-      {senzaArgomenti.length > 0 && !programmaAperto && (
+      {isConsultant && senzaArgomenti.length > 0 && !programmaAperto && (
         <p className="corso-avviso">
           <AlertTriangle size={14} />
           {senzaArgomenti.length === 1
@@ -830,7 +875,7 @@ function SchedaCorso({ corso, sessioni, partecipanti, formazioneRole, onChiudi, 
           sull'attestato il programma di quel modulo esce in bianco. Correggilo qui sotto e riscarica i documenti.
         </p>
       )}
-      {!programmaAperto ? (
+      {!programmaAperto || !isConsultant ? (
         <>
           <ul className="corso-moduli-elenco">
             {sessioni.map((s) => (
@@ -843,7 +888,9 @@ function SchedaCorso({ corso, sessioni, partecipanti, formazioneRole, onChiudi, 
               </li>
             ))}
           </ul>
-          <button type="button" className="link-btn" onClick={apriProgramma}>Modifica il programma</button>
+          {isConsultant && (
+            <button type="button" className="link-btn" onClick={apriProgramma}>Modifica il programma</button>
+          )}
         </>
       ) : (
         <>
@@ -899,6 +946,7 @@ function SchedaCorso({ corso, sessioni, partecipanti, formazioneRole, onChiudi, 
             companyId={company?.id}
             allegati={allegatiCorso.filter((a) => a.course_id === corso?.id)}
             onCambiato={cambiaAllegato}
+            puoiTogliere={isConsultant}
           />
         ))}
       </ul>
@@ -906,7 +954,7 @@ function SchedaCorso({ corso, sessioni, partecipanti, formazioneRole, onChiudi, 
       {errore && <p className="corso-avviso"><AlertTriangle size={14} /> {errore}</p>}
       {fatto && <p className="corso-esito"><CheckCircle2 size={14} /> {fatto}</p>}
 
-      {concluso && attestatiDelCorso.length > 0 && (
+      {isConsultant && concluso && attestatiDelCorso.length > 0 && (
         <>
           <p className="corso-sezione">Attestati in Attestati</p>
           <p className="sub" style={{ margin: "0 0 10px" }}>
@@ -920,7 +968,7 @@ function SchedaCorso({ corso, sessioni, partecipanti, formazioneRole, onChiudi, 
         </>
       )}
 
-      {!concluso && (
+      {isConsultant && !concluso && (
         <>
           <p className="corso-sezione">Chiusura del corso</p>
           <p className="sub" style={{ margin: "0 0 10px" }}>
@@ -943,6 +991,7 @@ function SchedaCorso({ corso, sessioni, partecipanti, formazioneRole, onChiudi, 
         </>
       )}
 
+      {isConsultant && (<>
       <p className="corso-sezione">Elimina il corso</p>
       {!eliminaAperto ? (
         <>
@@ -994,6 +1043,7 @@ function SchedaCorso({ corso, sessioni, partecipanti, formazioneRole, onChiudi, 
           </div>
         </div>
       )}
+      </>)}
     </div>
   );
 }
