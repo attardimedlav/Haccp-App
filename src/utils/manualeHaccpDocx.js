@@ -285,16 +285,18 @@ export function vale(voce, azienda) {
 
 // --- controllo di coerenza prima di generare ----------------------------
 //
-// Il manuale promette dei controlli: se in azienda non esistono gli impianti,
-// il responsabile o i prodotti di sanificazione, quelle promesse restano
-// lettera morta. Meglio dirlo prima di generare che scoprirlo in ispezione.
+// Il manuale promette dei controlli: se in azienda non esistono gli impianti
+// o il responsabile, quelle promesse restano lettera morta. Meglio dirlo
+// prima di generare che scoprirlo in ispezione.
 export function controlli(dossier) {
-  const { azienda, impianti = [], sanificanti = [], registrazione = null, cicli = [], procedure = [] } = dossier;
+  const { azienda, impianti = [], registrazione = null, cicli = [], procedure = [] } = dossier;
   const avvisi = [];
   if (!azienda?.haccp_manager) avvisi.push("Manca il responsabile del piano di autocontrollo: si indica in Configurazione.");
   if (!registrazione) avvisi.push("Manca la registrazione sanitaria: il manuale cita numero, data e autorità competente.");
   if (impianti.length === 0) avvisi.push("Nessun impianto a temperatura controllata censito: il CCP 1 dichiarerebbe un monitoraggio senza apparecchi su cui farlo.");
-  if (sanificanti.length === 0) avvisi.push("Nessun prodotto di sanificazione registrato: il piano di pulizia rimanda a schede tecniche che non risultano.");
+  // Il manuale non elenca piu' i prodotti per nome, quindi la sezione
+  // Sanificanti vuota non lo blocca: resta un controllo utile, ma e' un
+  // promemoria, non un impedimento.
   if ((dossier.piano || []).filter((r) => r.active !== false).length === 0) {
     avvisi.push("Il programma di pulizia è vuoto: il manuale non potrà stampare frequenze, e la scheda Sanificazione resterà senza righe da spuntare. Si compila in Configurazione → Piano pulizie.");
   }
@@ -317,7 +319,6 @@ export function corpoManuale(dossier) {
     cicli = [],
     procedure = [],
     piano = [],
-    sanificanti = [],
     analisi = [],
   } = dossier;
 
@@ -562,6 +563,18 @@ export function corpoManuale(dossier) {
   } else {
     b.push(p("Da completare: gli impianti a temperatura controllata non risultano ancora censiti.", { italic: true }));
   }
+  // La clausola che tiene l'azienda al riparo quando compra un frigorifero.
+  //
+  // L'elenco qui sopra fotografa la dotazione al momento della revisione. Un
+  // manuale che la dichiarasse come immutabile metterebbe l'OSA in difetto il
+  // giorno in cui sostituisce una vetrina rotta: la registrazione sanitaria
+  // riguarda lo stabilimento e le attività che vi si svolgono, non il numero
+  // dei frigoriferi, e aggiungere o sostituire un'apparecchiatura dello stesso
+  // tipo non cambia né i locali, né le lavorazioni, né le categorie di
+  // prodotto. Quello che deve cambiare è il piano di autocontrollo, ed è
+  // quello che la frase impegna a fare.
+  b.push(p("L'elenco degli impianti riporta la dotazione presente alla data della presente revisione. L'installazione, la sostituzione o la dismissione di un'apparecchiatura a temperatura controllata dello stesso tipo e con la stessa destinazione d'uso non modifica i locali, il ciclo produttivo né le categorie di prodotto trattate, e rientra pertanto nella ordinaria gestione dell'attività già registrata ai sensi dell'art. 6 del Reg. (CE) n. 852/2004: non comporta una nuova segnalazione di inizio attività."));
+  b.push(p("Ogni variazione è però recepita immediatamente nel piano di autocontrollo: la nuova apparecchiatura viene censita con la propria destinazione d'uso e i propri limiti di conformità, entra nel programma di monitoraggio delle temperature e nel programma di pulizia e sanificazione dal giorno della messa in esercizio, e l'elenco aggiornato è riportato nella revisione successiva del manuale. Restano fermi gli obblighi di comunicazione all'Autorità competente previsti dalla normativa regionale per le modifiche strutturali e impiantistiche, per il cambio di sede e per la variazione delle attività o delle categorie di prodotto."));
 
   b.push(h2("5.3 Materie prime e destinazione d'uso"));
   b.push(griglia(["Gruppo", "Conservazione"], [
@@ -641,13 +654,30 @@ export function corpoManuale(dossier) {
       conMetodo.forEach((r) => b.push(punto(`${r.operation} — ${r.method}`)));
     }
     b.push(par("", { after: 140 }));
-    b.push(p("I prodotti impiegati sono quelli elencati fra i sanificanti dell'azienda, utilizzati alle diluizioni e con i tempi di contatto indicati nelle rispettive schede tecniche, conservate in sede e a disposizione dell'Autorità competente. Le superfici a contatto con gli alimenti sono risciacquate con acqua potabile dopo l'impiego del disinfettante.", { size: 20 }));
-    if (sanificanti.length) {
-      b.push(par("", { after: 120 }));
-      b.push(griglia(["Prodotto", "Impiego"],
-        sanificanti.map((x) => [x.name || "", x.usage || x.note || "Pulizia e sanificazione delle superfici"]),
-        [3400, 5960]));
-    }
+    // Categorie, non marche.
+    //
+    // Prima qui usciva l'elenco dei prodotti registrati in azienda, con i
+    // nomi commerciali. Era un impegno che l'azienda non puo' mantenere: il
+    // giorno in cui il fornitore cambia fornitura, o il banconista compra
+    // un'altra marca di sgrassatore, il manuale dichiara un prodotto che in
+    // magazzino non c'e' piu' - e in ispezione quella e' una difformita' fra
+    // il dichiarato e il reale. La categoria invece resta vera, e la marca
+    // effettivamente in uso si legge dove serve davvero: sulla scheda
+    // tecnica conservata in sede e sul calendario delle pulizie, dove si
+    // scrive il prodotto usato.
+    b.push(p("I prodotti impiegati appartengono alle categorie indicate di seguito, scelti fra quelli idonei all'impiego nell'industria alimentare e utilizzati alle diluizioni e con i tempi di contatto indicati nelle rispettive schede tecniche, conservate in sede e a disposizione dell'Autorità competente. Le superfici a contatto con gli alimenti sono risciacquate con acqua potabile dopo l'impiego del disinfettante.", { size: 20 }));
+    b.push(par("", { after: 120 }));
+    b.push(griglia(["Categoria di prodotto", "Impiego"], [
+      ["Detergente per superfici e utensili", "Rimozione dello sporco e dei residui organici da piani di lavoro, banchi, lavelli, utensili e attrezzature smontabili."],
+      ["Detergente sgrassante", "Attrezzature, cappe, filtri, friggitrici e superfici con residui grassi."],
+      ["Disinfettante idoneo al contatto con gli alimenti", "Sanificazione delle superfici e delle attrezzature a contatto con gli alimenti, dopo la detersione, seguita da risciacquo con acqua potabile."],
+      ["Detergente disinfettante", "Dove la scheda tecnica del prodotto ne consente l'impiego combinato in un'unica operazione."],
+      ["Detergente per pavimenti", "Pavimenti dei locali di lavorazione, della sala e dei servizi igienici, con attrezzature distinte per i servizi."],
+      ["Disincrostante o anticalcare", "Lavelli, lavastoviglie e attrezzature a contatto con acqua, secondo le indicazioni del costruttore."],
+      ["Prodotto per i servizi igienici", "Vaso, lavabo e pavimento dei servizi igienici."],
+      ["Sapone e prodotto per l'igiene delle mani", "Lavaggio e igiene delle mani degli operatori ai lavabi dedicati."],
+    ], [3400, 5960]));
+    b.push(p("Il manuale indica la categoria e non la marca: la sostituzione di un prodotto con un altro della stessa categoria, parimenti idoneo all'impiego nell'industria alimentare, non comporta la revisione del manuale, purché la scheda tecnica del prodotto in uso sia conservata insieme alle altre. Il prodotto effettivamente impiegato per ciascuna operazione è riportato sul calendario delle pulizie.", { italic: true, size: 20 }));
   }
   b.push(saltoPagina());
 
