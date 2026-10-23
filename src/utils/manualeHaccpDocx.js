@@ -263,7 +263,22 @@ function diagramma(ciclo, numeroCcp) {
     // Le decisioni non consumano un numero: numerate sono le fasi del
     // processo, non le domande che ci si fa dentro.
     n += 1;
+    // Il numero scritto sulla fase vince su quello del ciclo.
+    //
+    // La conservazione a temperatura negativa e' UN punto critico solo, e
+    // si attraversa in piu' cicli: lo stoccaggio, il gelato confezionato in
+    // pozzetto, il ghiaccio acquistato, il congelamento dei preparati. Il
+    // limite e' lo stesso, il monitoraggio e' lo stesso, l'azione correttiva
+    // e' la stessa: numerarlo una volta per ciclo moltiplicherebbe i punti
+    // critici senza aggiungere un controllo, e in ispezione «CCP 1» deve
+    // indicare una cosa sola. Quando il catalogo scrive «CCP 1» su una fase,
+    // quello e' il numero da stampare, anche se il ciclo che la contiene non
+    // e' classificato critico.
     const ccp = /CCP/i.test(f.marcatore || "");
+    const numeroFase = (String(f.marcatore || "").match(/CCP\s*(\d+)/i) || [])[1];
+    const etichettaPunto = ccp
+      ? (numeroFase ? `CCP ${numeroFase}` : (numeroCcp ? `CCP ${numeroCcp}` : "CCP"))
+      : "CP";
     const dentro =
       par(f.nome, { bold: true, size: 20, after: f.dettaglio ? 50 : 0 }) +
       (f.dettaglio ? par(f.dettaglio, { size: 17, color: "4A5A50", after: 0, interlinea: 240 }) : "");
@@ -275,7 +290,7 @@ function diagramma(ciclo, numeroCcp) {
       // L'etichetta del punto critico e' una pastiglia piena, non una
       // scritta: su una pagina di riquadri verdi e' l'unica cosa che deve
       // saltare all'occhio da lontano.
-      cellaDia(par(ccp ? (numeroCcp ? `CCP ${numeroCcp}` : "CCP") : "CP",
+      cellaDia(par(etichettaPunto,
         { bold: ccp, size: 16, align: "center", after: 0, color: ccp ? "FFFFFF" : "6E8B78" }),
         D.tag, ccp ? { sfondo: "A83A2C", pad: 60, padLat: 40 } : {}) +
       coda(),

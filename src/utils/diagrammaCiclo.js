@@ -277,7 +277,13 @@ export function disegnaCiclo(ciclo, numeroCcp) {
     }
 
     // l'etichetta del punto: pastiglia piena solo quando e' critico
-    const etichetta = ccp ? (numeroCcp ? "CCP " + numeroCcp : "CCP") : "CP";
+    // Il numero scritto sulla fase vince su quello del ciclo: la
+    // conservazione a temperatura negativa e' un punto critico solo, che si
+    // attraversa in piu' cicli, e deve portare sempre lo stesso numero.
+    const numeroFase = (String(nodo.marcatore || "").match(/CCP\s*(\d+)/i) || [])[1];
+    const etichetta = ccp
+      ? (numeroFase ? "CCP " + numeroFase : (numeroCcp ? "CCP " + numeroCcp : "CCP"))
+      : "CP";
     ctx.font = FONT(12, true);
     const we = ctx.measureText(etichetta).width + 18;
     const xe = xBox + BOX_W + 14;
