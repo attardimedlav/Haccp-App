@@ -6,7 +6,7 @@ import { useAuth } from "../AuthContext";
 import { WATER_TANK_CONTROL_TYPE } from "./AcquePotabili";
 import { PLAN_TYPE } from "./Documenti";
 import { expiryInfo, FORMAZIONE_ROLE, DATORE_ROLES } from "./SicurezzaLavoro";
-import { riassuntoPerArea } from "../utils/pianoPulizie";
+import { riassuntoPerArea, righeValide } from "../utils/pianoPulizie";
 
 const CHECK_PERIODICITY = [
 ];
@@ -315,9 +315,12 @@ export default function Dashboard({ goTo, openWorkSafety }) {
 
     // Pulizie di ogni giorno: una riga sola con il conteggio, non una per
     // voce, altrimenti cinque righe di pulizie coprono le scadenze serie.
-    const quotidiane = piano.items.filter((r) =>
-      r.active !== false && Number(r.frequency_days) === 1 &&
-      (!r.requires_flag || company?.[r.requires_flag]));
+    // Le righe che valgono per questa azienda: una volta sola, e poi si
+    // usano sia per le quotidiane sia per gli avvisi delle periodiche.
+    // Prima il filtro c'era solo sulle quotidiane, e dalle periodiche
+    // uscivano avvisi sulla macchina del ghiaccio a chi non ce l'ha.
+    const pianoAzienda = righeValide(piano.items, company);
+    const quotidiane = pianoAzienda.filter((r) => Number(r.frequency_days) === 1);
     const quotidianeFatte = quotidiane.filter((r) => san.items.some((s) =>
       s.area === r.area && (s.operation || "") === r.operation &&
       String(s.created_at).slice(0, 10) === oggi)).length;
@@ -332,7 +335,7 @@ export default function Dashboard({ goTo, openWorkSafety }) {
     // Pulizie fuori frequenza, raggruppate per area: una riga per area con
     // il ritardo peggiore. Elencarle una per una coprirebbe le scadenze
     // serie sotto dieci voci di pulizie.
-    riassuntoPerArea(piano.items, san.items).forEach((a) => haccpIssues.push({
+    riassuntoPerArea(pianoAzienda, san.items).forEach((a) => haccpIssues.push({
       key: "pulizie-" + a.area, tab: "sanificazione", icon: SprayCan,
       titolo: "Pulizie in ritardo — " + a.area,
       dettaglio: a.peggiore

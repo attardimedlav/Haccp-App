@@ -33,6 +33,16 @@ export default function PianoPulizie() {
   const [mod, setMod] = useState(null);
 
   const stati = statoPiano(piano, registrazioni);
+
+  // Una riga legata a una casella spenta in Configurazione non vale per
+  // questa azienda: l'OSA non la vede nella sua scheda e il manuale non la
+  // stampa. Qui NON si nasconde — il consulente deve poter capire perche'
+  // una voce del modello non e' arrivata al cliente, e riaccenderla e' una
+  // spunta in Configurazione — ma si marca, altrimenti sembra un piano piu'
+  // ricco di quello che il cliente ha davvero.
+  const attiva = function (r) {
+    return !r.requires_flag || !!(company && company[r.requires_flag]);
+  };
   const scoperte = stati.filter(function (s) { return s.cls === "pill-alert"; }).length;
 
   const svuota = function () {
@@ -230,11 +240,17 @@ export default function PianoPulizie() {
                     );
                   }
                   return (
-                    <li key={r.id} className={"dish-row" + (s.cls === "pill-alert" ? " row-warn" : "")}>
+                    <li key={r.id} className={"dish-row" + (s.cls === "pill-alert" && attiva(r) ? " row-warn" : "")}
+                        style={attiva(r) ? undefined : { opacity: 0.62 }}>
                       <div className="dish-top">
                         <div style={{ minWidth: 0 }}>
                           <strong>{r.operation}</strong>
                           <span className="lot-tag">{etichettaFrequenza(r.frequency_days)}</span>
+                          {!attiva(r) && (
+                            <span className="doc-type-tag" title="La casella corrispondente è spenta in Configurazione → Azienda">
+                              non attiva per questa azienda
+                            </span>
+                          )}
                         </div>
                         <div style={{ display: "flex", gap: 2 }}>
                           <button
