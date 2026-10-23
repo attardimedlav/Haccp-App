@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Trash2, AlertTriangle, Paperclip, BookOpen, Lock, CheckCircle2, Wand2, FileDown } from "lucide-react";
+import { Plus, Trash2, AlertTriangle, Paperclip, BookOpen, Lock, CheckCircle2, Wand2, FileDown, Printer } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { uploadAttachment } from "../hooks/useAttachment";
@@ -9,6 +9,8 @@ import { pacchettoDocx, scaricaDocx } from "./CorsoFormazione";
 import { corpoManuale, controlli } from "../utils/manualeHaccpDocx";
 import { base64DaBlob } from "../utils/firmaImmagine";
 import { scaricaModuliRegistrazione } from "../utils/moduliRegistrazioneDocx";
+import { elencoModuli } from "../utils/moduliElenco";
+import { stampaModulo } from "../utils/moduliStampa";
 
 const MAX_FILE_BYTES = 12 * 1024 * 1024;
 
@@ -302,6 +304,42 @@ export default function ManualeHaccp() {
         >
           <FileDown size={16} /> {moduliInCorso ? "Preparazione…" : "Scarica i moduli (.docx)"}
         </button>
+
+        {/* L'elenco dei moduli, uno per riga, con la stampa singola.
+            Il .docx con tutti dentro serve a depositare l'allegato; questo
+            serve al titolare che ha finito i fogli del registro temperature
+            e ne vuole ristampare due. Dal dialogo di stampa «Salva come
+            PDF» produce il file, che è il modo per avere un PDF per modulo
+            senza passare da Word. */}
+        <p className="appt-section-label" style={{ marginTop: 16 }}>Stampa un modulo alla volta</p>
+        <p className="sub" style={{ margin: "0 0 8px" }}>
+          Si apre la finestra di stampa del browser: da lì si stampa sul momento oppure si sceglie
+          «Salva come PDF» per tenerne una copia.
+        </p>
+        <ul className="dish-list">
+          {elencoModuli(company || {}).map((m) => (
+            <li key={m.chiave} className="dish-row">
+              <div className="dish-top">
+                <div>
+                  <strong>{m.codice} — {m.titolo}</strong>
+                  <span className="lot-tag">{m.frequenza}</span>
+                </div>
+                <button
+                  type="button" className="link-btn"
+                  onClick={() => stampaModulo(m.chiave, {
+                    azienda: company || {},
+                    impianti: impianti || [],
+                    piano: pianoPulizie || [],
+                    postazioni: postazioni || [],
+                    revisione: corrente ? { numero: corrente.revision, data: corrente.issued_on } : null,
+                  })}
+                >
+                  <Printer size={14} /> Stampa o salva in PDF
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
       </div>
 
       {loading ? (
