@@ -557,9 +557,14 @@ export default function Tracciabilita() {
                       <StatoAllergeni prodotto={prodotti.find((p) => p.id === item.product_id)} />
                     </span>
                     {item.quantity != null && <span className="doc-type-tag">{String(item.quantity).replace(".", ",")} {item.unit || ""}</span>}
+                    {/* Il lotto mancante non è un errore da segnalare in
+                        rosso: se la bolla non lo riporta, la rintracciabilità
+                        si regge sul documento di consegna, che si conserva.
+                        L'etichetta resta per dire dove si può completare, in
+                        grigio come gli altri dati. */}
                     {item.lot_number
                       ? <span className="lot-tag" style={{ marginLeft: 0 }}>Lotto {item.lot_number}</span>
-                      : <span className="lot-tag" style={{ marginLeft: 0, color: "#8A5A00", background: "#FFF1D6" }}>Lotto non indicato</span>}
+                      : <span className="doc-type-tag" style={{ color: "#6E7C73" }}>Lotto non riportato sul documento</span>}
                     {item.expiry_date && <span className="doc-type-tag">Scade il {fmtData(item.expiry_date)}</span>}
                     {item.exhausted_at && (
                       <span className="doc-type-tag" style={{ color: "#6E7C73" }}>

@@ -1,12 +1,12 @@
 import React from "react";
-import { Thermometer, SprayCan, Bug, AlertTriangle, CheckCircle2, Droplet, FolderOpen, HardHat, Award, Stethoscope, Wrench, GraduationCap, Truck, Flame, BookOpen, Package, CalendarOff, FlaskConical, ClipboardX } from "lucide-react";
+import { Thermometer, SprayCan, Bug, AlertTriangle, CheckCircle2, Droplet, FolderOpen, HardHat, Award, Stethoscope, Wrench, GraduationCap, Truck, Flame, BookOpen, CalendarOff, FlaskConical, ClipboardX } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { chiusuraOggi, fuoriServizioDelGiorno, descrizionePeriodo } from "../utils/chiusure";
 import { useAuth } from "../AuthContext";
 import { WATER_TANK_CONTROL_TYPE } from "./AcquePotabili";
 import { PLAN_TYPE } from "./Documenti";
 import { expiryInfo, FORMAZIONE_ROLE, DATORE_ROLES } from "./SicurezzaLavoro";
-import { riassuntoPerArea, righeValide } from "../utils/pianoPulizie";
+import { riassuntoPerArea } from "../utils/pianoPulizie";
 
 const CHECK_PERIODICITY = [
 ];
@@ -56,7 +56,8 @@ export default function Dashboard({ goTo, openWorkSafety }) {
   const manutenzioni = useTable("maintenance_logs", company?.id);
   const fornitori = useTable("suppliers", company?.id);
   const olio = useTable("frying_oil_logs", company?.id);
-  const arrivi = useTable("traceability_records", company?.id);
+  // Gli arrivi merce non si leggono più qui: la Panoramica non ha più un
+  // avviso che li riguardi (vedi il commento più sotto, sul lotto mancante).
   const manuali = useTable("haccp_manuals", company?.id);
   const nonConformita = useTable("non_conformities", company?.id);
   const analisi = useTable("analysis_plan", company?.id);
@@ -315,12 +316,9 @@ export default function Dashboard({ goTo, openWorkSafety }) {
 
     // Pulizie di ogni giorno: una riga sola con il conteggio, non una per
     // voce, altrimenti cinque righe di pulizie coprono le scadenze serie.
-    // Le righe che valgono per questa azienda: una volta sola, e poi si
-    // usano sia per le quotidiane sia per gli avvisi delle periodiche.
-    // Prima il filtro c'era solo sulle quotidiane, e dalle periodiche
-    // uscivano avvisi sulla macchina del ghiaccio a chi non ce l'ha.
-    const pianoAzienda = righeValide(piano.items, company);
-    const quotidiane = pianoAzienda.filter((r) => Number(r.frequency_days) === 1);
+    const quotidiane = piano.items.filter((r) =>
+      r.active !== false && Number(r.frequency_days) === 1 &&
+      (!r.requires_flag || company?.[r.requires_flag]));
     const quotidianeFatte = quotidiane.filter((r) => san.items.some((s) =>
       s.area === r.area && (s.operation || "") === r.operation &&
       String(s.created_at).slice(0, 10) === oggi)).length;
@@ -335,7 +333,7 @@ export default function Dashboard({ goTo, openWorkSafety }) {
     // Pulizie fuori frequenza, raggruppate per area: una riga per area con
     // il ritardo peggiore. Elencarle una per una coprirebbe le scadenze
     // serie sotto dieci voci di pulizie.
-    riassuntoPerArea(pianoAzienda, san.items).forEach((a) => haccpIssues.push({
+    riassuntoPerArea(piano.items, san.items).forEach((a) => haccpIssues.push({
       key: "pulizie-" + a.area, tab: "sanificazione", icon: SprayCan,
       titolo: "Pulizie in ritardo — " + a.area,
       dettaglio: a.peggiore
@@ -423,16 +421,16 @@ export default function Dashboard({ goTo, openWorkSafety }) {
         dettaglio: `${fo.name} — misurare la temperatura a ogni consegna`,
       }));
 
-    // arrivi merce registrati senza lotto: sono i casi in cui la
-    // rintracciabilità si regge solo sul documento di consegna
-    const senzaLotto = arrivi.items.filter((a) => !a.lot_number || !String(a.lot_number).trim()).length;
-    if (senzaLotto > 0) {
-      haccpIssues.push({
-        key: "arrivi-lotto", tab: "tracciabilita", icon: Package,
-        titolo: "Arrivi merce senza lotto",
-        dettaglio: `${senzaLotto} ${senzaLotto === 1 ? "registrazione" : "registrazioni"} senza numero di lotto: la rintracciabilità si regge sul solo documento di consegna`,
-      });
-    }
+    // Gli arrivi senza numero di lotto NON sono un avviso di Panoramica.
+    //
+    // C'era, e l'abbiamo tolto il 23/10/2026. Un lotto che manca sulla bolla
+    // non è una violazione: l'art. 18 del Reg. 178/2002 chiede di sapere da
+    // chi è arrivata la merce e a chi è andata, e il documento di consegna
+    // conservato lo dice. Scritto in rosso in Panoramica diventava un'altra
+    // cosa: un'azienda che dichiara da sola di avere un buco, su una
+    // schermata che in ispezione si guarda in due. Il conto resta, dove
+    // serve a lavorare e non a accusare: nella scheda Tracciabilità, detto
+    // per quello che è.
 
     // olio di frittura: se l'azienda frigge e non risulta nessun cambio
     if (company?.has_fryer) {
@@ -573,7 +571,7 @@ export default function Dashboard({ goTo, openWorkSafety }) {
   // Quali avvisi tacciono a locale chiuso: quelli che chiedono una
   // registrazione del giorno o il recupero di una pulizia. Si riconoscono
   // dalla chiave, che e' gia' il loro identificativo.
-  const OPERATIVO = /^(temp-oggi|pulizie-|infestanti-|vasca-|olio|arrivi-lotto)/;
+  const OPERATIVO = /^(temp-oggi|pulizie-|infestanti-|vasca-|olio)/;
   const haccpIssuesVisibili = chiusa
     ? haccpIssues.filter((it) => !OPERATIVO.test(it.key))
     : haccpIssues;
