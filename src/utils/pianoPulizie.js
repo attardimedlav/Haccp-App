@@ -122,6 +122,27 @@ export function statoPiano(piano, registrazioni) {
     });
 }
 
+
+// Le righe del piano che valgono per QUESTA azienda.
+//
+// Ogni riga puo' portare un `requires_flag`: la pulizia della macchina del
+// ghiaccio esiste solo se l'azienda ha la macchina del ghiaccio, quella
+// della cappa solo se c'e' la cappa. Il filtro era scritto a mano in ogni
+// scheda che legge il piano, e dove qualcuno se l'e' dimenticato — gli
+// avvisi delle pulizie periodiche in Panoramica, la scheda del piano —
+// sono comparsi controlli su attrezzature che l'azienda non ha.
+//
+// Un filtro scritto in un posto solo non si dimentica in cinque.
+export function righeValide(piano, azienda) {
+  return (piano || [])
+    .filter(function (r) { return r.active !== false; })
+    .filter(function (r) {
+      if (!r.requires_flag) return true;
+      return !!(azienda && azienda[r.requires_flag]);
+    })
+    .sort(function (a, b) { return (a.sort_order || 0) - (b.sort_order || 0); });
+}
+
 // Soglia degli avvisi.
 //
 // Le pulizie di ogni giorno non generano avvisi: nessuno registra voce per
