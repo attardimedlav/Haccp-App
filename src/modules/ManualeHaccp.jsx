@@ -272,10 +272,14 @@ export default function ManualeHaccp() {
           <div>
             <h3>Moduli di registrazione da stampare</h3>
             <p className="sub">
-              Le schede cartacee allegate al manuale: M01 temperature (una per ogni impianto censito),
-              pulizie, arrivo merci, fornitori, non conformità, manutenzione, infestanti, ritiro. Servono
+              Le schede cartacee allegate al manuale: temperature (una per ogni impianto censito),
+              pulizie, arrivo merci, fornitori, non conformità, manutenzione, infestanti, ritiro. Un
+              modulo per pagina, con i codici numerati di fila come nel manuale. Servono
               all'azienda che tiene le schede su carta, e a chi compila nell'app restano come riserva
               quando il sistema non è disponibile.
+              {corrente
+                ? ` Il frontespizio porta la revisione ${corrente.revision} del manuale depositato.`
+                : " Depositando il manuale, il frontespizio ne porterà il numero di revisione."}
             </p>
           </div>
         </div>
@@ -283,7 +287,15 @@ export default function ManualeHaccp() {
           type="button" className="btn-primary" disabled={moduliInCorso}
           onClick={async () => {
             setModuliInCorso(true);
-            try { await scaricaModuliRegistrazione(company || {}, impianti || [], pianoPulizie || [], postazioni || []); }
+            // I moduli sono un allegato del manuale: portano in frontespizio
+            // la revisione di quello depositato, non un campo da riempire a
+            // penna. Senza manuale depositato resta la riga in bianco.
+            try {
+              await scaricaModuliRegistrazione(
+                company || {}, impianti || [], pianoPulizie || [], postazioni || [],
+                corrente ? { numero: corrente.revision, data: corrente.issued_on } : null,
+              );
+            }
             catch (e) { setError("Moduli non generati: " + e.message); }
             finally { setModuliInCorso(false); }
           }}
