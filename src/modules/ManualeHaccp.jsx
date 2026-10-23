@@ -6,11 +6,12 @@ import { uploadAttachment } from "../hooks/useAttachment";
 import DocumentoInPagina from "../DocumentoInPagina";
 import { supabase } from "../supabaseClient";
 import { pacchettoDocx, scaricaDocx } from "./CorsoFormazione";
-import { corpoManuale, controlli } from "../utils/manualeHaccpDocx";
+import { corpoManuale, controlli, cicliDelManuale } from "../utils/manualeHaccpDocx";
 import { base64DaBlob } from "../utils/firmaImmagine";
 import { scaricaModuliRegistrazione } from "../utils/moduliRegistrazioneDocx";
 import { elencoModuli } from "../utils/moduliElenco";
 import { stampaModulo } from "../utils/moduliStampa";
+import { disegnaCiclo, misuraInPagina } from "../utils/diagrammaCiclo";
 
 const MAX_FILE_BYTES = 12 * 1024 * 1024;
 
@@ -147,13 +148,34 @@ export default function ManualeHaccp() {
       // La firma depositata in Configurazione entra nel pacchetto come
       // immagine: il corpo del manuale la cita, qui si allega il file.
       const firma = await firmaDellAzienda();
+      // I diagrammi di flusso si disegnano qui, uno per ciclo, e viaggiano
+      // nel pacchetto come immagini. L'indice della relazione dipende dalla
+      // firma: se c'e', occupa lei la posizione 0 (il corpo la cita con
+      // RID_IMMAGINE(0)) e i diagrammi partono da 1. Sbagliare questo conto
+      // significa stampare la firma al posto di un diagramma.
+      const immagini = firma ? { "firma.png": firma } : {};
+      const diagrammi = {};
+      let indice = firma ? 1 : 0;
+      // Stessa funzione che usa il generatore per decidere quali cicli
+      // entrano e con che numero: il foglio appeso e il testo del manuale
+      // devono dire lo stesso numero.
+      cicliDelManuale(dossier.cicli, dossier.azienda).forEach((c, i) => {
+        const dis = disegnaCiclo(c, c.ccpNumero);
+        if (!dis) return;
+        const nome = `ciclo-${String(i + 1).padStart(2, "0")}.png`;
+        immagini[nome] = dis.base64;
+        const mis = misuraInPagina(dis);
+        diagrammi[c.id] = { indice, larghezzaCm: mis.larghezzaCm, altezzaCm: mis.altezzaCm };
+        indice += 1;
+      });
+      dossier.diagrammi = diagrammi;
       // aggiornaCampi scrive settings.xml con <w:updateFields>: è l'istruzione
       // con cui Word, aprendo il file, ricalcola l'indice. L'app non impagina,
       // quindi i numeri di pagina può metterli solo lui; senza questa riga il
       // sommario resta vuoto finché qualcuno non preme F9, e nessuno lo preme.
       const files = pacchettoDocx(corpoManuale(dossier), {
         aggiornaCampi: true,
-        ...(firma ? { immagini: { "firma.png": firma } } : {}),
+        ...(Object.keys(immagini).length ? { immagini } : {}),
       });
       const nome = `Manuale_autocontrollo_${(company?.name || "azienda").replace(/[^A-Za-z0-9]+/g, "_")}_rev_${dossier.revisione.numero}.docx`;
       if (soloProva) {
