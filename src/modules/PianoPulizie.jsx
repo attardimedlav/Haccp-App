@@ -1,9 +1,10 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { supabase } from "../supabaseClient";
 import { Plus, Trash2, Check, X, Pencil, AlertTriangle, Info, SprayCan } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { SAN_AREAS } from "./Sanificazione";
-import { FREQUENZE, etichettaFrequenza, statoPiano, fmtData } from "../utils/pianoPulizie";
+import { FREQUENZE, etichettaFrequenza, statoPiano, fmtData, vociStandardMancanti } from "../utils/pianoPulizie";
 
 // Piano di pulizia e sanificazione.
 //
@@ -16,7 +17,7 @@ import { FREQUENZE, etichettaFrequenza, statoPiano, fmtData } from "../utils/pia
 export default function PianoPulizie() {
   const { company } = useAuth();
   const companyId = company?.id;
-  const { items: piano, add, remove, update, loading } = useTable("cleaning_plan", companyId);
+  const { items: piano, add, remove, update, loading, reload } = useTable("cleaning_plan", companyId);
   const { items: registrazioni } = useTable("sanitization_logs", companyId);
   const { items: sanificanti } = useTable("sanitizers", companyId);
 
@@ -31,6 +32,46 @@ export default function PianoPulizie() {
   const [busy, setBusy] = useState(false);
 
   const [mod, setMod] = useState(null);
+
+  // Piano standard.
+  //
+  // Un'azienda nuova non ha ancora nessuna voce nelle aree della scheda
+  // Sanificazione (al massimo quelle di un'attrezzatura, come la macchina
+  // del ghiaccio): la prima volta che si apre questa pagina il piano si
+  // riempie da solo con le voci tipiche e le loro frequenze, che poi si
+  // cambiano a mano. Il riferimento evita il doppio inserimento quando
+  // React monta la pagina due volte.
+  const seminato = useRef(null);
+  const [caricoStandard, setCaricoStandard] = useState(false);
+
+  // Si rilegge il piano dal database prima di inserire: allo scambio di
+  // azienda l'elenco a schermo puo' essere ancora quello del cliente di
+  // prima, e confrontare con quello creerebbe doppioni.
+  const caricaStandard = async function (soloSeVuoto) {
+    if (!companyId) return;
+    setCaricoStandard(true); setErrore("");
+    const { data: attuale, error: errLettura } = await supabase
+      .from("cleaning_plan").select("*").eq("company_id", companyId);
+    if (errLettura) { setErrore("Errore nel leggere il piano: " + errLettura.message); setCaricoStandard(false); return; }
+    const haVociBase = (attuale || []).some(function (r) { return SAN_AREAS.indexOf(r.area) >= 0 && !r.requires_flag; });
+    const mancanti = vociStandardMancanti(attuale);
+    if ((soloSeVuoto && haVociBase) || !mancanti.length) { setCaricoStandard(false); return; }
+    const { error } = await supabase
+      .from("cleaning_plan")
+      .insert(mancanti.map(function (v) { return { ...v, company_id: companyId }; }));
+    if (error) setErrore("Errore nel caricare il piano standard: " + error.message);
+    await reload();
+    setCaricoStandard(false);
+  };
+
+  useEffect(function () {
+    if (loading || !companyId || seminato.current === companyId) return;
+    seminato.current = companyId;
+    caricaStandard(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, companyId]);
+
+  const nMancanti = vociStandardMancanti(piano).length;
 
   const stati = statoPiano(piano, registrazioni);
 
@@ -130,6 +171,16 @@ export default function PianoPulizie() {
       >
         <Plus size={16} /> {apri ? "Chiudi" : "Aggiungi una voce"}
       </button>
+      {nMancanti > 0 && !loading && (
+        <button
+          type="button" className="link-btn" disabled={caricoStandard}
+          onClick={function () { caricaStandard(false); }}
+          style={{ marginLeft: 12, marginBottom: 12 }}
+          title="Aggiunge solo le voci del piano standard che qui non ci sono ancora"
+        >
+          <SprayCan size={14} /> {caricoStandard ? "Caricamento…" : "Aggiungi le voci standard mancanti (" + nMancanti + ")"}
+        </button>
+      )}
 
       {apri && (
         <form onSubmit={salva} className="traccia-form">
