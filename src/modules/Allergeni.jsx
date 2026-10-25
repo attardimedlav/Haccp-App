@@ -513,7 +513,7 @@ export default function Allergeni() {
         </div>
       </details>
 
-      <p className="login-info" style={{ margin: "0 0 16px" }}>
+      <p className="login-info no-print" style={{ margin: "0 0 16px" }}>
         <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
         <span>
           La responsabilità della dichiarazione resta dell'operatore del settore alimentare: prima di
@@ -763,61 +763,62 @@ export default function Allergeni() {
       )}
 
       {items.length > 0 && (
-        <div className="print-only">
-          <div className="print-allergen-header">
-            <h1>Menu con evidenza degli allergeni</h1>
-            {company?.name && <p className="print-allergen-company">{company.name}</p>}
-            <p className="print-allergen-legal">
-              Informazione resa ai sensi dell'art. 44 del Regolamento (UE) n. 1169/2011 e del D.Lgs. n. 231/2017.
-              Per ogni preparazione sono indicate le sostanze che provocano allergie o intolleranze, elencate
-              nell'Allegato II del medesimo Regolamento. Per ulteriori informazioni rivolgersi al personale.
-            </p>
+        <div className="print-only print-menu">
+          <div className="print-menu-testata">
+            {company?.name && <p className="print-menu-azienda">{company.name}</p>}
+            <hr className="print-menu-filetto" />
+            <h1 className="print-menu-titolo">Menu</h1>
+            <p className="print-menu-sottotitolo">con evidenza degli allergeni</p>
+            <p className="print-menu-rombo">&#9670;</p>
           </div>
-          <div className="print-allergen-grid">
+
+          {/* Su due colonne solo quando le voci sono tante: con tre piatti
+              una colonna sola, centrata, e' quello che fa un menu vero. */}
+          <div className={"print-menu-voci" + (items.length > 8 ? " due-colonne" : "")}>
             {items.map((item) => (
-              <div key={item.id} className="print-allergen-card">
+              <div key={item.id} className="print-menu-voce">
                 <h3>{item.dish}</h3>
                 {item.allergens && item.allergens.length > 0 ? (
-                  <div className="print-allergen-badges">
-                    {item.allergens.map((a) => (
-                      <span key={a} className="print-allergen-badge">{a}</span>
+                  <p className="print-menu-allergeni">
+                    {item.allergens.map((a, i) => (
+                      <React.Fragment key={a}>
+                        {i > 0 && <span className="sep">&middot;</span>}
+                        {a}
+                      </React.Fragment>
                     ))}
-                  </div>
+                  </p>
                 ) : (
-                  <span className="print-allergen-none">Nessun allergene dichiarato</span>
+                  <p className="print-menu-nessuno">Senza allergeni dichiarati</p>
                 )}
                 {stampaIngredienti && item.ingredients_text && (
-                  <div className="print-allergen-ingredients">
+                  <div className="print-menu-ingredienti">
                     {item.ingredients_text.split("\n").map((riga, i) => {
                       const taglio = riga.indexOf(":");
                       const componente = taglio > 0 ? riga.slice(0, taglio) : riga;
                       const dettaglio = taglio > 0 ? riga.slice(taglio + 1).trim() : "";
                       return (
-                        <p key={i} className="print-allergen-componente">
+                        <p key={i}>
                           <strong>{componente}</strong>{dettaglio ? ": " + dettaglio : ""}
                         </p>
                       );
                     })}
                   </div>
                 )}
-                {item.note && <p className="print-allergen-ingredients">{item.note}</p>}
+                {item.note && <p className="print-menu-nota">{item.note}</p>}
               </div>
             ))}
           </div>
-          <p className="print-allergen-legal">
-            Le informazioni derivano dalle etichette e dalle schede tecniche dei prodotti impiegati, conservate
-            in azienda. In caso di cambio di fornitore o di ricetta l'elenco viene aggiornato. L'operatore del
-            settore alimentare è responsabile della presente dichiarazione e ne verifica la corrispondenza con
-            le etichette dei prodotti effettivamente impiegati.
-          </p>
-          {/* La data in calce dice se il foglio appeso è ancora quello buono:
-              un elenco allergeni senza data, quando cambia un ingrediente,
-              diventa la prova del contrario di quello che si voleva. */}
-          <p className="print-allergen-data">
-            Aggiornato al {new Date(
-              items.reduce((max, i) => Math.max(max, new Date(i.updated_at || i.created_at).getTime()), 0) || Date.now(),
-            ).toLocaleDateString("it-IT")} — stampato il {new Date().toLocaleDateString("it-IT")}
-          </p>
+
+          <div className="print-menu-piede">
+            <hr className="print-menu-filetto" />
+            <p className="print-menu-legale">
+              Informazione sugli allergeni resa ai sensi dell'art. 44 del Reg. (UE) n. 1169/2011 e dell'art. 19
+              del D.Lgs. n. 231/2017. Sono indicate le sostanze elencate nell'Allegato II del Regolamento che
+              provocano allergie o intolleranze. Le informazioni derivano dalle etichette e dalle schede tecniche
+              dei prodotti impiegati, conservate in azienda e disponibili su richiesta. Per ulteriori
+              informazioni rivolgersi al personale.
+            </p>
+          </div>
         </div>
       )}
     </div>
