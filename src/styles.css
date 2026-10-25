@@ -383,6 +383,15 @@ nav { display: flex; flex-direction: column; gap: 2px; }
     font-family: Calibri, Carlito, Arial, sans-serif;
     font-size: 10px; letter-spacing: 1.4px; text-transform: uppercase; color: #97A199; margin: 0;
   }
+  /* Le tracce: sotto gli allergeni, piu' piccole, in corsivo e in grigio.
+     Si devono leggere, ma non devono avere lo stesso peso di quello che il
+     prodotto contiene davvero: e' la differenza fra un obbligo e
+     un'avvertenza, e sul foglio si deve vedere. */
+  .print-menu-tracce {
+    font-family: Calibri, Carlito, Arial, sans-serif;
+    font-size: 9.5px; font-style: italic; color: #8E948B; margin: 1.5mm 0 0;
+    letter-spacing: .2px;
+  }
   .print-menu-ingredienti { font-size: 11px; font-style: italic; color: #5A6B5E; margin: 2.5mm 0 0; line-height: 1.45; }
   .print-menu-ingredienti p { margin: 0 0 1mm; }
   .print-menu-nota { font-size: 11px; font-style: italic; color: #5A6B5E; margin: 2mm 0 0; }
