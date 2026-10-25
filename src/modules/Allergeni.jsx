@@ -420,18 +420,60 @@ export default function Allergeni() {
         <div>
           <h2>Menu con evidenza degli allergeni</h2>
           <p className="sub">
-            L'informazione che l'art. 44 del Reg. UE 1169/2011 impone di dare per iscritto sugli alimenti
-            non preimballati. Ogni voce si compone dai prodotti del catalogo: allergeni e ingredienti
-            arrivano dalle etichette lette, così la dichiarazione ha una prova alle spalle.
-            <strong> La responsabilità della dichiarazione resta dell'operatore del settore alimentare:
-            prima di esporre il menu deve accertarsi che gli allergeni indicati corrispondano alle
-            etichette dei prodotti effettivamente in uso.</strong>
+            Il foglio con gli allergeni da esporre, composto dai prodotti e dalle loro etichette.
           </p>
         </div>
-        <button type="button" className="link-btn no-print" onClick={() => window.print()}>
-          <Printer size={14} /> Stampa il menu
+        <button type="button" className="btn-primary no-print" onClick={() => window.print()}>
+          <Printer size={15} /> Stampa il menu
         </button>
       </div>
+
+      {/* La pagina era un muro di spiegazioni con i campi in mezzo: chi la usa
+          due volte l'anno non trovava i passi. Le spiegazioni restano — servono
+          davvero, e la prima volta si leggono — ma richiuse qui dentro. Fuori
+          resta solo la riga sulla responsabilità, che e' l'unica che va letta
+          ogni volta. */}
+      <details className="no-print" style={{ margin: "4px 0 14px" }}>
+        <summary style={{ cursor: "pointer", fontWeight: 600, color: "#2F6F4E", fontSize: "0.92rem" }}>
+          Come funziona questa pagina
+        </summary>
+        <div className="sub" style={{ margin: "8px 0 0", lineHeight: 1.5 }}>
+          <p style={{ margin: "0 0 8px" }}>
+            Una voce di menu non si scrive a mano: <strong>si compone dai prodotti</strong>, e allergeni
+            e ingredienti si ereditano dalle loro etichette. È questo che dà una prova alle spalle della
+            dichiarazione, invece di una spunta messa a memoria.
+          </p>
+          <p style={{ margin: "0 0 8px" }}>
+            Per quello che si serve al banco vale l'<strong>art. 44 del Reg. UE 1169/2011</strong>, che
+            chiede gli allergeni per iscritto, riconducibili a ciascun alimento. Per quello che si vende
+            sfuso o preincartato in vetrina vale l'<strong>art. 19 del D.Lgs. 231/2017</strong>, che chiede
+            anche l'elenco degli ingredienti. Un bar fa tutte e due le cose, e il foglio stampato può
+            portarli insieme.
+          </p>
+          <p style={{ margin: "0 0 8px" }}>
+            <strong>Per registrare un prodotto, dalla via più economica:</strong> il codice a barre cerca
+            prima nel catalogo di questa azienda, poi nel catalogo condiviso, poi nella banca dati aperta
+            Open Food Facts — tutte e tre gratis. La ricerca per nome guarda fra i prodotti composti già
+            registrati da questa pagina: <em>non</em> è il catalogo degli arrivi merce. La foto
+            dell'etichetta serve solo se le altre non trovano niente: è l'unica che si paga, ed è l'unica
+            che vale come prova.
+          </p>
+          <p style={{ margin: 0 }}>
+            Gli allergeni col puntino arrivano da un'etichetta letta davvero; gli altri li aggiungi tu.
+            Per le preparazioni fatte in casa è normale: li dichiara l'operatore. L'etichetta serve per i
+            prodotti composti di terzi, dove l'unica fonte attendibile è il produttore.
+          </p>
+        </div>
+      </details>
+
+      <p className="login-info" style={{ margin: "0 0 16px" }}>
+        <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+        <span>
+          La responsabilità della dichiarazione resta dell'operatore del settore alimentare: prima di
+          esporre il menu deve accertarsi che gli allergeni indicati corrispondano alle etichette dei
+          prodotti effettivamente in uso.
+        </span>
+      </p>
 
       <form onSubmit={submit} className="traccia-form no-print">
         {inModifica && (
@@ -439,10 +481,16 @@ export default function Allergeni() {
             Stai correggendo una voce già in menu: salvando, la data di aggiornamento del foglio si sposta a oggi.
           </p>
         )}
+        <p className="appt-section-label" style={{ margin: "0" }}>1 · Che cos'è</p>
         <input
           type="text" placeholder="Voce di menu (es. Cornetto alla crema di nocciole)" required
           value={dish} onChange={(e) => setDish(e.target.value)} className="note-input" style={{ maxWidth: 420 }}
         />
+
+        <p className="appt-section-label" style={{ margin: "14px 0 0" }}>2 · Di che cosa è fatta</p>
+        <p className="sub" style={{ margin: 0 }}>
+          Scegli i prodotti che la compongono: allergeni e ingredienti arrivano da loro.
+        </p>
 
         <div className="row-form" style={{ margin: 0 }}>
           <input
@@ -462,9 +510,7 @@ export default function Allergeni() {
         </div>
         <video ref={video} playsInline muted className={inquadrando ? "scanner-video" : "scanner-video nascosto"} />
         <p className="sub" style={{ margin: 0 }}>
-          Il codice a barre cerca prima nel catalogo di questa azienda, poi nel catalogo condiviso, poi
-          nella banca dati aperta Open Food Facts. La foto dell'etichetta serve solo se non si trova niente:
-          è l'unica delle tre che si paga, ed è l'unica che vale come prova.
+          Gratis: catalogo dell'azienda, catalogo condiviso, Open Food Facts.
         </p>
 
         <div className="row-form" style={{ margin: 0 }}>
@@ -481,9 +527,8 @@ export default function Allergeni() {
 
         {!cercaAttiva && (
           <p className="sub" style={{ margin: 0 }}>
-            Scrivi almeno due lettere per cercare fra i prodotti composti che hai già registrato qui —
-            creme, semilavorati, prodotti pronti di laboratori esterni. Non è il catalogo degli arrivi
-            merce: qui entra solo quello che aggiungi da questa pagina.
+            Almeno due lettere. Si cerca fra i prodotti registrati da questa pagina — non fra gli arrivi
+            merce. La foto dell'etichetta si paga: usala solo se le altre vie non trovano niente.
           </p>
         )}
         {cercaAttiva && elencoProdotti.length === 0 && condivisiDaProporre.length === 0 && (
@@ -509,9 +554,8 @@ export default function Allergeni() {
         {condivisiDaProporre.length > 0 && (
           <>
             <p className="sub" style={{ margin: 0 }}>
-              Dal catalogo condiviso — prodotti già letti per altre aziende: scegliendoli non si paga nessuna
-              lettura. Quelli col puntino sono proposte non ancora verificate: guarda la foto dell'etichetta
-              prima di usarli.
+              Dal catalogo condiviso, già letti per altre aziende: gratis. Quelli col puntino sono proposte
+              non verificate — guarda l'etichetta prima di usarli.
             </p>
             <div className="chip-grid">
               {condivisiDaProporre.map((c) => (
@@ -528,24 +572,6 @@ export default function Allergeni() {
             </div>
           </>
         )}
-
-        <p className="sub" style={{ margin: 0 }}>Allergeni della voce — quelli dei prodotti scelti, più quelli che aggiungi a mano:</p>
-        <div className="chip-grid">
-          {ALLERGENI.map((a) => {
-            const daProdotto = prodottiScelti.some((p) => (p.allergens || []).includes(a));
-            const acceso = allergeniVoce.includes(a);
-            return (
-              <button
-                type="button" key={a}
-                className={"chip" + (acceso ? " chip-on" : "")}
-                onClick={() => commutaManuale(a)}
-                title={daProdotto ? "Letto dall'etichetta di un prodotto" : "Aggiunto a mano"}
-              >
-                {a}{daProdotto ? " ·" : ""}
-              </button>
-            );
-          })}
-        </div>
 
         {prodottiScelti.length > 0 && (
           <ul className="log-list">
@@ -577,6 +603,28 @@ export default function Allergeni() {
             ))}
           </ul>
         )}
+
+        <p className="appt-section-label" style={{ margin: "14px 0 0" }}>3 · Allergeni da dichiarare</p>
+        <p className="sub" style={{ margin: 0 }}>
+          Accesi da soli quelli dei prodotti scelti. Gli altri li aggiungi tu.
+        </p>
+        <div className="chip-grid">
+          {ALLERGENI.map((a) => {
+            const daProdotto = prodottiScelti.some((p) => (p.allergens || []).includes(a));
+            const acceso = allergeniVoce.includes(a);
+            return (
+              <button
+                type="button" key={a}
+                className={"chip" + (acceso ? " chip-on" : "")}
+                onClick={() => commutaManuale(a)}
+                title={daProdotto ? "Letto dall'etichetta di un prodotto" : "Aggiunto a mano"}
+              >
+                {a}{daProdotto ? " ·" : ""}
+              </button>
+            );
+          })}
+        </div>
+
         {senzaEtichetta.length > 0 && (
           <span className="file-error">
             <AlertTriangle size={13} /> Etichetta non ancora letta per: {senzaEtichetta.map((p) => p.name).join(", ")}.
@@ -596,6 +644,15 @@ export default function Allergeni() {
           )}
         </div>
       </form>
+
+      {/* Il menu composto finora. Prima cominciava subito dopo il modulo,
+          senza stacco: non si capiva dove finiva l'inserimento e dove
+          cominciava quello che c'e' gia' dentro. */}
+      <div className="tr-head no-print" style={{ marginTop: 20 }}>
+        <span className="appt-section-label">
+          <Package size={15} /> Voci in menu{items.length > 0 ? " (" + items.length + ")" : ""}
+        </span>
+      </div>
 
       {loading ? (
         <p className="sub">Caricamento…</p>
