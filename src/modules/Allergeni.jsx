@@ -64,6 +64,9 @@ export default function Allergeni() {
   const [manuali, setManuali] = useState([]);    // allergeni aggiunti o tolti a mano
   const [note, setNote] = useState("");
   const [cerca, setCerca] = useState("");
+  // La terza via: l'ingrediente fresco, senza etichetta e senza codice.
+  const [fresco, setFresco] = useState("");
+  const [salvandoFresco, setSalvandoFresco] = useState(false);
   const [busy, setBusy] = useState(false);
   const [leggendo, setLeggendo] = useState(false);
   const [errore, setErrore] = useState("");
@@ -345,6 +348,50 @@ export default function Allergeni() {
     setAvviso(`«${p.name}» è nel catalogo condiviso: da adesso lo ritrovi in tutte le aziende.`);
   };
 
+  // L'ingrediente fresco, comprato sciolto: gamberetti, pesce, verdura, pane
+  // del fornaio. Non ha etichetta né codice a barre, quindi nessuna delle tre
+  // vie gratuite lo trova e la foto non c'e' niente da fotografare — ma
+  // l'allergene va dichiarato lo stesso, e i crostacei sono esattamente il
+  // caso in cui dimenticarlo costa caro.
+  //
+  // Entra nel catalogo come gli altri, con la fonte scritta a chiare lettere:
+  // non e' un dato verificato da un'etichetta, e' una dichiarazione
+  // dell'operatore. Gli allergeni si spuntano nel passo 3, sulla voce.
+  const aggiungiFresco = async () => {
+    const nome = (fresco || "").trim();
+    if (!nome || !company?.id) return;
+    setErrore(""); setAvviso("");
+    // Se quell'ingrediente c'e' gia', non se ne crea un secondo con lo stesso
+    // nome: lo si riusa. Due «Gamberetti freschi» nel catalogo sono l'inizio
+    // di due dichiarazioni che un giorno diranno cose diverse.
+    const gia = prodotti.find(
+      (x) => (x.name || "").trim().toLowerCase() === nome.toLowerCase());
+    if (gia) {
+      setScelti((s2) => (s2.includes(gia.id) ? s2 : [...s2, gia.id]));
+      setFresco("");
+      setAvviso(`«${gia.name}» era già in catalogo: l'ho aggiunto alla voce.`);
+      return;
+    }
+    setSalvandoFresco(true);
+    try {
+      const { data, error } = await supabase.from("menu_products").insert({
+        company_id: company.id,
+        name: nome,
+        allergens: [],
+        data_source: "ingrediente fresco, senza etichetta — allergeni dichiarati dall'operatore",
+      }).select().single();
+      if (error) throw new Error(error.message);
+      await ricaricaProdotti();
+      setScelti((s2) => [...s2, data.id]);
+      setFresco("");
+      setAvviso(`«${nome}» aggiunto. Non ha etichetta: spunta tu gli allergeni qui sotto.`);
+    } catch (e) {
+      setErrore("Non sono riuscito ad aggiungere l'ingrediente: " + e.message);
+    } finally {
+      setSalvandoFresco(false);
+    }
+  };
+
   const svuotaForm = () => {
     setDish(""); setScelti([]); setManuali([]); setNote("");
     setAvviso(""); setErrore(""); setCerca(""); setEan(""); setInModifica(null);
@@ -531,6 +578,25 @@ export default function Allergeni() {
             merce. La foto dell'etichetta si paga: usala solo se le altre vie non trovano niente.
           </p>
         )}
+
+        {/* La terza riga: quello che un'etichetta non ce l'ha. */}
+        <div className="row-form" style={{ margin: 0 }}>
+          <input
+            type="text"
+            placeholder="Ingrediente senza etichetta (es. gamberetti freschi)"
+            value={fresco} onChange={(e) => setFresco(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); aggiungiFresco(); } }}
+            className="note-input"
+          />
+          <button type="button" className="link-btn" disabled={salvandoFresco || !fresco.trim()}
+            onClick={aggiungiFresco}>
+            <Plus size={14} /> {salvandoFresco ? "Aggiungo…" : "Aggiungi alla voce"}
+          </button>
+        </div>
+        <p className="sub" style={{ margin: 0 }}>
+          Per quello che si compra sciolto e non ha etichetta né codice: pesce, crostacei, verdura, pane
+          del fornaio. Gli allergeni li dichiari tu nel passo 3.
+        </p>
         {cercaAttiva && elencoProdotti.length === 0 && condivisiDaProporre.length === 0 && (
           <p className="sub" style={{ margin: 0 }}>
             Nessun prodotto trovato: cercalo col codice a barre o fotografa l'etichetta.
@@ -582,9 +648,12 @@ export default function Allergeni() {
                   <strong>{p.name}</strong>
                   <span className="log-note"> {p.ingredients_text || "etichetta non ancora letta"}</span>
                   {!p.allergens_checked_at && p.data_source && (
-                    <span className="log-unit"> — da {p.data_source}, non verificato</span>
+                    <span className="log-unit"> — da {p.data_source}{/^ingrediente fresco/.test(p.data_source) ? "" : ", non verificato"}</span>
                   )}
-                  {(p.allergens || []).length === 0 && (
+                  {/* Sull'ingrediente fresco il bollino rosso sarebbe una bugia:
+                      non manca niente, un'etichetta non esiste proprio e la
+                      dichiarazione e' dell'operatore per definizione. */}
+                  {(p.allergens || []).length === 0 && !/^ingrediente fresco/.test(p.data_source || "") && (
                     <span className="badge-mancante">allergeni da indicare</span>
                   )}
                   {(p.allergens || []).length > 0 && (
