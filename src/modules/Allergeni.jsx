@@ -69,6 +69,14 @@ export default function Allergeni() {
   const [tracce, setTracce] = useState([]);
   const [note, setNote] = useState("");
   const [cerca, setCerca] = useState("");
+  // Correzione di un prodotto gia' in catalogo: nome, ingredienti, allergeni.
+  const [modProd, setModProd] = useState(null);
+  const [mpNome, setMpNome] = useState("");
+  const [mpIngredienti, setMpIngredienti] = useState("");
+  const [mpAllergeni, setMpAllergeni] = useState([]);
+  const [mpBusy, setMpBusy] = useState(false);
+  const [mpErr, setMpErr] = useState("");
+
   // La terza via: l'ingrediente fresco, senza etichetta e senza codice.
   const [fresco, setFresco] = useState("");
   const [salvandoFresco, setSalvandoFresco] = useState(false);
@@ -411,6 +419,51 @@ export default function Allergeni() {
     }
   };
 
+  // Correggere un prodotto del catalogo invece di rifarlo.
+  //
+  // Serviva: una banca dati aperta restituisce nomi con il peso attaccato,
+  // ingredienti troncati, allergeni dedotti per approssimazione. Finche' si
+  // poteva solo togliere il prodotto dalla voce, l'errore restava in
+  // catalogo e tornava nella voce successiva. La correzione e' sul prodotto,
+  // quindi vale per tutte le voci che lo contengono — ed e' giusto cosi':
+  // l'etichetta di quel prodotto e' una sola.
+  const apriProdotto = (p) => {
+    setModProd(p.id);
+    setMpNome(p.name || "");
+    setMpIngredienti(p.ingredients_text || "");
+    setMpAllergeni(p.allergens || []);
+    setMpErr("");
+  };
+  const chiudiProdotto = () => { setModProd(null); setMpErr(""); };
+  const commutaMpAllergene = (a) => {
+    setMpAllergeni((v) => (v.includes(a) ? v.filter((x) => x !== a) : [...v, a]));
+  };
+  const salvaProdotto = async (p) => {
+    const nome = (mpNome || "").trim();
+    if (!nome) { setMpErr("Il nome non puo' restare vuoto."); return; }
+    setMpBusy(true); setMpErr("");
+    try {
+      const { error } = await supabase.from("menu_products")
+        .update({
+          name: nome,
+          ingredients_text: (mpIngredienti || "").trim() || null,
+          allergens: mpAllergeni,
+          // allergens_checked_at non si tocca: "verificato" vuol dire che
+          // qualcuno ha guardato l'etichetta, non che qualcuno ha corretto
+          // il testo. Confondere le due cose svuoterebbe quel bollino.
+        })
+        .eq("id", p.id).eq("company_id", company.id);
+      if (error) throw new Error(error.message);
+      await ricaricaProdotti();
+      chiudiProdotto();
+      setAvviso(`«${nome}» corretto. La modifica vale per tutte le voci che lo contengono.`);
+    } catch (e) {
+      setMpErr("Non sono riuscito a salvare: " + e.message);
+    } finally {
+      setMpBusy(false);
+    }
+  };
+
   const svuotaForm = () => {
     setDish(""); setScelti([]); setManuali([]); setTracce([]); setNote("");
     setAvviso(""); setErrore(""); setCerca(""); setEan(""); setInModifica(null);
@@ -664,8 +717,50 @@ export default function Allergeni() {
         {prodottiScelti.length > 0 && (
           <ul className="log-list">
             {prodottiScelti.map((p) => (
-              <li key={p.id} className="log-row" style={{ alignItems: "flex-start", flexWrap: "wrap" }}>
+              <li key={p.id} className={"log-row" + (modProd === p.id ? " editing" : "")} style={{ alignItems: "flex-start", flexWrap: "wrap" }}>
                 <Package size={14} color={p.allergens_checked_at ? "#2F6F4E" : "#C58A2A"} />
+                {modProd === p.id ? (
+                  <div style={{ flex: "1 1 100%", minWidth: 0 }}>
+                    <input
+                      type="text" className="full-input edit-input" placeholder="Nome del prodotto"
+                      value={mpNome} onChange={(e) => setMpNome(e.target.value)}
+                    />
+                    <textarea
+                      className="full-input nc-textarea" style={{ marginTop: 8 }}
+                      placeholder="Ingredienti, come stanno scritti sull'etichetta o sulla scheda tecnica"
+                      value={mpIngredienti} onChange={(e) => setMpIngredienti(e.target.value)}
+                    />
+                    <p className="sub" style={{ margin: "8px 0 4px" }}>
+                      Allergeni di questo prodotto — quelli che contiene davvero:
+                    </p>
+                    <div className="chip-grid">
+                      {ALLERGENI.map((a) => (
+                        <button
+                          type="button" key={"mp-" + a}
+                          className={"chip" + (mpAllergeni.includes(a) ? " chip-on" : "")}
+                          onClick={() => commutaMpAllergene(a)}
+                        >
+                          {a}
+                        </button>
+                      ))}
+                    </div>
+                    {mpErr && <span className="file-error"><AlertTriangle size={13} /> {mpErr}</span>}
+                    <div className="row-form" style={{ margin: "10px 0 0" }}>
+                      <button type="button" className="btn-primary" disabled={mpBusy}
+                        onClick={() => salvaProdotto(p)}>
+                        <Check size={15} /> {mpBusy ? "Salvataggio…" : "Salva il prodotto"}
+                      </button>
+                      <button type="button" className="link-btn" onClick={chiudiProdotto}>
+                        <X size={14} /> Annulla
+                      </button>
+                    </div>
+                    <p className="sub" style={{ margin: "8px 0 0" }}>
+                      La correzione vale per tutte le voci di menu che contengono questo prodotto:
+                      l'etichetta di un prodotto è una sola.
+                    </p>
+                  </div>
+                ) : (
+                <>
                 <span className="log-main">
                   <strong>{p.name}</strong>
                   <span className="log-note"> {p.ingredients_text || "etichetta non ancora letta"}</span>
@@ -687,9 +782,15 @@ export default function Allergeni() {
                     <Share2 size={13} /> {p.allergens_checked_at ? "metti nel condiviso" : "conferma e condividi"}
                   </button>
                 )}
+                <button type="button" className="icon-btn" onClick={() => apriProdotto(p)}
+                  aria-label="Correggi il prodotto" title="Correggi nome, ingredienti e allergeni">
+                  <Pencil size={13} />
+                </button>
                 <button type="button" className="icon-btn" onClick={() => commutaProdotto(p.id)} aria-label="Togli dalla voce">
                   <Trash2 size={13} />
                 </button>
+                </>
+                )}
               </li>
             ))}
           </ul>
