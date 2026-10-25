@@ -571,6 +571,7 @@ export function corpoManuale(dossier) {
   b.push(h1("5. Sviluppo del piano di autocontrollo"));
   b.push(h2("5.1 Gruppo di lavoro HACCP"));
   b.push(p("Il gruppo di lavoro è costituito dal titolare, che assume la funzione di responsabile delle procedure di autocontrollo, dagli addetti alla manipolazione degli alimenti e dal consulente tecnico incaricato. Tutti gli operatori che manipolano alimenti sono formati alla manipolazione dei prodotti alimentari e ai rischi della fase di cui sono responsabili."));
+  b.push(p(`Il presente manuale è stato redatto dal datore di lavoro, nella sua qualità di Operatore del Settore Alimentare e responsabile del piano di autocontrollo, con la collaborazione ${azienda.consultant_name ? "del consulente tecnico incaricato, " + azienda.consultant_name : "del consulente tecnico incaricato"}: l'analisi dei pericoli, l'individuazione dei punti critici e la stesura delle procedure sono state condotte insieme, sulla base del ciclo produttivo e dei locali dell'impresa. Le decisioni sul sistema di autocontrollo e sulla sua applicazione restano in capo al datore di lavoro.`));
   b.push(griglia(["Ruolo", "Nominativo", "Compiti"], [
     ["Titolare e Operatore del Settore Alimentare", azienda.haccp_manager || "____________________",
      "Responsabile ultimo della sicurezza degli alimenti: garantisce risorse, attrezzature e formazione, approva il manuale, decide sul destino dei prodotti non conformi"],
@@ -579,7 +580,7 @@ export function corpoManuale(dossier) {
     ["Addetti alla manipolazione", "____________________",
      "Applicano le procedure di igiene, eseguono le registrazioni di competenza, segnalano ogni anomalia al responsabile"],
     ["Consulenza tecnica", azienda.consultant_name || "____________________",
-     "Redige e aggiorna il manuale, eroga la formazione, effettua le verifiche periodiche del sistema"],
+     "Collabora con il datore di lavoro alla stesura e all'aggiornamento del manuale, eroga la formazione, effettua le verifiche periodiche del sistema"],
   ], [2400, 2400, 4560]));
 
   b.push(h2("5.2 Requisiti dei locali e delle attrezzature"));
