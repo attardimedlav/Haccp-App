@@ -228,6 +228,25 @@ export default function Formazione() {
   // ordine di rilascio: il primo è il rilascio iniziale, quelli dopo i rinnovi.
   const schede = (() => {
     const mappa = new Map();
+    // Prima le persone, poi i loro attestati.
+    //
+    // Fino al 25/10/2026 questo elenco nasceva SOLO dagli attestati caricati:
+    // un dipendente appena inserito in Configurazione, senza ancora nessun
+    // attestato, non compariva da nessuna parte in questa pagina. La
+    // Panoramica lo segnalava («Formazione alimentaristi mancante») e poi,
+    // aprendo la scheda, quella persona non c'era — l'avviso sembrava un
+    // errore dell'app invece di un adempimento da fare.
+    //
+    // Ora ogni persona in anagrafica entra con la sua scheda alimentarista,
+    // vuota finche' l'attestato non arriva. E' il rovescio dello stesso
+    // principio del quadro della sicurezza: chi manca si vede, non sparisce.
+    const SCHEDA_BASE = "Alimentaristi (HACCP)";
+    dipendenti.forEach((d) => {
+      const persona = pulisci(`${d.first_name || ""} ${d.last_name || ""}`);
+      if (!persona) return;
+      const chiave = persona.toLowerCase() + "|" + SCHEDA_BASE.toLowerCase();
+      if (!mappa.has(chiave)) mappa.set(chiave, { chiave, persona, famiglia: SCHEDA_BASE, righe: [] });
+    });
     items.forEach((it) => {
       const persona = pulisci(it.employee_name) || "Senza nominativo";
       const famiglia = famigliaCorso(it.course);
@@ -314,8 +333,13 @@ export default function Formazione() {
 
       {loading ? (
         <p className="sub">Caricamento…</p>
-      ) : items.length === 0 ? (
-        <div className="empty"><p>Nessun corso registrato.</p></div>
+      ) : schede.length === 0 ? (
+        <div className="empty">
+          <p>
+            Nessun corso registrato e nessuna persona in anagrafica: i dipendenti si inseriscono in
+            Configurazione → Dipendenti, e da lì compaiono qui con la loro scheda.
+          </p>
+        </div>
       ) : (
         <ul className="dish-list">
           {schede.map((s) => {
@@ -329,7 +353,9 @@ export default function Formazione() {
                     <span className="lot-tag">{s.famiglia}</span>
                   </div>
                   <span className={"pill " + (scaduto ? "pill-alert" : inScadenza ? "pill-warn" : "pill-ok")}>
-                    {!s.valido
+                    {s.righe.length === 0
+                      ? "Nessun attestato"
+                      : !s.valido
                       ? "Senza scadenza"
                       : scaduto
                         ? "Scaduto il " + fmtData(s.valido.expiry)
@@ -338,6 +364,12 @@ export default function Formazione() {
                           : "Valido fino al " + fmtData(s.valido.expiry)}
                   </span>
                 </div>
+
+                {s.righe.length === 0 && (
+                  <p className="none-label" style={{ margin: "4px 0 0" }}>
+                    Nessun attestato di alimentarista allegato per questa persona.
+                  </p>
+                )}
 
                 <ul className="tr-list">
                   {s.righe.map((item, i) => (

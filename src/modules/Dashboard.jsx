@@ -186,12 +186,17 @@ export default function Dashboard({ goTo, openWorkSafety }) {
     safetyIssues.sort((a, b) => new Date(a.expiry) - new Date(b.expiry));
   }
 
+  // Il confronto fra nomi ignora l'ordine delle parole, perché sugli
+  // attestati e sulle nomine si trova sia "Bello Giuseppe" sia "Giuseppe
+  // Bello". Serve qui sotto per accostare un dipendente ai suoi corsi.
+  const chiave = (testo) => String(testo || "").trim().toLowerCase().split(/\s+/).sort().join(" ");
+
   // Chi è il datore di lavoro. Non basta guardare il ruolo scritto in
   // anagrafica: spesso il titolare risulta datore soltanto dalla nomina, e
   // allora compariva fra i lavoratori senza visita medica — un obbligo che
-  // non lo riguarda. Si guardano tutti e due, come fa la scheda dei documenti.
-  // Chi e' il datore lo decide una funzione sola, in SicurezzaLavoro.jsx:
-  // qui c'era una copia del ragionamento, e una copia prima o poi diverge.
+  // non lo riguarda. Si guardano tutti e due, e il ragionamento sta in una
+  // funzione sola in SicurezzaLavoro.jsx: qui ce n'era una copia, e una
+  // copia prima o poi diverge.
   const eDatore = eDatoreDi(employees.items, workSafety.items);
 
   // Lavoratori senza alcuna visita registrata: obbligo di legge per tutti
