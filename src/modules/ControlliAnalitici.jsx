@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Info, FlaskConical, Check, X } from "lucide-react";
+import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Info, FlaskConical, Check, X, Lock } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { supabase } from "../supabaseClient";
@@ -105,7 +105,8 @@ function AttachmentLink(props) {
 }
 
 export default function ControlliAnalitici() {
-  const { company } = useAuth();
+  const { company, consultantCompanies } = useAuth();
+  const isConsultant = (consultantCompanies || []).length > 0;
   const companyId = company?.id;
   const { items: piani, add: addPiano, remove: removePiano, update: updatePiano, loading } =
     useTable("analysis_plan", companyId);
@@ -257,11 +258,91 @@ export default function ControlliAnalitici() {
   // Da quando si contano i mesi per un controllo mai eseguito.
   const inizioRapporto = company?.subscription_start || company?.created_at || null;
 
-  const attivi = piani.filter(function (p) { return p.active !== false; });
+  // Un controllo previsto per una dotazione che l'azienda non ha non deve
+  // comparire: il piano analisi ha la stessa colonna requires_flag del piano
+  // pulizie, e si legge allo stesso modo. Senza questo filtro un bar che non
+  // produce ghiaccio si vedeva in elenco l'analisi del ghiaccio — un
+  // controllo che non potra' mai eseguire, e un avviso che non si puo'
+  // soddisfare insegna a ignorare anche gli altri.
+  const previsto = function (p) {
+    if (!p.requires_flag) return true;
+    return !!(company && company[p.requires_flag]);
+  };
+  const attivi = piani.filter(function (p) { return p.active !== false && previsto(p); });
   const scoperti = attivi.filter(function (p) {
     const s = statoPiano(p, referti, inizioRapporto);
     return s.cls === "pill-alert" || s.cls === "pill-warn";
   }).length;
+
+  // Che cosa vede il titolare.
+  //
+  // Non il programma delle analisi: le periodicita', le scadenze e i «nessun
+  // referto registrato» sono roba del consulente, che le analisi le programma
+  // e le fa eseguire. Messi sotto gli occhi di chi arriva a controllare
+  // diventano un'altra cosa: una scadenza futura o una riga mai compilata si
+  // leggono come un'ammissione, ed e' il motivo per cui l'OSA ci ha chiesto
+  // di toglierli. Gli restano i rapporti di prova ricevuti — che sono poi le
+  // carte da esibire — in sola lettura.
+  if (!isConsultant) {
+    const ricevuti = (referti || [])
+      .slice()
+      .sort(function (a, b) { return (a.sample_date || "") < (b.sample_date || "") ? 1 : -1; });
+    const nomePiano = function (id) {
+      const p = piani.find(function (x) { return x.id === id; });
+      return p ? p.label : "Analisi di laboratorio";
+    };
+    return (
+      <div className="panel">
+        <div className="panel-head">
+          <div>
+            <h2>Controlli analitici</h2>
+            <p className="sub">
+              I rapporti di prova del laboratorio ricevuti per questa azienda.
+            </p>
+          </div>
+        </div>
+
+        <p className="login-info" style={{ margin: "16px 0" }}>
+          <Lock size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+          Il programma delle analisi lo stabilisce il consulente, secondo le periodicità
+          dichiarate nel manuale di autocontrollo, e provvede lui a far eseguire i prelievi e a
+          registrare i referti. Qui trovi i rapporti di prova già ricevuti, da esibire all'organo
+          di controllo insieme al manuale.
+        </p>
+
+        {loading ? (
+          <p className="sub">Caricamento…</p>
+        ) : ricevuti.length === 0 ? (
+          <div className="empty"><p>Nessun rapporto di prova ancora caricato.</p></div>
+        ) : (
+          <ul className="tr-list">
+            {ricevuti.map(function (r) {
+              return (
+                <li key={r.id} className="tr-item">
+                  <div className="tr-item-top">
+                    <FlaskConical size={13} style={{ marginRight: 4, verticalAlign: -2 }} color="#2F6F4E" />
+                    <strong>{nomePiano(r.plan_id)}</strong>
+                    <span className="tr-kind">Prelievo del {fmt(r.sample_date)}</span>
+                    {r.result && (
+                      <span className={"pill " + (r.result === "Non conforme" ? "pill-alert" : r.result === "Conforme" ? "pill-ok" : "pill-warn")}>
+                        {r.result}
+                      </span>
+                    )}
+                    {r.report_number && <span className="doc-type-tag">N. {r.report_number}</span>}
+                    {r.report_date && <span className="doc-type-tag">referto del {fmt(r.report_date)}</span>}
+                  </div>
+                  {r.laboratory && <p className="pest-note" style={{ margin: "4px 0 0" }}>Laboratorio: {r.laboratory}</p>}
+                  {r.values_note && <p className="pest-note" style={{ margin: "2px 0 0" }}>{r.values_note}</p>}
+                  {r.note && <p className="pest-note" style={{ margin: "2px 0 0" }}>{r.note}</p>}
+                  <AttachmentLink path={r.attachment_path} interno={!!r.source} />
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="panel">
