@@ -4,6 +4,7 @@ import { useAuth } from "../AuthContext";
 import { useTable } from "../hooks/useTable";
 import { downloadReminderICS, elencoPromemoria } from "../hooks/useReminders";
 import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
+import { supabase } from "../supabaseClient";
 import { fotoInFirma } from "../utils/firmaImmagine";
 import { getSubscriptionStatus, pillClassFor } from "../subscriptionStatus";
 import { GIORNI } from "../utils/chiusure";
@@ -52,6 +53,34 @@ const SUB_TABS = [
 // Solo il consulente crea le credenziali con cui l'azienda entra nell'app.
 const TAB_ACCESSO = { id: "accesso", label: "Accesso", icon: KeyRound };
 
+// Stessa conversione usata per bolle, etichette e registrazione sanitaria: i
+// PDF passano interi, le foto si rimpiccioliscono a 2000 px prima di partire.
+function fileInBase64(file) {
+  return new Promise((resolve, reject) => {
+    if (file.type === "application/pdf") {
+      const r = new FileReader();
+      r.onload = () => resolve({ data: String(r.result).split(",")[1], media_type: "application/pdf" });
+      r.onerror = reject;
+      r.readAsDataURL(file);
+      return;
+    }
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const lato = 2000;
+      const scala = Math.min(1, lato / Math.max(img.width, img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(img.width * scala);
+      canvas.height = Math.round(img.height * scala);
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      resolve({ data: canvas.toDataURL("image/jpeg", 0.85).split(",")[1], media_type: "image/jpeg" });
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Immagine non leggibile")); };
+    img.src = url;
+  });
+}
+
 function addOneYear(dateStr) {
   if (!dateStr) return "";
   const d = new Date(dateStr);
@@ -72,6 +101,14 @@ export default function Configurazione({ onVai, subTabIniziale }) {
   const [formaGiuridica, setFormaGiuridica] = useState("");
   const [numeroRea, setNumeroRea] = useState("");
   const [codiceAteco, setCodiceAteco] = useState("");
+  // La visura camerale: il documento allegato all'azienda e la sua data. I
+  // campi dell'anagrafica stanno tutti lì sopra, e battuti a mano uno per uno
+  // è il punto in cui si sbaglia una cifra della P.IVA o un numero REA.
+  const [visuraPath, setVisuraPath] = useState("");
+  const [visuraData, setVisuraData] = useState("");
+  const [visuraBusy, setVisuraBusy] = useState(false);
+  const [visuraErrore, setVisuraErrore] = useState("");
+  const [visuraLetti, setVisuraLetti] = useState([]);
   const [tipologiaAttivita, setTipologiaAttivita] = useState("");
   const [hasWaterTank, setHasWaterTank] = useState(false);
   const [hasWaterFilter, setHasWaterFilter] = useState(false);
@@ -169,6 +206,8 @@ export default function Configurazione({ onVai, subTabIniziale }) {
       setFormaGiuridica(company.forma_giuridica || "");
       setNumeroRea(company.numero_rea || "");
       setCodiceAteco(company.codice_ateco || "");
+      setVisuraPath(company.chamber_doc_path || "");
+      setVisuraData(company.chamber_doc_date || "");
       setTipologiaAttivita(company.tipologia_attivita || "");
       setHasWaterTank(!!company.has_water_tank);
       setHasWaterFilter(!!company.has_water_filter);
@@ -224,6 +263,8 @@ export default function Configurazione({ onVai, subTabIniziale }) {
     forma_giuridica: formaGiuridica,
     numero_rea: numeroRea,
     codice_ateco: codiceAteco,
+    chamber_doc_path: visuraPath || null,
+    chamber_doc_date: visuraData || null,
     tipologia_attivita: tipologiaAttivita,
     has_water_tank: hasWaterTank,
     has_water_filter: hasWaterFilter,
@@ -355,6 +396,80 @@ export default function Configurazione({ onVai, subTabIniziale }) {
     }
   };
 
+  // La visura si carica una volta e resta attaccata all'azienda. Il documento
+  // viene salvato subito — altrimenti il file resterebbe nello storage senza
+  // che nessuno sappia di chi è — mentre i campi letti restano nel modulo da
+  // controllare: la visura propone, il consulente conferma col Salva.
+  const onVisuraFile = async (e) => {
+    const f = e.target.files?.[0] || null;
+    setVisuraErrore("");
+    setVisuraLetti([]);
+    if (!f) return;
+    if (f.size > 12 * 1024 * 1024) {
+      setVisuraErrore("File troppo grande (limite 12 MB).");
+      e.target.value = "";
+      return;
+    }
+    setVisuraBusy(true);
+    try {
+      const path = await uploadAttachment(company.id, f);
+      setVisuraPath(path);
+
+      let dataVisura = "";
+      const letti = [];
+      try {
+        const { data: b64, media_type } = await fileInBase64(f);
+        const { data, error: err } = await supabase.functions.invoke("clever-responder", {
+          body: { file_base64: b64, media_type, tipo: "visura", company_id: company?.id },
+        });
+        if (err) throw new Error(err.message || "Lettura non riuscita");
+        if (data?.errore) throw new Error(data.errore);
+        const metti = (valore, set, etichetta) => {
+          const v = String(valore || "").trim();
+          if (!v) return;
+          set(v);
+          letti.push(etichetta);
+        };
+        metti(data?.denominazione, setName, "ragione sociale");
+        metti(data?.forma_giuridica, setFormaGiuridica, "forma giuridica");
+        metti(data?.piva, setPiva, "P.IVA");
+        metti(data?.numero_rea, setNumeroRea, "numero REA");
+        metti(data?.sede_legale, setSedeLegale, "sede legale");
+        metti(data?.sede_operativa, setSedeOperativa, "sede operativa");
+        metti(data?.pec, setPec, "PEC");
+        metti(data?.codice_ateco, setCodiceAteco, "codice ATECO");
+        metti(data?.attivita, setTipologiaAttivita, "tipologia di attività");
+        metti(data?.legale_rappresentante, setHaccpManager, "legale rappresentante");
+        if (data?.data_visura) { dataVisura = String(data.data_visura); setVisuraData(dataVisura); }
+        setVisuraLetti(letti);
+        if (letti.length === 0) {
+          setVisuraErrore("Il documento è allegato, ma dalla visura non è stato letto nessun campo: compila a mano.");
+        }
+      } catch (e2) {
+        // Il documento è salvato comunque: la lettura è un aiuto, non la
+        // condizione per allegare la visura.
+        setVisuraErrore("Documento allegato. Lettura automatica non riuscita (" + e2.message + "): compila i campi a mano.");
+      }
+
+      const ok = await updateCompany(buildPayload({
+        chamber_doc_path: path,
+        chamber_doc_date: dataVisura || visuraData || null,
+      }));
+      if (ok) { setSaved(true); setTimeout(() => setSaved(false), 2500); }
+    } catch (err) {
+      setVisuraErrore("Errore durante il caricamento: " + err.message);
+    } finally {
+      setVisuraBusy(false);
+      e.target.value = "";
+    }
+  };
+
+  const apriVisura = async () => {
+    if (!visuraPath) return;
+    const url = await getAttachmentUrl(visuraPath);
+    if (url) window.open(url, "_blank", "noopener");
+  };
+
   const apriManuale = async () => {
     if (!manualPath) return;
     const url = await getAttachmentUrl(manualPath);
@@ -475,6 +590,60 @@ export default function Configurazione({ onVai, subTabIniziale }) {
           <form onSubmit={submit} className="config-form">
             <fieldset className="config-group">
               <legend>Attività</legend>
+
+              {/* La visura camerale sta PRIMA dei campi, non in fondo alla
+                  pagina: è il documento da cui quei campi si copiano, e
+                  chiederla dopo averli battuti a mano non serve a nessuno. */}
+              <div style={{ marginBottom: 14, padding: "12px 14px", border: "1px solid #E1E5DF", borderRadius: 10, background: "#F7F9F6" }}>
+                <p style={{ margin: 0, fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
+                  <FileText size={15} /> Visura camerale
+                </p>
+                <p className="sub" style={{ marginTop: 4 }}>
+                  Ragione sociale, forma giuridica, P.IVA, numero REA, sede e codice ATECO stanno tutti sulla visura. Caricala: l'app legge i campi e li compila qui sotto, tu controlli e salvi. Il documento resta allegato all'azienda.
+                </p>
+
+                {visuraPath ? (
+                  <p className="sub" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+                    <Paperclip size={14} />
+                    <button type="button" className="link-btn" onClick={apriVisura}>
+                      {visuraPath.split("/").pop()}
+                    </button>
+                    <Download size={13} />
+                    {visuraData && <span>— visura del {new Date(visuraData).toLocaleDateString("it-IT")}</span>}
+                  </p>
+                ) : (
+                  <p className="sub" style={{ marginTop: 8 }}>Nessuna visura allegata.</p>
+                )}
+
+                {isConsultant && (
+                  <>
+                    <label className="field-label" style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8 }}>
+                      <Paperclip size={14} />
+                      {visuraBusy ? "Caricamento e lettura in corso…" : (visuraPath ? "Sostituisci la visura (PDF o foto, max 12 MB)" : "Carica la visura (PDF o foto, max 12 MB)")}
+                      <input type="file" accept="application/pdf,image/*" disabled={visuraBusy} onChange={onVisuraFile} />
+                    </label>
+                    <div className="config-grid-2" style={{ marginTop: 8 }}>
+                      <label className="field-label">
+                        Data della visura
+                        <input type="date" value={visuraData} onChange={(e) => setVisuraData(e.target.value)} className="full-input" />
+                      </label>
+                    </div>
+                    <p className="sub" style={{ marginTop: 4 }}>
+                      La data serve a sapere se l'anagrafica è ancora attuale: una visura di tre anni fa non dice più chi è il legale rappresentante.
+                    </p>
+                  </>
+                )}
+
+                {visuraLetti.length > 0 && (
+                  <p className="sub" style={{ marginTop: 6, color: "#1f6b3a" }}>
+                    Letti dalla visura: {visuraLetti.join(", ")}. Controllali e premi Salva.
+                  </p>
+                )}
+                {visuraErrore && (
+                  <p className="sub" style={{ marginTop: 6, color: "#a33" }}>{visuraErrore}</p>
+                )}
+              </div>
+
               <input type="text" placeholder="Ragione sociale / nome attività" value={name} onChange={(e) => setName(e.target.value)} className="full-input" />
               <input type="email" placeholder="Email del titolare" value={ownerEmail} onChange={(e) => setOwnerEmail(e.target.value)} className="full-input" style={{ marginTop: 10 }} />
               <div className="config-grid-2" style={{ marginTop: 10 }}>
