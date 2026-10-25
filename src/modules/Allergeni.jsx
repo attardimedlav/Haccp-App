@@ -119,7 +119,7 @@ export default function Allergeni() {
 
   const commutaProdotto = (id) =>
     setScelti((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
-  const commutaManuale = (a) =>
+  const commutaManuale = (a) => {
     setManuali((m) => (m.includes(a) ? m.filter((x) => x !== a) : [...m, a]));
   };
 
@@ -128,6 +128,7 @@ export default function Allergeni() {
   const commutaTraccia = (a) => {
     setTracce((t) => (t.includes(a) ? t.filter((x) => x !== a) : [...t, a]));
     setManuali((m) => m.filter((x) => x !== a));
+  };
 
   // Foto dell'etichetta: crea il prodotto nel catalogo con ingredienti e
   // allergeni letti, e lo aggiunge subito alla voce in composizione. È il
