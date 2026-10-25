@@ -337,16 +337,62 @@ nav { display: flex; flex-direction: column; gap: 2px; }
   .print-fridge-table th, .print-fridge-table td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
   .print-fridge-table th { background: #F0F1EE; }
   .allergeni-screen-list { display: none !important; }
-  .print-allergen-header { text-align: center; margin-bottom: 22px; }
-  .print-allergen-header h1 { font-size: 22px; margin: 0 0 6px; color: #1B2A22; }
-  .print-allergen-company { font-size: 14px; font-weight: 600; margin: 0 0 8px; color: #1B2A22; }
-  .print-allergen-legal { font-size: 11px; color: #4C5A52; margin: 0; max-width: 480px; margin-left: auto; margin-right: auto; }
-  .print-allergen-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-  .print-allergen-card { border: 1.5px solid #E1E5DF; border-radius: 10px; padding: 12px 14px; break-inside: avoid; }
-  .print-allergen-card h3 { margin: 0 0 8px; font-size: 14px; color: #1B2A22; }
-  .print-allergen-badges { display: flex; flex-wrap: wrap; gap: 6px; }
-  .print-allergen-badge { display: inline-block; font-size: 10.5px; padding: 4px 10px; border-radius: 999px; background: #2F6F4E; color: #fff; font-weight: 500; }
-  .print-allergen-none { font-size: 11px; color: #97A199; font-style: italic; }
+
+  /* ---- Il menu da esporre ----
+     Non e' un modulo da compilare: e' un foglio che il cliente guarda
+     appeso al muro o appoggiato al banco. Quindi niente riquadri, niente
+     pastiglie colorate, niente griglia da tabella — un carattere con le
+     grazie, aria intorno, e gli allergeni in maiuscoletto spaziato sotto
+     ogni voce. La leggibilita' da un metro di distanza viene prima
+     dell'eleganza, ma in un menu le due cose coincidono quasi sempre. */
+  .print-menu { font-family: Georgia, "Times New Roman", serif; color: #1B2A22; padding: 6mm 4mm 0; }
+  .print-menu-testata { text-align: center; margin: 0 0 14mm; }
+  .print-menu-azienda {
+    font-family: Calibri, Carlito, Arial, sans-serif;
+    font-size: 10.5px; letter-spacing: 2.6px; text-transform: uppercase;
+    color: #6E7C73; margin: 0 0 7mm;
+  }
+  .print-menu-filetto { width: 46mm; height: 1px; background: #B9C4BC; margin: 0 auto; border: 0; }
+  .print-menu-titolo {
+    font-size: 40px; letter-spacing: 7px; text-transform: uppercase;
+    font-weight: 400; margin: 5mm 0 2mm; line-height: 1;
+  }
+  .print-menu-sottotitolo {
+    font-size: 12.5px; font-style: italic; color: #4C5A52; margin: 0 0 5mm;
+  }
+  .print-menu-rombo { font-size: 11px; color: #B08D57; letter-spacing: 6px; margin: 0; }
+
+  /* Le voci si incolonnano al centro come la testata: un menu allineato a
+     sinistra sotto un titolo centrato sembra un elenco rimasto a meta'.
+     min-height tiene il piede in fondo al foglio anche con tre sole voci,
+     invece di lasciarlo a mezz'aria. */
+  .print-menu-voci { margin: 0 auto; max-width: 150mm; text-align: center; min-height: 150mm; }
+  .print-menu-voci.due-colonne { max-width: none; columns: 2; column-gap: 16mm; min-height: 0; }
+  .print-menu-voce { break-inside: avoid; margin: 0 0 10mm; }
+  .print-menu-voce h3 {
+    font-size: 19px; font-weight: 400; margin: 0 0 2.5mm; color: #1B2A22;
+    letter-spacing: .4px;
+  }
+  .print-menu-allergeni {
+    font-family: Calibri, Carlito, Arial, sans-serif;
+    font-size: 10px; letter-spacing: 1.7px; text-transform: uppercase;
+    color: #8A5A2B; margin: 0;
+  }
+  .print-menu-allergeni .sep { color: #C9B9A3; padding: 0 2px; }
+  .print-menu-nessuno {
+    font-family: Calibri, Carlito, Arial, sans-serif;
+    font-size: 10px; letter-spacing: 1.4px; text-transform: uppercase; color: #97A199; margin: 0;
+  }
+  .print-menu-ingredienti { font-size: 11px; font-style: italic; color: #5A6B5E; margin: 2.5mm 0 0; line-height: 1.45; }
+  .print-menu-ingredienti p { margin: 0 0 1mm; }
+  .print-menu-nota { font-size: 11px; font-style: italic; color: #5A6B5E; margin: 2mm 0 0; }
+
+  .print-menu-piede { margin: 12mm auto 0; max-width: 150mm; text-align: center; }
+  .print-menu-piede .print-menu-filetto { margin-bottom: 4mm; }
+  .print-menu-legale {
+    font-family: Calibri, Carlito, Arial, sans-serif;
+    font-size: 8.5px; line-height: 1.5; color: #7A857D; margin: 0;
+  }
 
   /* Organigramma da esporre: in pagina resta solo lo schema. */
   body.print-organigramma .print-header,
