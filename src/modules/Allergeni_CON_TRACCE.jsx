@@ -1,0 +1,977 @@
+import React, { useState } from "react";
+import { Plus, Trash2, Camera, Printer, Package, AlertTriangle, Share2, ScanLine, Pencil, X, Check, Copy } from "lucide-react";
+import { useTable } from "../hooks/useTable";
+import { useAuth } from "../AuthContext";
+import { supabase } from "../supabaseClient";
+import { uploadAttachment } from "../hooks/useAttachment";
+import { eanValido, cercaSuOpenFoodFacts, fotocameraDisponibile, leggiCodiceDallaFotocamera } from "../utils/codiceABarre";
+import { allergeniDaIngredienti } from "../utils/allergeniDaIngredienti";
+
+const ALLERGENI = ["Glutine", "Latte", "Uova", "Soia", "Frutta a guscio", "Pesce", "Crostacei", "Sedano", "Senape", "Solfiti", "Arachidi", "Sesamo", "Lupini", "Molluschi"];
+const MAX_FILE_BYTES = 8 * 1024 * 1024;
+const FUNZIONE_LETTURA = "clever-responder";
+
+const normalizza = (s) => String(s || "").trim().toLowerCase().replace(/\s+/g, " ");
+
+// Stessa conversione delle altre letture: PDF interi, foto a 2000 px.
+function fileInBase64(file) {
+  return new Promise((resolve, reject) => {
+    if (file.type === "application/pdf") {
+      const r = new FileReader();
+      r.onload = () => resolve({ data: String(r.result).split(",")[1], media_type: "application/pdf" });
+      r.onerror = reject;
+      r.readAsDataURL(file);
+      return;
+    }
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const lato = 2000;
+      const scala = Math.min(1, lato / Math.max(img.width, img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(img.width * scala);
+      canvas.height = Math.round(img.height * scala);
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      resolve({ data: canvas.toDataURL("image/jpeg", 0.85).split(",")[1], media_type: "image/jpeg" });
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Immagine non leggibile")); };
+    img.src = url;
+  });
+}
+
+export default function Allergeni() {
+  const { company, consultantCompanies } = useAuth();
+  const isConsultant = (consultantCompanies || []).length > 0;
+  const { items, add, remove, update, loading } = useTable("allergen_dishes", company?.id);
+  // Banca dati di QUESTA sezione: i prodotti composti di terzi che entrano
+  // nelle preparazioni. Non è il catalogo della tracciabilità, che si riempie
+  // dalle bolle e qui non c'entra niente.
+  const { items: prodotti, add: aggiungiProdotto, reload: ricaricaProdotti } = useTable("menu_products", company?.id);
+  // Il catalogo condiviso del consulente: un prodotto letto una volta vale
+  // per tutti i clienti. Qui si legge soltanto; scegliendolo se ne fa una
+  // copia nel catalogo dell'azienda.
+  const [condivisi, setCondivisi] = useState([]);
+  const caricaCondivisi = React.useCallback(async () => {
+    const { data, error } = await supabase.from("shared_products").select("*").order("name");
+    if (error) setErrore("Catalogo condiviso non leggibile: " + error.message);
+    setCondivisi(data || []);
+  }, []);
+  React.useEffect(() => { caricaCondivisi(); }, [caricaCondivisi]);
+
+  const [dish, setDish] = useState("");
+  const [scelti, setScelti] = useState([]);      // id dei prodotti che compongono la voce
+  const [manuali, setManuali] = useState([]);    // allergeni aggiunti o tolti a mano
+  // Le tracce stanno in un elenco a parte, mai insieme agli allergeni
+  // presenti: i primi sono informazione obbligatoria, le seconde
+  // volontaria, e unirle fa dire al menu che la guastella contiene latte
+  // e uova quando invece li puo' contenere.
+  const [tracce, setTracce] = useState([]);
+  const [note, setNote] = useState("");
+  const [cerca, setCerca] = useState("");
+  // Correzione di un prodotto gia' in catalogo: nome, ingredienti, allergeni.
+  const [modProd, setModProd] = useState(null);
+  const [mpNome, setMpNome] = useState("");
+  const [mpIngredienti, setMpIngredienti] = useState("");
+  const [mpAllergeni, setMpAllergeni] = useState([]);
+  const [mpBusy, setMpBusy] = useState(false);
+  const [mpErr, setMpErr] = useState("");
+
+  // La terza via: l'ingrediente fresco, senza etichetta e senza codice.
+  const [fresco, setFresco] = useState("");
+  const [salvandoFresco, setSalvandoFresco] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [leggendo, setLeggendo] = useState(false);
+  const [errore, setErrore] = useState("");
+  const [avviso, setAvviso] = useState("");
+  const [stampaIngredienti, setStampaIngredienti] = useState(true);
+  const [inModifica, setInModifica] = useState(null);   // id della voce che si sta correggendo
+  const [ean, setEan] = useState("");
+  const [cercandoEan, setCercandoEan] = useState(false);
+  const [inquadrando, setInquadrando] = useState(false);
+  const video = React.useRef(null);
+
+  const prodottiScelti = scelti.map((id) => prodotti.find((p) => p.id === id)).filter(Boolean);
+
+  // Gli allergeni della voce: quelli dei prodotti che la compongono, più
+  // quelli aggiunti a mano per ciò che non passa dal catalogo (la farina del
+  // fornitore di sempre, l'uovo usato per spennellare).
+  const allergeniVoce = [...new Set([
+    ...prodottiScelti.flatMap((p) => p.allergens || []),
+    ...manuali,
+  ])].sort((a, b) => ALLERGENI.indexOf(a) - ALLERGENI.indexOf(b));
+
+  // Le tracce: quelle spuntate a mano, meno quelle che risultano presenti —
+  // se una sostanza c'e' davvero, dirla anche come possibile traccia
+  // indebolisce l'informazione invece di rafforzarla.
+  const tracceVoce = tracce
+    .filter((a) => !allergeniVoce.includes(a))
+    .sort((a, b) => ALLERGENI.indexOf(a) - ALLERGENI.indexOf(b));
+
+  // Una riga per componente: il cornetto, la crema, la granella. Ognuno con i
+  // propri ingredienti, come stanno scritti sulla sua etichetta. In un filo
+  // unico separato da puntini, su tre componenti, non si capiva più niente.
+  const ingredientiVoce = prodottiScelti
+    .map((p) => (p.ingredients_text ? `${p.name}: ${p.ingredients_text}` : `${p.name}: ingredienti non ancora letti`))
+    .join("\n");
+
+  const senzaEtichetta = prodottiScelti.filter((p) => !p.allergens_checked_at);
+
+  const commutaProdotto = (id) =>
+    setScelti((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+  const commutaManuale = (a) =>
+    setManuali((m) => (m.includes(a) ? m.filter((x) => x !== a) : [...m, a]));
+  };
+
+  // Una sostanza non puo' essere insieme presente e possibile traccia:
+  // accendendola di qua si spegne di la'.
+  const commutaTraccia = (a) => {
+    setTracce((t) => (t.includes(a) ? t.filter((x) => x !== a) : [...t, a]));
+    setManuali((m) => m.filter((x) => x !== a));
+
+  // Foto dell'etichetta: crea il prodotto nel catalogo con ingredienti e
+  // allergeni letti, e lo aggiunge subito alla voce in composizione. È il
+  // percorso del barattolo di crema che si usa per farcire.
+  const leggiEtichetta = async (e) => {
+    const f = e.target.files?.[0] || null;
+    e.target.value = "";
+    if (!f) return;
+    if (f.size > MAX_FILE_BYTES) { setErrore("File troppo grande (limite 8 MB)."); return; }
+    setLeggendo(true); setErrore(""); setAvviso("");
+    try {
+      const { data: b64, media_type } = await fileInBase64(f);
+      const { data, error } = await supabase.functions.invoke(FUNZIONE_LETTURA, {
+        body: { file_base64: b64, media_type, tipo: "etichetta" },
+      });
+      if (error) throw new Error(error.message || "Lettura non riuscita");
+      if (data?.errore) throw new Error(data.errore);
+
+      const nome = (data?.prodotto || "").trim() || "Prodotto da etichetta";
+      let letti = (data?.allergeni || []).filter((x) => ALLERGENI.includes(x));
+      let dedottiDaTesto = [];
+      if (letti.length === 0 && data?.ingredienti) {
+        dedottiDaTesto = allergeniDaIngredienti(data.ingredienti);
+        letti = dedottiDaTesto;
+      }
+      const tracce = (data?.tracce || []).filter((x) => ALLERGENI.includes(x));
+      let foto = null;
+      try { foto = await uploadAttachment(company.id, f); } catch { /* la foto è utile, non indispensabile */ }
+
+      const esistente = prodotti.find((p) => normalizza(p.name) === normalizza(nome));
+      const campi = {
+        name: nome,
+        ean: (ean || "").replace(/\D/g, "") || undefined,
+        allergens: letti,
+        ingredients_text: data?.ingredienti || null,
+        allergens_checked_at: new Date().toISOString(),
+      };
+      if (foto) campi.label_attachment_path = foto;
+
+      let id = esistente?.id;
+      if (esistente) {
+        await supabase.from("menu_products").update(campi).eq("id", esistente.id).eq("company_id", company.id);
+      } else {
+        const creato = await aggiungiProdotto(campi);
+        if (!creato?.id) throw new Error("salvataggio del prodotto non riuscito");
+        id = creato.id;
+      }
+      await ricaricaProdotti();
+      setScelti((s) => (s.includes(id) ? s : [...s, id]));
+
+      // Lo stesso prodotto entra nel catalogo condiviso: la prossima azienda
+      // che lo usa non paga un'altra lettura. Il consulente lo mette come
+      // verificato; un'azienda lo propone soltanto, e solo se la foto c'è —
+      // senza prova non si condivide niente (è anche una regola del database).
+      if (isConsultant || foto) {
+        const gia = condivisi.find((c) => normalizza(c.name) === normalizza(nome));
+        const campiCondivisi = {
+          name: nome,
+          ean: (ean || "").replace(/\D/g, "") || null,
+          ingredients_text: data?.ingredienti || null,
+          allergens: letti,
+          traces: tracce,
+          source: "etichetta",
+          verified_at: isConsultant ? new Date().toISOString() : null,
+          contributed_by: isConsultant ? null : company.id,
+          contributed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        if (foto) campiCondivisi.label_attachment_path = foto;
+        const esito = gia && isConsultant
+          ? await supabase.from("shared_products").update(campiCondivisi).eq("id", gia.id)
+          : gia
+            ? { error: null }        // l'azienda non tocca una voce già presente
+            : await supabase.from("shared_products").insert(campiCondivisi);
+        if (esito.error) {
+          // Silenziarlo significherebbe credere di avere un catalogo condiviso
+          // che in realtà è vuoto: meglio saperlo subito.
+          setErrore("Il prodotto è stato salvato in questa azienda, ma NON nel catalogo condiviso: " + esito.error.message);
+        }
+        await caricaCondivisi();
+      }
+      setAvviso(
+        `Letta l'etichetta di «${nome}»${letti.length ? (dedottiDaTesto.length ? " — allergeni dedotti dagli ingredienti: " : ": ") + letti.join(", ") : " — nessun allergene riconosciuto"}` +
+        (tracce.length ? `. Tracce dichiarate: ${tracce.join(", ")} (vanno valutate a parte).` : "") +
+        ` — salvato nel catalogo prodotti: la prossima volta lo ritrovi fra le voci da spuntare, senza rifotografarlo.`,
+      );
+    } catch (err) {
+      setErrore("Etichetta non letta (" + err.message + "): puoi spuntare gli allergeni a mano.");
+    } finally {
+      setLeggendo(false);
+    }
+  };
+
+  // Dal catalogo condiviso al catalogo dell'azienda: una copia, non un
+  // collegamento. Se il fornitore cambia formulazione, l'azienda corregge la
+  // propria voce senza toccare quella delle altre.
+  const importaCondiviso = async (c) => {
+    setErrore(""); setAvviso("");
+    const gia = prodotti.find((p) => normalizza(p.name) === normalizza(c.name));
+    if (gia) { commutaProdotto(gia.id); return; }
+    const { data, error } = await supabase.from("menu_products").insert({
+      company_id: company.id,
+      name: c.name,
+      ingredients_text: c.ingredients_text,
+      allergens: c.allergens || [],
+      allergens_checked_at: c.verified_at || null,
+      label_attachment_path: c.label_attachment_path || null,
+    }).select().single();
+    if (error) { setErrore("Non è stato possibile copiare il prodotto: " + error.message); return; }
+    await ricaricaProdotti();
+    setScelti((s) => [...s, data.id]);
+    setAvviso(c.verified_at
+      ? `«${c.name}» copiato dal catalogo condiviso: controlla che l'etichetta del fornitore di questa azienda corrisponda.`
+      : `«${c.name}» è una proposta di un'altra azienda, NON verificata: confrontala con l'etichetta della confezione prima di stamparla nel menu.`);
+  };
+
+  // Ricerca per codice a barre, dal meno caro al più caro:
+  // catalogo dell'azienda → catalogo condiviso → banca dati aperta →
+  // e solo se non si trova niente, la foto dell'etichetta a pagamento.
+  const cercaPerCodice = async (codice) => {
+    const c = String(codice || "").replace(/\D/g, "");
+    setErrore(""); setAvviso("");
+    if (!eanValido(c)) {
+      setErrore("Il codice non è valido: deve avere 8 o 13 cifre e la cifra di controllo deve tornare. Ricontrolla o fotografa l'etichetta.");
+      return;
+    }
+    setCercandoEan(true);
+    try {
+      const mio = prodotti.find((p) => p.ean === c);
+      if (mio) {
+        commutaProdotto(mio.id);
+        setAvviso(`«${mio.name}» era già nel catalogo di questa azienda.`);
+        setEan("");
+        return;
+      }
+      const condiviso = condivisi.find((x) => x.ean === c);
+      if (condiviso) {
+        await importaCondiviso(condiviso);
+        setEan("");
+        return;
+      }
+
+      const trovato = await cercaSuOpenFoodFacts(c);
+      if (!trovato) {
+        setErrore("Questo prodotto non risulta nella banca dati aperta: fotografa l'etichetta.");
+        return;
+      }
+      // Nelle banche dati aperte capita la scheda con il solo nome. Il prodotto
+      // si salva lo stesso — fotografare l'etichetta richiede una quindicina di
+      // secondi e al banco non sempre ci sono — ma resta marcato in rosso
+      // finché gli allergeni non li indica l'OSA.
+      const soloNome = !trovato.ingredienti && trovato.allergeni.length === 0;
+      // Ingredienti sì, allergeni no: si ricavano dal testo con il dizionario
+      // interno. Sono una proposta, non una lettura.
+      let dedotti = [];
+      if (trovato.allergeni.length === 0 && trovato.ingredienti) {
+        dedotti = allergeniDaIngredienti(trovato.ingredienti);
+      }
+      const { data, error } = await supabase.from("menu_products").insert({
+        company_id: company.id,
+        name: trovato.nome,
+        ean: c,
+        ingredients_text: trovato.ingredienti,
+        allergens: trovato.allergeni.length ? trovato.allergeni : dedotti,
+        data_source: soloNome
+          ? "banca dati aperta — solo il nome, allergeni da indicare"
+          : dedotti.length
+            ? "banca dati aperta, allergeni dedotti dagli ingredienti"
+            : "banca dati aperta",
+        // niente allergens_checked_at: il dato NON è verificato finché non si
+        // guarda l'etichetta vera. È la differenza fra un'informazione e una prova.
+      }).select().single();
+      if (error) throw new Error(error.message);
+      await ricaricaProdotti();
+      setScelti((s2) => [...s2, data.id]);
+      setEan("");
+      if (soloNome) {
+        setErrore(
+          `«${trovato.nome}» salvato, ma in banca dati ci sono solo il nome e il codice: ` +
+          "ingredienti e allergeni NON risultano e devono essere indicati dall'OSA. " +
+          "Spunta gli allergeni qui sotto, oppure fotografa l'etichetta quando hai tempo.",
+        );
+        return;
+      }
+      setAvviso(
+        `«${trovato.nome}» letto dalla banca dati aperta. ` +
+        (trovato.allergeni.length
+          ? "Allergeni dichiarati: " + trovato.allergeni.join(", ") + ". "
+          : dedotti.length
+            ? "Allergeni dedotti dagli ingredienti (non dichiarati in banca dati): " + dedotti.join(", ") + ". "
+            : "Nessun allergene ricavabile. ") +
+        "Dato NON verificato: confrontalo con l'etichetta della confezione e, quando puoi, fotografala.",
+      );
+    } catch (e2) {
+      setErrore("Ricerca non riuscita: " + e2.message + ". Puoi fotografare l'etichetta.");
+    } finally {
+      setCercandoEan(false);
+    }
+  };
+
+  const inquadraCodice = async () => {
+    setErrore(""); setAvviso("");
+    setInquadrando(true);
+    try {
+      const codice = await leggiCodiceDallaFotocamera(video.current);
+      if (!codice) { setErrore("Non sono riuscito a leggere il codice: riprova con più luce o scrivilo a mano."); return; }
+      setEan(codice);
+      await cercaPerCodice(codice);
+    } catch (e2) {
+      setErrore("Fotocamera non disponibile (" + e2.message + "): scrivi il codice a mano.");
+    } finally {
+      setInquadrando(false);
+    }
+  };
+
+  // Promuove un prodotto dell'azienda al catalogo condiviso. È il passo che
+  // mancava per i prodotti arrivati dalla banca dati aperta: li hai guardati
+  // sulla confezione, li dichiari verificati, e da lì valgono per tutti.
+  const confermaECondividi = async (p) => {
+    setErrore(""); setAvviso("");
+    const adesso = new Date().toISOString();
+    const { error: e1 } = await supabase
+      .from("menu_products")
+      .update({ allergens_checked_at: p.allergens_checked_at || adesso })
+      .eq("id", p.id).eq("company_id", company.id);
+    if (e1) { setErrore("Non è stato possibile segnare il prodotto come verificato: " + e1.message); return; }
+
+    const gia = condivisi.find((c) => normalizza(c.name) === normalizza(p.name) || (p.ean && c.ean === p.ean));
+    const campi = {
+      name: p.name,
+      ean: p.ean || null,
+      ingredients_text: p.ingredients_text || null,
+      allergens: p.allergens || [],
+      label_attachment_path: p.label_attachment_path || null,
+      source: p.label_attachment_path ? "etichetta" : (p.data_source || "manuale"),
+      verified_at: adesso,
+      updated_at: adesso,
+    };
+    const esito = gia
+      ? await supabase.from("shared_products").update(campi).eq("id", gia.id)
+      : await supabase.from("shared_products").insert(campi);
+    if (esito.error) { setErrore("Catalogo condiviso: " + esito.error.message); return; }
+    await caricaCondivisi();
+    await ricaricaProdotti();
+    setAvviso(`«${p.name}» è nel catalogo condiviso: da adesso lo ritrovi in tutte le aziende.`);
+  };
+
+  // L'ingrediente fresco, comprato sciolto: gamberetti, pesce, verdura, pane
+  // del fornaio. Non ha etichetta né codice a barre, quindi nessuna delle tre
+  // vie gratuite lo trova e la foto non c'e' niente da fotografare — ma
+  // l'allergene va dichiarato lo stesso, e i crostacei sono esattamente il
+  // caso in cui dimenticarlo costa caro.
+  //
+  // Entra nel catalogo come gli altri, con la fonte scritta a chiare lettere:
+  // non e' un dato verificato da un'etichetta, e' una dichiarazione
+  // dell'operatore. Gli allergeni si spuntano nel passo 3, sulla voce.
+  const aggiungiFresco = async () => {
+    const nome = (fresco || "").trim();
+    if (!nome || !company?.id) return;
+    setErrore(""); setAvviso("");
+    // Se quell'ingrediente c'e' gia', non se ne crea un secondo con lo stesso
+    // nome: lo si riusa. Due «Gamberetti freschi» nel catalogo sono l'inizio
+    // di due dichiarazioni che un giorno diranno cose diverse.
+    const gia = prodotti.find(
+      (x) => (x.name || "").trim().toLowerCase() === nome.toLowerCase());
+    if (gia) {
+      setScelti((s2) => (s2.includes(gia.id) ? s2 : [...s2, gia.id]));
+      setFresco("");
+      setAvviso(`«${gia.name}» era già in catalogo: l'ho aggiunto alla voce.`);
+      return;
+    }
+    setSalvandoFresco(true);
+    try {
+      const { data, error } = await supabase.from("menu_products").insert({
+        company_id: company.id,
+        name: nome,
+        allergens: [],
+        data_source: "ingrediente fresco, senza etichetta — allergeni dichiarati dall'operatore",
+      }).select().single();
+      if (error) throw new Error(error.message);
+      await ricaricaProdotti();
+      setScelti((s2) => [...s2, data.id]);
+      setFresco("");
+      setAvviso(`«${nome}» aggiunto. Non ha etichetta: spunta tu gli allergeni qui sotto.`);
+    } catch (e) {
+      setErrore("Non sono riuscito ad aggiungere l'ingrediente: " + e.message);
+    } finally {
+      setSalvandoFresco(false);
+    }
+  };
+
+  // Correggere un prodotto del catalogo invece di rifarlo.
+  //
+  // Serviva: una banca dati aperta restituisce nomi con il peso attaccato,
+  // ingredienti troncati, allergeni dedotti per approssimazione. Finche' si
+  // poteva solo togliere il prodotto dalla voce, l'errore restava in
+  // catalogo e tornava nella voce successiva. La correzione e' sul prodotto,
+  // quindi vale per tutte le voci che lo contengono — ed e' giusto cosi':
+  // l'etichetta di quel prodotto e' una sola.
+  const apriProdotto = (p) => {
+    setModProd(p.id);
+    setMpNome(p.name || "");
+    setMpIngredienti(p.ingredients_text || "");
+    setMpAllergeni(p.allergens || []);
+    setMpErr("");
+  };
+  const chiudiProdotto = () => { setModProd(null); setMpErr(""); };
+  const commutaMpAllergene = (a) => {
+    setMpAllergeni((v) => (v.includes(a) ? v.filter((x) => x !== a) : [...v, a]));
+  };
+  const salvaProdotto = async (p) => {
+    const nome = (mpNome || "").trim();
+    if (!nome) { setMpErr("Il nome non puo' restare vuoto."); return; }
+    setMpBusy(true); setMpErr("");
+    try {
+      const { error } = await supabase.from("menu_products")
+        .update({
+          name: nome,
+          ingredients_text: (mpIngredienti || "").trim() || null,
+          allergens: mpAllergeni,
+          // allergens_checked_at non si tocca: "verificato" vuol dire che
+          // qualcuno ha guardato l'etichetta, non che qualcuno ha corretto
+          // il testo. Confondere le due cose svuoterebbe quel bollino.
+        })
+        .eq("id", p.id).eq("company_id", company.id);
+      if (error) throw new Error(error.message);
+      await ricaricaProdotti();
+      chiudiProdotto();
+      setAvviso(`«${nome}» corretto. La modifica vale per tutte le voci che lo contengono.`);
+    } catch (e) {
+      setMpErr("Non sono riuscito a salvare: " + e.message);
+    } finally {
+      setMpBusy(false);
+    }
+  };
+
+  const svuotaForm = () => {
+    setDish(""); setScelti([]); setManuali([]); setTracce([]); setNote("");
+    setAvviso(""); setErrore(""); setCerca(""); setEan(""); setInModifica(null);
+  };
+
+  // Correggere una voce senza rifarla: si cambia la ricetta — le noci nel
+  // cornetto — e la data di aggiornamento si sposta da sola.
+  const apriModifica = (item) => {
+    setInModifica(item.id);
+    setDish(item.dish || "");
+    setScelti(item.product_ids || []);
+    setManuali(item.allergens || []);
+    setTracce(item.traces || []);
+    setNote(item.note || "");
+    setCerca(""); setEan(""); setErrore(""); setAvviso("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  // Duplica: due varianti dello stesso piatto — uno con la granella e uno
+  // senza — si scrivono in dieci secondi invece di rifare tutta la voce.
+  const duplica = (item) => {
+    setInModifica(null);
+    setDish(`${item.dish} (variante)`);
+    setScelti(item.product_ids || []);
+    setManuali(item.allergens || []);
+    setTracce(item.traces || []);
+    setNote(item.note || "");
+    setCerca(""); setEan(""); setErrore("");
+    setAvviso("Copia della voce: cambia il nome e correggi i componenti, poi aggiungila al menu.");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!dish.trim()) return;
+    setBusy(true);
+    const campi = {
+      dish: dish.trim(),
+      allergens: allergeniVoce,
+      traces: tracceVoce,
+      product_ids: scelti,
+      ingredients_text: ingredientiVoce || null,
+      note: note.trim() || null,
+      updated_at: new Date().toISOString(),
+    };
+    if (inModifica) await update(inModifica, campi);
+    else await add(campi);
+    svuotaForm();
+    setBusy(false);
+  };
+
+  // Il catalogo prodotti si riempie da solo leggendo le bolle: dentro c'è
+  // ogni riga di fattura, con i nomi da magazzino. Mostrarlo tutto qui rende
+  // la pagina illeggibile, quindi si vede solo quello che si cerca.
+  const ricerca = normalizza(cerca);
+  const cercaAttiva = ricerca.length >= 2;
+
+  const condivisiDaProporre = !cercaAttiva ? [] : condivisi
+    .filter((c) => !prodotti.some((p) => normalizza(p.name) === normalizza(c.name)))
+    .filter((c) => normalizza(c.name).includes(ricerca))
+    .slice(0, 20);
+
+  const elencoProdotti = !cercaAttiva ? [] : [...prodotti]
+    .filter((p) => normalizza(p.name).includes(ricerca))
+    // prima quelli che servono davvero al menu: con ingredienti o allergeni
+    .sort((a, b) => {
+      const va = (a.ingredients_text || (a.allergens || []).length) ? 0 : 1;
+      const vb = (b.ingredients_text || (b.allergens || []).length) ? 0 : 1;
+      return va - vb || a.name.localeCompare(b.name, "it");
+    })
+    .slice(0, 30);
+
+  return (
+    <div className="panel">
+      <div className="panel-head allergeni-panel-head">
+        <div>
+          <h2>Menu con evidenza degli allergeni</h2>
+          <p className="sub">
+            Il foglio con gli allergeni da esporre, composto dai prodotti e dalle loro etichette.
+          </p>
+        </div>
+        <button type="button" className="btn-primary no-print" onClick={() => window.print()}>
+          <Printer size={15} /> Stampa il menu
+        </button>
+      </div>
+
+      {/* La pagina era un muro di spiegazioni con i campi in mezzo: chi la usa
+          due volte l'anno non trovava i passi. Le spiegazioni restano — servono
+          davvero, e la prima volta si leggono — ma richiuse qui dentro. Fuori
+          resta solo la riga sulla responsabilità, che e' l'unica che va letta
+          ogni volta. */}
+      <details className="no-print" style={{ margin: "4px 0 14px" }}>
+        <summary style={{ cursor: "pointer", fontWeight: 600, color: "#2F6F4E", fontSize: "0.92rem" }}>
+          Come funziona questa pagina
+        </summary>
+        <div className="sub" style={{ margin: "8px 0 0", lineHeight: 1.5 }}>
+          <p style={{ margin: "0 0 8px" }}>
+            Una voce di menu non si scrive a mano: <strong>si compone dai prodotti</strong>, e allergeni
+            e ingredienti si ereditano dalle loro etichette. È questo che dà una prova alle spalle della
+            dichiarazione, invece di una spunta messa a memoria.
+          </p>
+          <p style={{ margin: "0 0 8px" }}>
+            Per quello che si serve al banco vale l'<strong>art. 44 del Reg. UE 1169/2011</strong>, che
+            chiede gli allergeni per iscritto, riconducibili a ciascun alimento. Per quello che si vende
+            sfuso o preincartato in vetrina vale l'<strong>art. 19 del D.Lgs. 231/2017</strong>, che chiede
+            anche l'elenco degli ingredienti. Un bar fa tutte e due le cose, e il foglio stampato può
+            portarli insieme.
+          </p>
+          <p style={{ margin: "0 0 8px" }}>
+            <strong>Per registrare un prodotto, dalla via più economica:</strong> il codice a barre cerca
+            prima nel catalogo di questa azienda, poi nel catalogo condiviso, poi nella banca dati aperta
+            Open Food Facts — tutte e tre gratis. La ricerca per nome guarda fra i prodotti composti già
+            registrati da questa pagina: <em>non</em> è il catalogo degli arrivi merce. La foto
+            dell'etichetta serve solo se le altre non trovano niente: è l'unica che si paga, ed è l'unica
+            che vale come prova.
+          </p>
+          <p style={{ margin: 0 }}>
+            Gli allergeni col puntino arrivano da un'etichetta letta davvero; gli altri li aggiungi tu.
+            Per le preparazioni fatte in casa è normale: li dichiara l'operatore. L'etichetta serve per i
+            prodotti composti di terzi, dove l'unica fonte attendibile è il produttore.
+          </p>
+        </div>
+      </details>
+
+      <p className="login-info no-print" style={{ margin: "0 0 16px" }}>
+        <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+        <span>
+          La responsabilità della dichiarazione resta dell'operatore del settore alimentare: prima di
+          esporre il menu deve accertarsi che gli allergeni indicati corrispondano alle etichette dei
+          prodotti effettivamente in uso.
+        </span>
+      </p>
+
+      <form onSubmit={submit} className="traccia-form no-print">
+        {inModifica && (
+          <p className="sub" style={{ margin: 0, color: "#2F6F4E" }}>
+            Stai correggendo una voce già in menu: salvando, la data di aggiornamento del foglio si sposta a oggi.
+          </p>
+        )}
+        <p className="appt-section-label" style={{ margin: "0" }}>1 · Che cos'è</p>
+        <input
+          type="text" placeholder="Voce di menu (es. Cornetto alla crema di nocciole)" required
+          value={dish} onChange={(e) => setDish(e.target.value)} className="note-input" style={{ maxWidth: 420 }}
+        />
+
+        <p className="appt-section-label" style={{ margin: "14px 0 0" }}>2 · Di che cosa è fatta</p>
+        <p className="sub" style={{ margin: 0 }}>
+          Scegli i prodotti che la compongono: allergeni e ingredienti arrivano da loro.
+        </p>
+
+        <div className="row-form" style={{ margin: 0 }}>
+          <input
+            type="text" inputMode="numeric" placeholder="Codice a barre (8 o 13 cifre)"
+            value={ean} onChange={(e) => setEan(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); cercaPerCodice(ean); } }}
+            className="note-input" style={{ maxWidth: 260 }}
+          />
+          <button type="button" className="btn-primary" disabled={cercandoEan || !ean} onClick={() => cercaPerCodice(ean)}>
+            {cercandoEan ? "Ricerca…" : "Cerca il prodotto"}
+          </button>
+          {fotocameraDisponibile() && (
+            <button type="button" className="link-btn" disabled={inquadrando} onClick={inquadraCodice}>
+              <ScanLine size={14} /> {inquadrando ? "Inquadra il codice…" : "Inquadra col telefono"}
+            </button>
+          )}
+        </div>
+        <video ref={video} playsInline muted className={inquadrando ? "scanner-video" : "scanner-video nascosto"} />
+        <p className="sub" style={{ margin: 0 }}>
+          Gratis: catalogo dell'azienda, catalogo condiviso, Open Food Facts.
+        </p>
+
+        <div className="row-form" style={{ margin: 0 }}>
+          <input
+            type="text" placeholder="Cerca un prodotto del catalogo…"
+            value={cerca} onChange={(e) => setCerca(e.target.value)} className="note-input"
+          />
+          <label className="file-drop" htmlFor="allergeni-etichetta" style={{ maxWidth: 320 }}>
+            <Camera size={15} />
+            <span>{leggendo ? "Lettura dell'etichetta…" : "Fotografa l'etichetta di un prodotto"}</span>
+            <input id="allergeni-etichetta" type="file" accept="image/*,.pdf" capture="environment" onChange={leggiEtichetta} hidden disabled={leggendo} />
+          </label>
+        </div>
+
+        {!cercaAttiva && (
+          <p className="sub" style={{ margin: 0 }}>
+            Almeno due lettere. Si cerca fra i prodotti registrati da questa pagina — non fra gli arrivi
+            merce. La foto dell'etichetta si paga: usala solo se le altre vie non trovano niente.
+          </p>
+        )}
+
+        {/* La terza riga: quello che un'etichetta non ce l'ha. */}
+        <div className="row-form" style={{ margin: 0 }}>
+          <input
+            type="text"
+            placeholder="Ingrediente senza etichetta (es. gamberetti freschi)"
+            value={fresco} onChange={(e) => setFresco(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); aggiungiFresco(); } }}
+            className="note-input"
+          />
+          <button type="button" className="link-btn" disabled={salvandoFresco || !fresco.trim()}
+            onClick={aggiungiFresco}>
+            <Plus size={14} /> {salvandoFresco ? "Aggiungo…" : "Aggiungi alla voce"}
+          </button>
+        </div>
+        <p className="sub" style={{ margin: 0 }}>
+          Per quello che si compra sciolto e non ha etichetta né codice: pesce, crostacei, verdura, pane
+          del fornaio. Gli allergeni li dichiari tu nel passo 3.
+        </p>
+        {cercaAttiva && elencoProdotti.length === 0 && condivisiDaProporre.length === 0 && (
+          <p className="sub" style={{ margin: 0 }}>
+            Nessun prodotto trovato: cercalo col codice a barre o fotografa l'etichetta.
+          </p>
+        )}
+        {elencoProdotti.length > 0 && (
+          <div className="chip-grid">
+            {elencoProdotti.map((p) => (
+              <button
+                type="button" key={p.id}
+                className={"chip" + (scelti.includes(p.id) ? " chip-on" : "")}
+                onClick={() => commutaProdotto(p.id)}
+                title={p.ingredients_text || "Etichetta non ancora letta"}
+              >
+                <Package size={12} /> {p.name}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {condivisiDaProporre.length > 0 && (
+          <>
+            <p className="sub" style={{ margin: 0 }}>
+              Dal catalogo condiviso, già letti per altre aziende: gratis. Quelli col puntino sono proposte
+              non verificate — guarda l'etichetta prima di usarli.
+            </p>
+            <div className="chip-grid">
+              {condivisiDaProporre.map((c) => (
+                <button
+                  type="button" key={c.id}
+                  className={"chip chip-condiviso" + (c.verified_at ? "" : " chip-proposto")}
+                  onClick={() => importaCondiviso(c)}
+                  title={(c.ingredients_text || "Ingredienti non registrati") +
+                    (c.verified_at ? "" : " — proposto da un'altra azienda, non verificato")}
+                >
+                  <Share2 size={12} /> {c.name}{c.verified_at ? "" : " ·"}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {prodottiScelti.length > 0 && (
+          <ul className="log-list">
+            {prodottiScelti.map((p) => (
+              <li key={p.id} className={"log-row" + (modProd === p.id ? " editing" : "")} style={{ alignItems: "flex-start", flexWrap: "wrap" }}>
+                <Package size={14} color={p.allergens_checked_at ? "#2F6F4E" : "#C58A2A"} />
+                {modProd === p.id ? (
+                  <div style={{ flex: "1 1 100%", minWidth: 0 }}>
+                    <input
+                      type="text" className="full-input edit-input" placeholder="Nome del prodotto"
+                      value={mpNome} onChange={(e) => setMpNome(e.target.value)}
+                    />
+                    <textarea
+                      className="full-input nc-textarea" style={{ marginTop: 8 }}
+                      placeholder="Ingredienti, come stanno scritti sull'etichetta o sulla scheda tecnica"
+                      value={mpIngredienti} onChange={(e) => setMpIngredienti(e.target.value)}
+                    />
+                    <p className="sub" style={{ margin: "8px 0 4px" }}>
+                      Allergeni di questo prodotto — quelli che contiene davvero:
+                    </p>
+                    <div className="chip-grid">
+                      {ALLERGENI.map((a) => (
+                        <button
+                          type="button" key={"mp-" + a}
+                          className={"chip" + (mpAllergeni.includes(a) ? " chip-on" : "")}
+                          onClick={() => commutaMpAllergene(a)}
+                        >
+                          {a}
+                        </button>
+                      ))}
+                    </div>
+                    {mpErr && <span className="file-error"><AlertTriangle size={13} /> {mpErr}</span>}
+                    <div className="row-form" style={{ margin: "10px 0 0" }}>
+                      <button type="button" className="btn-primary" disabled={mpBusy}
+                        onClick={() => salvaProdotto(p)}>
+                        <Check size={15} /> {mpBusy ? "Salvataggio…" : "Salva il prodotto"}
+                      </button>
+                      <button type="button" className="link-btn" onClick={chiudiProdotto}>
+                        <X size={14} /> Annulla
+                      </button>
+                    </div>
+                    <p className="sub" style={{ margin: "8px 0 0" }}>
+                      La correzione vale per tutte le voci di menu che contengono questo prodotto:
+                      l'etichetta di un prodotto è una sola.
+                    </p>
+                  </div>
+                ) : (
+                <>
+                <span className="log-main">
+                  <strong>{p.name}</strong>
+                  <span className="log-note"> {p.ingredients_text || "etichetta non ancora letta"}</span>
+                  {!p.allergens_checked_at && p.data_source && (
+                    <span className="log-unit"> — da {p.data_source}{/^ingrediente fresco/.test(p.data_source) ? "" : ", non verificato"}</span>
+                  )}
+                  {/* Sull'ingrediente fresco il bollino rosso sarebbe una bugia:
+                      non manca niente, un'etichetta non esiste proprio e la
+                      dichiarazione e' dell'operatore per definizione. */}
+                  {(p.allergens || []).length === 0 && !/^ingrediente fresco/.test(p.data_source || "") && (
+                    <span className="badge-mancante">allergeni da indicare</span>
+                  )}
+                  {(p.allergens || []).length > 0 && (
+                    <span className="log-unit"> — {(p.allergens || []).join(", ")}</span>
+                  )}
+                </span>
+                {isConsultant && (
+                  <button type="button" className="link-btn" onClick={() => confermaECondividi(p)}>
+                    <Share2 size={13} /> {p.allergens_checked_at ? "metti nel condiviso" : "conferma e condividi"}
+                  </button>
+                )}
+                <button type="button" className="icon-btn" onClick={() => apriProdotto(p)}
+                  aria-label="Correggi il prodotto" title="Correggi nome, ingredienti e allergeni">
+                  <Pencil size={13} />
+                </button>
+                <button type="button" className="icon-btn" onClick={() => commutaProdotto(p.id)} aria-label="Togli dalla voce">
+                  <Trash2 size={13} />
+                </button>
+                </>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <p className="appt-section-label" style={{ margin: "14px 0 0" }}>3 · Allergeni da dichiarare</p>
+        <p className="sub" style={{ margin: 0 }}>
+          Accesi da soli quelli dei prodotti scelti. Gli altri li aggiungi tu.
+        </p>
+        <div className="chip-grid">
+          {ALLERGENI.map((a) => {
+            const daProdotto = prodottiScelti.some((p) => (p.allergens || []).includes(a));
+            const acceso = allergeniVoce.includes(a);
+            return (
+              <button
+                type="button" key={a}
+                className={"chip" + (acceso ? " chip-on" : "")}
+                onClick={() => commutaManuale(a)}
+                title={daProdotto ? "Letto dall'etichetta di un prodotto" : "Aggiunto a mano"}
+              >
+                {a}{daProdotto ? " ·" : ""}
+              </button>
+            );
+          })}
+        </div>
+
+        <p className="appt-section-label" style={{ margin: "14px 0 0" }}>Può contenere (tracce)</p>
+        <p className="sub" style={{ margin: 0 }}>
+          Solo la contaminazione crociata dichiarata dal produttore — «nello stesso stabilimento si
+          lavorano anche…». Non ci vanno gli allergeni che il prodotto contiene davvero: quelli stanno
+          sopra, e ripeterli qui indebolisce tutta l'informazione.
+        </p>
+        <div className="chip-grid">
+          {ALLERGENI.map((a) => {
+            const presente = allergeniVoce.includes(a);
+            const acceso = tracceVoce.includes(a);
+            return (
+              <button
+                type="button" key={"tr-" + a}
+                className={"chip" + (acceso ? " chip-on" : "")}
+                disabled={presente}
+                style={presente ? { opacity: 0.35, cursor: "not-allowed" } : undefined}
+                onClick={() => commutaTraccia(a)}
+                title={presente ? "Già dichiarato fra gli allergeni presenti" : "Possibile traccia"}
+              >
+                {a}
+              </button>
+            );
+          })}
+        </div>
+
+        {senzaEtichetta.length > 0 && (
+          <span className="file-error">
+            <AlertTriangle size={13} /> Etichetta non ancora letta per: {senzaEtichetta.map((p) => p.name).join(", ")}.
+            Gli allergeni di quei prodotti non sono verificati.
+          </span>
+        )}
+        {avviso && <span className="file-ok">{avviso}</span>}
+        {errore && <span className="file-error"><AlertTriangle size={13} /> {errore}</span>}
+
+        <input type="text" placeholder="Nota per il cliente (facoltativa)" value={note} onChange={(e) => setNote(e.target.value)} className="full-input" />
+        <div className="row-form" style={{ margin: 0 }}>
+          <button type="submit" className="btn-primary" disabled={busy || leggendo}>
+            {inModifica ? <Check size={16} /> : <Plus size={16} />} {inModifica ? "Salva le modifiche" : "Aggiungi al menu"}
+          </button>
+          {inModifica && (
+            <button type="button" className="link-btn" onClick={svuotaForm}><X size={14} /> Annulla la modifica</button>
+          )}
+        </div>
+      </form>
+
+      {/* Il menu composto finora. Prima cominciava subito dopo il modulo,
+          senza stacco: non si capiva dove finiva l'inserimento e dove
+          cominciava quello che c'e' gia' dentro. */}
+      <div className="tr-head no-print" style={{ marginTop: 20 }}>
+        <span className="appt-section-label">
+          <Package size={15} /> Voci in menu{items.length > 0 ? " (" + items.length + ")" : ""}
+        </span>
+      </div>
+
+      {loading ? (
+        <p className="sub">Caricamento…</p>
+      ) : items.length === 0 ? (
+        <div className="empty"><p>Nessuna voce registrata: finché il menu è vuoto, l'azienda non ha l'informazione scritta da mettere a disposizione del cliente.</p></div>
+      ) : (
+        <ul className="dish-list allergeni-screen-list no-print">
+          {items.map((item) => (
+            <li key={item.id} className="dish-row">
+              <div className="dish-top">
+                <strong>{item.dish}</strong>
+                <span>
+                  <button className="icon-btn" onClick={() => apriModifica(item)} aria-label="Modifica"><Pencil size={14} /></button>
+                  <button className="icon-btn" onClick={() => duplica(item)} aria-label="Duplica"><Copy size={14} /></button>
+                  <button className="icon-btn" onClick={() => remove(item.id)} aria-label="Elimina"><Trash2 size={14} /></button>
+                </span>
+              </div>
+              {item.allergens && item.allergens.length > 0 ? (
+                <div className="chip-grid">
+                  {item.allergens.map((a) => <span key={a} className="chip chip-static">{a}</span>)}
+                </div>
+              ) : <span className="none-label">Nessun allergene dichiarato</span>}
+              {item.ingredients_text && <p className="pest-note">{item.ingredients_text}</p>}
+              {item.note && <p className="pest-note">{item.note}</p>}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {items.length > 0 && (
+        <label className="check-row no-print" style={{ marginTop: 10 }}>
+          <input type="checkbox" checked={stampaIngredienti} onChange={(e) => setStampaIngredienti(e.target.checked)} />
+          <span>
+            Stampa anche gli ingredienti sotto ogni voce. Per gli alimenti non preimballati la legge
+            chiede solo gli allergeni; gli ingredienti sono un'informazione in più, obbligatoria se il
+            prodotto viene preincartato per la vendita diretta.
+          </span>
+        </label>
+      )}
+
+      {items.length > 0 && (
+        <div className="print-only print-menu">
+          <div className="print-menu-testata">
+            {company?.name && <p className="print-menu-azienda">{company.name}</p>}
+            <hr className="print-menu-filetto" />
+            <h1 className="print-menu-titolo">Menu</h1>
+            <p className="print-menu-sottotitolo">con evidenza degli allergeni</p>
+            <p className="print-menu-rombo">&#9670;</p>
+          </div>
+
+          {/* Su due colonne solo quando le voci sono tante: con tre piatti
+              una colonna sola, centrata, e' quello che fa un menu vero. */}
+          <div className={"print-menu-voci" + (items.length > 8 ? " due-colonne" : "")}>
+            {items.map((item) => (
+              <div key={item.id} className="print-menu-voce">
+                <h3>{item.dish}</h3>
+                {item.allergens && item.allergens.length > 0 ? (
+                  <p className="print-menu-allergeni">
+                    {item.allergens.map((a, i) => (
+                      <React.Fragment key={a}>
+                        {i > 0 && <span className="sep">&middot;</span>}
+                        {a}
+                      </React.Fragment>
+                    ))}
+                  </p>
+                ) : (
+                  <p className="print-menu-nessuno">Senza allergeni dichiarati</p>
+                )}
+                {item.traces && item.traces.length > 0 && (
+                  <p className="print-menu-tracce">Può contenere: {item.traces.join(", ").toLowerCase()}</p>
+                )}
+                {stampaIngredienti && item.ingredients_text && (
+                  <div className="print-menu-ingredienti">
+                    {item.ingredients_text.split("\n").map((riga, i) => {
+                      const taglio = riga.indexOf(":");
+                      const componente = taglio > 0 ? riga.slice(0, taglio) : riga;
+                      const dettaglio = taglio > 0 ? riga.slice(taglio + 1).trim() : "";
+                      return (
+                        <p key={i}>
+                          <strong>{componente}</strong>{dettaglio ? ": " + dettaglio : ""}
+                        </p>
+                      );
+                    })}
+                  </div>
+                )}
+                {item.note && <p className="print-menu-nota">{item.note}</p>}
+              </div>
+            ))}
+          </div>
+
+          <div className="print-menu-piede">
+            <hr className="print-menu-filetto" />
+            <p className="print-menu-legale">
+              Informazione sugli allergeni resa ai sensi dell'art. 44 del Reg. (UE) n. 1169/2011 e dell'art. 19
+              del D.Lgs. n. 231/2017. Sono indicate le sostanze elencate nell'Allegato II del Regolamento che
+              provocano allergie o intolleranze. Le informazioni derivano dalle etichette e dalle schede tecniche
+              dei prodotti impiegati, conservate in azienda e disponibili su richiesta. Per ulteriori
+              informazioni rivolgersi al personale.
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
