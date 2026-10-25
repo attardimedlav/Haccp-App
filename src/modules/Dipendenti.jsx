@@ -5,6 +5,7 @@ import { useAuth } from "../AuthContext";
 import { dataNascitaDaCf } from "../utils/codiceFiscale";
 import { supabase } from "../supabaseClient";
 import { SECURITY_ROLE_OPTIONS } from "./Organigramma";
+import { DATORE_ROLES } from "./SicurezzaLavoro";
 import { generateNominaAttachment, findRlsName, findDatoreName } from "../utils/nominaTemplates";
 
 // Verifica di un codice fiscale. NON lo genera: il codice fiscale vero lo
@@ -216,6 +217,7 @@ export default function Dipendenti() {
   const [eCf, setECf] = useState("");
   const [eMansione, setEMansione] = useState("");
   const [eReparto, setEReparto] = useState("");
+  const [eRuoloSicurezza, setERuoloSicurezza] = useState("Dipendente");
   const [eBusy, setEBusy] = useState(false);
   const [eErr, setEErr] = useState("");
 
@@ -296,6 +298,7 @@ export default function Dipendenti() {
     setECf(emp.tax_code || "");
     setEMansione(emp.job_role || "");
     setEReparto(emp.department || "");
+    setERuoloSicurezza(emp.security_role || "Dipendente");
     setEErr("");
   };
 
@@ -327,6 +330,12 @@ export default function Dipendenti() {
         tax_code: pulisci(eCf).toUpperCase() || null,
         job_role: pulisci(eMansione) || null,
         department: pulisci(eReparto) || null,
+        // Il ruolo di sicurezza si corregge da qui. Prima si poteva solo
+        // scegliere all'inserimento: un titolare registrato per sbaglio come
+        // «Dipendente» restava tale, e da li' rientrava fra i lavoratori nel
+        // quadro della formazione. E' successo su BELLO GIUSEPPE il
+        // 25/10/2026, e si e' dovuto correggere con una query.
+        security_role: eRuoloSicurezza || "Dipendente",
       },
     });
     setEBusy(false);
@@ -423,6 +432,10 @@ export default function Dipendenti() {
                       className="note-input edit-input" placeholder="Mansione" aria-label="Mansione" />
                     <input type="text" value={eReparto} onChange={(e) => setEReparto(e.target.value)}
                       className="note-input edit-input" placeholder="Reparto" aria-label="Reparto" />
+                    <select value={eRuoloSicurezza} aria-label="Ruolo di sicurezza"
+                      onChange={(e) => setERuoloSicurezza(e.target.value)} className="edit-input">
+                      {SECURITY_ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                    </select>
                     <button className="icon-btn icon-btn-ok" onClick={() => salvaModifica(item)}
                       disabled={eBusy} aria-label="Salva"><Check size={15} /></button>
                     <button className="icon-btn" onClick={chiudiModifica} disabled={eBusy}
@@ -455,6 +468,17 @@ export default function Dipendenti() {
                           );
                         })()
                       : <span className="log-cf log-cf-manca">codice fiscale mancante</span>}
+                    {/* Il ruolo di sicurezza si legge dall'elenco.
+                        Senza, dopo l'inserimento non si capiva piu' chi fosse
+                        il datore di lavoro — e il datore e' l'unico che deve
+                        restare fuori dalla formazione dei lavoratori e dalla
+                        sorveglianza sanitaria, quindi e' proprio il dato che
+                        si deve poter controllare a colpo d'occhio. */}
+                    {item.security_role && item.security_role !== "Dipendente" && (
+                      <span className={"lot-tag" + (DATORE_ROLES.includes(item.security_role) ? " pill-ok" : "")}>
+                        {item.security_role}
+                      </span>
+                    )}
                     {item.job_role && <span className="log-unit">{item.job_role}</span>}
                     {item.department && <span className="log-note">{item.department}</span>}
                     <button className="icon-btn" onClick={() => apriModifica(item)}
