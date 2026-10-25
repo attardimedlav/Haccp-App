@@ -62,6 +62,11 @@ export default function Allergeni() {
   const [dish, setDish] = useState("");
   const [scelti, setScelti] = useState([]);      // id dei prodotti che compongono la voce
   const [manuali, setManuali] = useState([]);    // allergeni aggiunti o tolti a mano
+  // Le tracce stanno in un elenco a parte, mai insieme agli allergeni
+  // presenti: i primi sono informazione obbligatoria, le seconde
+  // volontaria, e unirle fa dire al menu che la guastella contiene latte
+  // e uova quando invece li puo' contenere.
+  const [tracce, setTracce] = useState([]);
   const [note, setNote] = useState("");
   const [cerca, setCerca] = useState("");
   // La terza via: l'ingrediente fresco, senza etichetta e senza codice.
@@ -88,6 +93,13 @@ export default function Allergeni() {
     ...manuali,
   ])].sort((a, b) => ALLERGENI.indexOf(a) - ALLERGENI.indexOf(b));
 
+  // Le tracce: quelle spuntate a mano, meno quelle che risultano presenti —
+  // se una sostanza c'e' davvero, dirla anche come possibile traccia
+  // indebolisce l'informazione invece di rafforzarla.
+  const tracceVoce = tracce
+    .filter((a) => !allergeniVoce.includes(a))
+    .sort((a, b) => ALLERGENI.indexOf(a) - ALLERGENI.indexOf(b));
+
   // Una riga per componente: il cornetto, la crema, la granella. Ognuno con i
   // propri ingredienti, come stanno scritti sulla sua etichetta. In un filo
   // unico separato da puntini, su tre componenti, non si capiva più niente.
@@ -101,6 +113,13 @@ export default function Allergeni() {
     setScelti((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
   const commutaManuale = (a) =>
     setManuali((m) => (m.includes(a) ? m.filter((x) => x !== a) : [...m, a]));
+  };
+
+  // Una sostanza non puo' essere insieme presente e possibile traccia:
+  // accendendola di qua si spegne di la'.
+  const commutaTraccia = (a) => {
+    setTracce((t) => (t.includes(a) ? t.filter((x) => x !== a) : [...t, a]));
+    setManuali((m) => m.filter((x) => x !== a));
 
   // Foto dell'etichetta: crea il prodotto nel catalogo con ingredienti e
   // allergeni letti, e lo aggiunge subito alla voce in composizione. È il
@@ -393,7 +412,7 @@ export default function Allergeni() {
   };
 
   const svuotaForm = () => {
-    setDish(""); setScelti([]); setManuali([]); setNote("");
+    setDish(""); setScelti([]); setManuali([]); setTracce([]); setNote("");
     setAvviso(""); setErrore(""); setCerca(""); setEan(""); setInModifica(null);
   };
 
@@ -404,6 +423,7 @@ export default function Allergeni() {
     setDish(item.dish || "");
     setScelti(item.product_ids || []);
     setManuali(item.allergens || []);
+    setTracce(item.traces || []);
     setNote(item.note || "");
     setCerca(""); setEan(""); setErrore(""); setAvviso("");
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -416,6 +436,7 @@ export default function Allergeni() {
     setDish(`${item.dish} (variante)`);
     setScelti(item.product_ids || []);
     setManuali(item.allergens || []);
+    setTracce(item.traces || []);
     setNote(item.note || "");
     setCerca(""); setEan(""); setErrore("");
     setAvviso("Copia della voce: cambia il nome e correggi i componenti, poi aggiungila al menu.");
@@ -429,6 +450,7 @@ export default function Allergeni() {
     const campi = {
       dish: dish.trim(),
       allergens: allergeniVoce,
+      traces: tracceVoce,
       product_ids: scelti,
       ingredients_text: ingredientiVoce || null,
       note: note.trim() || null,
@@ -694,6 +716,31 @@ export default function Allergeni() {
           })}
         </div>
 
+        <p className="appt-section-label" style={{ margin: "14px 0 0" }}>Può contenere (tracce)</p>
+        <p className="sub" style={{ margin: 0 }}>
+          Solo la contaminazione crociata dichiarata dal produttore — «nello stesso stabilimento si
+          lavorano anche…». Non ci vanno gli allergeni che il prodotto contiene davvero: quelli stanno
+          sopra, e ripeterli qui indebolisce tutta l'informazione.
+        </p>
+        <div className="chip-grid">
+          {ALLERGENI.map((a) => {
+            const presente = allergeniVoce.includes(a);
+            const acceso = tracceVoce.includes(a);
+            return (
+              <button
+                type="button" key={"tr-" + a}
+                className={"chip" + (acceso ? " chip-on" : "")}
+                disabled={presente}
+                style={presente ? { opacity: 0.35, cursor: "not-allowed" } : undefined}
+                onClick={() => commutaTraccia(a)}
+                title={presente ? "Già dichiarato fra gli allergeni presenti" : "Possibile traccia"}
+              >
+                {a}
+              </button>
+            );
+          })}
+        </div>
+
         {senzaEtichetta.length > 0 && (
           <span className="file-error">
             <AlertTriangle size={13} /> Etichetta non ancora letta per: {senzaEtichetta.map((p) => p.name).join(", ")}.
@@ -789,6 +836,9 @@ export default function Allergeni() {
                   </p>
                 ) : (
                   <p className="print-menu-nessuno">Senza allergeni dichiarati</p>
+                )}
+                {item.traces && item.traces.length > 0 && (
+                  <p className="print-menu-tracce">Può contenere: {item.traces.join(", ").toLowerCase()}</p>
                 )}
                 {stampaIngredienti && item.ingredients_text && (
                   <div className="print-menu-ingredienti">
