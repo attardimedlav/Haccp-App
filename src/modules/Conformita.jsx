@@ -2,7 +2,7 @@ import React from "react";
 import { AlertTriangle, CheckCircle2, ShieldAlert, Clock } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
-import { expiryInfo, MEDICO_ROLE, FORMAZIONE_ROLE } from "./SicurezzaLavoro";
+import { expiryInfo, MEDICO_ROLE, FORMAZIONE_ROLE, eDatoreDi } from "./SicurezzaLavoro";
 
 // Controllo di conformità: elenca gli adempimenti del D.Lgs. 81/08 che per
 // questa azienda risultano mancanti, scaduti o in scadenza.
@@ -121,7 +121,10 @@ export default function Conformita() {
 
   // --- Formazione dei lavoratori ---
   // Il datore di lavoro non rientra qui: ha il proprio percorso formativo.
-  const lavoratori = employees.filter((e) => !DATORE_ROLES.includes(e.security_role));
+  // Il datore non e' un lavoratore: riconosciuto dall'anagrafica e dalle
+  // nomine insieme, come in Panoramica e nel quadro della formazione.
+  const eDatore = eDatoreDi(employees, appointments);
+  const lavoratori = employees.filter((e) => !eDatore(e));
   const nomineFormazione = appointments.filter((a) => a.role === FORMAZIONE_ROLE);
 
   lavoratori.forEach((e) => {

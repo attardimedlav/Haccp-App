@@ -134,6 +134,40 @@ export const FORMAZIONE_ROLE = "Formazione Generale e Specifica Lavoratori";
 // obblighi riguardano i lavoratori, non lui.
 export const DATORE_ROLES = ["Datore di Lavoro", "RSPP Datore di Lavoro"];
 
+// Chi e' il datore di lavoro, riconosciuto una volta sola per tutta l'app.
+//
+// Il datore non e' un lavoratore ai sensi dell'art. 2 c. 1 lett. a del
+// D.Lgs. 81/08: la formazione dell'art. 37 e la sorveglianza sanitaria non
+// lo riguardano, e la sua formazione e' un'altra cosa — 16 ore da datore di
+// lavoro, piu' il modulo RSPP se assume il ruolo.
+//
+// Riconoscerlo dal solo `security_role` dell'anagrafica non basta, e questo
+// e' il difetto trovato il 25/10/2026 su BELLO GIUSEPPE: il titolare era
+// escluso dall'elenco dei dipendenti ma rientrava dalle nomine, perche'
+// qualcuno gli aveva intestato una nomina di formazione lavoratori. Nel
+// quadro compariva fra i lavoratori con «mai svolto» — cioe' l'azienda
+// dichiarava da sola un'inadempienza che non esiste.
+//
+// Qui si guarda da tutte e due le parti, e il confronto ignora l'ordine del
+// nome perche' su attestati e nomine si trova sia "Bello Giuseppe" sia
+// "Giuseppe Bello".
+export function eDatoreDi(employees, appointments) {
+  const chiave = (t) => String(t || "").trim().toLowerCase().split(/\s+/).sort().join(" ");
+  const nomi = new Set();
+  (appointments || [])
+    .filter((a) => DATORE_ROLES.includes(a.role))
+    .forEach((a) => { const k = chiave(a.person_name); if (k) nomi.add(k); });
+  (employees || [])
+    .filter((e) => DATORE_ROLES.includes(e.security_role))
+    .forEach((e) => { const k = chiave(`${e.first_name || ""} ${e.last_name || ""}`); if (k) nomi.add(k); });
+  return function (x) {
+    if (!x) return false;
+    if (typeof x === "string") return nomi.has(chiave(x));
+    if (DATORE_ROLES.includes(x.security_role)) return true;
+    return nomi.has(chiave(`${x.first_name || ""} ${x.last_name || ""}`));
+  };
+}
+
 const ORGANIGRAMMA_SUB_TAB = { id: "organigramma", label: "Organigramma", icon: Network };
 const CONFORMITA_SUB_TAB = { id: "conformita", label: "Conformità", icon: ShieldAlert };
 
@@ -912,12 +946,12 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
   // presenti solo nelle nomine (esterni, o persone tolte dall'elenco).
   const quadroRigheFormazione = () => {
     const perNome = new Map();
+    // Un riconoscitore solo, usato su tutte e due le strade da cui un nome
+    // puo' entrare qui: l'anagrafica e le nomine. Prima il filtro stava solo
+    // sulla prima, e il datore rientrava dalla seconda.
+    const eDatore = eDatoreDi(employees, appointments);
     employees
-      // Il datore di lavoro non e' un lavoratore ai sensi dell'art. 2 c. 1
-      // lett. a del D.Lgs. 81/08: la formazione dell'art. 37 non lo riguarda.
-      // La sua e' un'altra - 16 ore da datore di lavoro, piu' il modulo RSPP
-      // se assume il ruolo - e compare nel riquadro RSPP.
-      .filter((e) => !DATORE_ROLES.includes(e.security_role))
+      .filter((e) => !eDatore(e))
       .forEach((e) => {
         const nome = `${e.first_name} ${e.last_name}`.trim();
         if (nome && !perNome.has(nome)) perNome.set(nome, { key: "emp-" + e.id, name: nome, appts: [] });
@@ -927,6 +961,9 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
       .forEach((a) => {
         const nome = (a.person_name || "").trim();
         if (!nome) return;
+        // Il datore non entra mai fra i lavoratori, nemmeno se gli hanno
+        // intestato per sbaglio una nomina di formazione lavoratori.
+        if (eDatore(nome)) return;
         if (!perNome.has(nome)) perNome.set(nome, { key: "app-" + a.id, name: nome, appts: [] });
         perNome.get(nome).appts.push(a);
       });
