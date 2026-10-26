@@ -122,6 +122,10 @@ export default function Configurazione({ onVai, subTabIniziale }) {
   const [rteProduction, setRteProduction] = useState(false);
   const [closingWeekdays, setClosingWeekdays] = useState([]);
   const [reminderHour, setReminderHour] = useState(8);
+  // La seconda fascia: le temperature si leggono all'apertura, le pulizie si
+  // registrano alla chiusura. Con un orario solo una delle due arriva sempre
+  // nel momento sbagliato.
+  const [reminderHourEvening, setReminderHourEvening] = useState(20);
 
   // I dati che servono a costruire i promemoria del calendario: il piano
   // di pulizia, le vasche, il piano analitico con i referti e le
@@ -220,6 +224,8 @@ export default function Configurazione({ onVai, subTabIniziale }) {
       setRteProduction(!!company.rte_production);
       setClosingWeekdays(Array.isArray(company.closing_weekdays) ? company.closing_weekdays.map(Number) : []);
       setReminderHour(Number(company.reminder_hour) || 8);
+      setReminderHourEvening(Number(company.reminder_hour_evening) || 20);
+      setReminderHourEvening(Number(company.reminder_hour_evening) || 20);
       setHasHood(company.has_hood !== false);
       setIceMachineDays(String(company.ice_machine_cleaning_days || 30));
       setManualSource(company.haccp_manual_source === "esterno" ? "esterno" : "app");
@@ -277,6 +283,7 @@ export default function Configurazione({ onVai, subTabIniziale }) {
     rte_production: rteProduction,
     closing_weekdays: closingWeekdays,
     reminder_hour: Number(reminderHour) || 8,
+    reminder_hour_evening: Number(reminderHourEvening) || 20,
     has_hood: hasHood,
     ice_machine_cleaning_days: Math.max(1, parseInt(iceMachineDays, 10) || 30),
     haccp_manual_source: manualSource,
@@ -532,7 +539,12 @@ export default function Configurazione({ onVai, subTabIniziale }) {
   // Si legge l'ora dal campo in pagina, non da quella salvata, cosi'
   // l'elenco cambia mentre la si modifica.
   const datiCalendario = {
-    azienda: { ...(company || {}), closing_weekdays: closingWeekdays, reminder_hour: Number(reminderHour) || 8 },
+    azienda: {
+      ...(company || {}),
+      closing_weekdays: closingWeekdays,
+      reminder_hour: Number(reminderHour) || 8,
+      reminder_hour_evening: Number(reminderHourEvening) || 20,
+    },
     piano: piano.items,
     vasche: vasche.items,
     controlliVasche: controlliVasche.items,
@@ -1156,15 +1168,29 @@ export default function Configurazione({ onVai, subTabIniziale }) {
                 <p className="sub">Scarica il file e aprilo con l'app Calendario del telefono (Google, Apple o Outlook). Il calendario avvisa da solo, anche ad app chiusa — non serve un server.</p>
               </div>
             </div>
-            <label className="field-label" style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
-              Ora dell'avviso
-              <input
-                type="number" min="0" max="23" value={reminderHour} disabled={!isConsultant}
-                onChange={(e) => setReminderHour(e.target.value)}
-                className="full-input" style={{ width: 80 }}
-              />
-              <span className="sub">si salva con la configurazione</span>
-            </label>
+            <div className="config-grid-2" style={{ marginBottom: 8 }}>
+              <label className="field-label" style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                Avviso del mattino
+                <input
+                  type="number" min="0" max="23" value={reminderHour} disabled={!isConsultant}
+                  onChange={(e) => setReminderHour(e.target.value)}
+                  className="full-input" style={{ width: 80 }}
+                />
+              </label>
+              <label className="field-label" style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                Avviso della sera
+                <input
+                  type="number" min="0" max="23" value={reminderHourEvening} disabled={!isConsultant}
+                  onChange={(e) => setReminderHourEvening(e.target.value)}
+                  className="full-input" style={{ width: 80 }}
+                />
+              </label>
+            </div>
+            <p className="sub" style={{ marginTop: 0, marginBottom: 8 }}>
+              Due fasce, perche' i controlli non si fanno tutti alla stessa ora: al mattino la
+              lettura delle temperature, il giro degli infestanti e le scadenze programmate; alla
+              sera le pulizie, che si registrano a fine turno. Si salvano con la configurazione.
+            </p>
             <ul className="reminder-list">
               {datiPromemoria.map((ev) => (
                 <li key={ev.key}>{ev.quando} — {ev.titolo}</li>
