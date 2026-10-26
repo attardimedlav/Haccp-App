@@ -912,7 +912,12 @@ export function corpoManuale(dossier) {
   b.push(punto("si esegue un campionamento straordinario quando cambia il processo, quando si avvia una produzione nuova, dopo una non conformità rilevata o una segnalazione, e in caso di esito non conforme la frequenza viene raddoppiata per l'anno successivo."));
   b.push(p("La verifica dell'efficacia della pulizia è organizzata su due livelli. Due volte l'anno il consulente esegue un controllo rapido sui residui proteici delle superfici, con lettura immediata e redazione di verbale: si effettua dopo detersione e risciacquo e prima della disinfezione, perché è la pulizia che si sta verificando, e un esito non conforme comporta la ripetizione della pulizia sul punto interessato e il riesame della procedura. Periodicamente, un tampone di laboratorio con esame microbiologico conferma che quella verifica stia misurando la cosa giusta."));
   b.push(p(`Il tampone di laboratorio è eseguito ${azienda.rte_production ? "ogni anno, perché l'impresa produce alimenti pronti al consumo che possono favorire la crescita di Listeria monocytogenes e per essi il campionamento delle aree di lavorazione è previsto dall'art. 5, comma 2 del Reg. (CE) n. 2073/2005" : "ogni due anni: l'impresa non produce alimenti pronti al consumo che favoriscano la crescita di Listeria monocytogenes, e per le lavorazioni svolte la verifica rapida semestrale sui residui proteici è lo strumento con cui l'efficacia della sanificazione viene tenuta sotto controllo durante l'anno"}.`));
-  b.push(p("Le superfici campionate sono le stesse a ogni tornata: l'andamento nel tempo dice più del singolo risultato. Per le superfici la normativa non fissa limiti numerici; i valori di riferimento sono quelli adottati nel presente piano d'intesa con il laboratorio incaricato, e la presenza di patogeni su una superficie a contatto con gli alimenti comporta comunque un'azione correttiva immediata.", { size: 20 }));
+  // La verifica rapida è semestrale e tocca più superfici: lì l'andamento nel
+  // tempo è un argomento vero. Il tampone di laboratorio no — fra una tornata
+  // e l'altra passano mesi o anni, e due punti lontani non sono una curva. Le
+  // superfici restano fisse per un'altra ragione: che i risultati siano
+  // confrontabili e che si guardino sempre i punti più critici.
+  b.push(p("Le superfici campionate sono le stesse a ogni tornata, perché i risultati siano confrontabili e perché il controllo ricada sempre sui punti più esposti; l'andamento nel tempo è letto sulla verifica rapida semestrale, che è il controllo frequente. Per le superfici la normativa non fissa limiti numerici; i valori di riferimento sono quelli adottati nel presente piano d'intesa con il laboratorio incaricato, e la presenza di patogeni su una superficie a contatto con gli alimenti comporta comunque un'azione correttiva immediata.", { size: 20 }));
   b.push(par("", { after: 140 }));
   b.push(h2("9.2 Programma dei controlli"));
 
@@ -1119,18 +1124,17 @@ export function corpoManuale(dossier) {
   b.push(p("Si allegano inoltre: planimetria dei locali; documento di registrazione sanitaria; schede tecniche e di sicurezza dei prodotti di detergenza; schede tecniche o etichette dei prodotti alimentari acquistati con l'indicazione degli allergeni; dichiarazioni di conformità dei MOCA; attestati di formazione; rapporti di prova delle analisi; documentazione degli interventi di disinfestazione e di manutenzione."));
 
   // ---------------- 11. dati da completare ----------------
-  b.push(h1("13. Dati da completare a cura dell'azienda"));
-  b.push(p("I dati che seguono sono quelli che il manuale non può fissare in astratto e che il titolare completa alla prima emissione, aggiornandoli a ogni variazione."));
-  b.push(scheda([
-    ["Nominativi degli addetti", "________________________________________"],
-    ["Ditta autorizzata al ritiro degli oli esausti", "________________________________________"],
-    ["Ditta di disinfestazione, se incaricata", "________________________________________"],
-    ["Laboratorio di analisi incaricato", "________________________________________"],
-    ["Elenco dei fornitori di prodotti pronti", "________________________________________"],
-  ]));
-
-  // ---------------- 12. verifica e firme ----------------
-  b.push(h1("14. Verifica, riesame e approvazione"));
+  // Il capitolo «Dati da completare a cura dell'azienda» è stato tolto il
+  // 26/10/2026. Erano cinque righe puntinate — addetti, ditta degli oli
+  // esausti, disinfestazione, laboratorio, fornitori di prodotti pronti — da
+  // riempire a penna. Tutti dati che l'app già tiene, e meglio: gli addetti
+  // stanno in Dipendenti, i fornitori in Fornitori con le loro dichiarazioni
+  // allegate, il laboratorio e le ditte nelle registrazioni dei controlli e
+  // degli interventi. Un manuale che li richiede di nuovo su carta crea un
+  // secondo posto dove scriverli, che è il modo sicuro per averne due
+  // versioni diverse; e un modulo in bianco, in ispezione, si legge come una
+  // cosa non fatta.
+  b.push(h1("13. Verifica, riesame e approvazione"));
   [
     "Riesame mensile delle registrazioni da parte del responsabile dell'autocontrollo.",
     "Riesame completo del sistema almeno annuale, anticipato a ogni modifica di locali, attrezzature, lavorazioni o fornitori.",
