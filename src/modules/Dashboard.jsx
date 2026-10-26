@@ -313,9 +313,16 @@ export default function Dashboard({ goTo, openWorkSafety }) {
 
     // Pulizie di ogni giorno: una riga sola con il conteggio, non una per
     // voce, altrimenti cinque righe di pulizie coprono le scadenze serie.
-    const quotidiane = piano.items.filter((r) =>
-      r.active !== false && Number(r.frequency_days) === 1 &&
-      (!r.requires_flag || company?.[r.requires_flag]));
+    // Le righe del piano che valgono per QUESTA azienda. Si filtra una volta
+    // sola e si usa dappertutto: il filtro c'era sulle pulizie di oggi ma non
+    // sul riepilogo per area, e così la Panoramica di un bar senza friggitrice
+    // e senza macchina del ghiaccio chiedeva il cambio dell'olio e la pulizia
+    // del deflettore. Un avviso che non si può soddisfare insegna a ignorare
+    // anche gli altri.
+    const pianoAttivo = piano.items.filter((r) => !r.requires_flag || company?.[r.requires_flag]);
+
+    const quotidiane = pianoAttivo.filter((r) =>
+      r.active !== false && Number(r.frequency_days) === 1);
     const quotidianeFatte = quotidiane.filter((r) => san.items.some((s) =>
       s.area === r.area && (s.operation || "") === r.operation &&
       String(s.created_at).slice(0, 10) === oggi)).length;
@@ -330,7 +337,7 @@ export default function Dashboard({ goTo, openWorkSafety }) {
     // Pulizie fuori frequenza, raggruppate per area: una riga per area con
     // il ritardo peggiore. Elencarle una per una coprirebbe le scadenze
     // serie sotto dieci voci di pulizie.
-    riassuntoPerArea(piano.items, san.items).forEach((a) => haccpIssues.push({
+    riassuntoPerArea(pianoAttivo, san.items).forEach((a) => haccpIssues.push({
       key: "pulizie-" + a.area, tab: "sanificazione", icon: SprayCan,
       titolo: "Pulizie in ritardo — " + a.area,
       dettaglio: a.peggiore
