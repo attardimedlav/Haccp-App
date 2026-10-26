@@ -403,10 +403,23 @@ export function controlli(dossier) {
   return avvisi;
 }
 
+// L'esempio del capitolo 10.4, uno per settore: la catena dal lotto in
+// entrata al prodotto servito raccontata con le lavorazioni che quell'azienda
+// fa davvero.
+const ESEMPIO_RINTRACCIABILITA = {
+  bar_ristorazione: "Arriva una partita di prosciutto cotto con il suo lotto, che viene registrato all'ingresso. Con quel prosciutto si prepara la farcitura dei panini della giornata, che riceve un lotto interno e nella cui scheda compare il lotto del prosciutto. I panini preparati e messi in vetrina richiamano nella loro scheda quel lotto interno. Se il fornitore richiama il lotto di prosciutto, dalla sua scheda si arriva alla farcitura e da questa ai panini: si ritirano quelli, e solo quelli, senza dover eliminare tutto il banco.",
+  pasticceria: "Arriva una partita di ricotta con il suo lotto, che viene registrato all'ingresso. Con quella ricotta si prepara una farcitura, che riceve un lotto interno e nella cui scheda compare il lotto della ricotta. Con la farcitura si producono i dolci della giornata, che nella loro scheda richiamano il lotto della farcitura. Se il caseificio richiama il lotto di ricotta, dalla sua scheda si arriva alla farcitura e da questa ai dolci: si ritirano quelli, e solo quelli.",
+  panificio: "Arriva una partita di farina con il suo lotto, che viene registrata all'ingresso. Con quella farina si prepara l'impasto della giornata, che riceve un lotto interno e nella cui scheda compare il lotto della farina. Il pane e le pizze prodotti da quell'impasto richiamano nella loro scheda il lotto interno. Se il molino richiama il lotto di farina, dalla sua scheda si arriva all'impasto e da questo alle infornate della giornata: si ritirano quelle, e solo quelle.",
+  macelleria: "Arriva una partita di carne bovina con il suo lotto, che viene registrata all'ingresso. Da quel taglio si prepara il macinato, che riceve un lotto interno e nella cui scheda compare il lotto della carne in entrata. Gli hamburger e le preparazioni ottenute dal macinato richiamano nella loro scheda quel lotto interno. Se il macello richiama il lotto, dalla sua scheda si arriva al macinato e da questo alle preparazioni esposte: si ritirano quelle, e solo quelle.",
+  pescheria: "Arriva una partita di pesce con il suo lotto e la documentazione di provenienza, registrata all'ingresso. Da quella partita si ricavano i filetti, che ricevono un lotto interno e nella cui scheda compare il lotto in entrata. Le preparazioni ottenute dai filetti richiamano nella loro scheda quel lotto interno. Se il fornitore richiama la partita, dalla sua scheda si arriva ai filetti e da questi alle preparazioni: si ritirano quelle, e solo quelle.",
+};
+
 // --- il documento -------------------------------------------------------
 
 export function corpoManuale(dossier) {
-  const {
+  // `let` e non `const`: subito sotto l'azienda viene ricopiata con i nomi
+  // ripuliti dagli spazi in coda.
+  let {
     azienda = {},
     registrazione = null,
     impianti = [],
@@ -415,8 +428,21 @@ export function corpoManuale(dossier) {
     procedure = [],
     piano = [],
     analisi = [],
+    dipendenti = [],
     diagrammi = {},
   } = dossier;
+
+  // Gli spazi in coda ai nomi arrivano dall'anagrafica e si vedono: «è Lipari
+  // Domenico .», «Lipari Domenico ____________» sulla riga della firma. Si
+  // tolgono qui, una volta, invece che in venti punti del documento.
+  azienda = {
+    ...azienda,
+    name: String(azienda.name || "").trim(),
+    haccp_manager: String(azienda.haccp_manager || "").trim(),
+    consultant_name: String(azienda.consultant_name || "").trim(),
+    sede_legale: String(azienda.sede_legale || "").trim(),
+    sede_operativa: String(azienda.sede_operativa || "").trim(),
+  };
 
   const inApp = azienda.haccp_records_mode !== "cartaceo";
   // I cicli del manuale sono quelli scelti per questa azienda, nell'ordine
@@ -581,7 +607,11 @@ export function corpoManuale(dossier) {
     "Direttiva 2011/91/UE — indicazioni che consentono di identificare la partita (lotto) alla quale appartiene una derrata alimentare.",
     "D.Lgs. 15 dicembre 2017, n. 231 — sanzioni per la violazione del Reg. (UE) 1169/2011 e disciplina del lotto e degli alimenti non preimballati.",
     "D.Lgs. 23 febbraio 2023, n. 18 — qualità delle acque destinate al consumo umano.",
-    "Circolare del Ministero della Sanità 11 gennaio 1991, n. 1 — oli e grassi impiegati per la frittura.",
+    // La circolare sugli oli di frittura si cita solo dove si frigge: un
+    // riferimento normativo che non riguarda l'attività non è un di più
+    // innocuo, è una norma che il manuale dichiara di applicare e che in
+    // ispezione qualcuno può chiedere come viene applicata.
+    ...(azienda.has_fryer ? ["Circolare del Ministero della Sanità 11 gennaio 1991, n. 1 — oli e grassi impiegati per la frittura."] : []),
     "Normativa regionale in materia di formazione degli addetti alla manipolazione degli alimenti.",
   ].forEach((t) => b.push(punto(t)));
 
@@ -600,6 +630,22 @@ export function corpoManuale(dossier) {
   ].forEach((t) => b.push(punto(t)));
 
   // ---------------- 5. sviluppo ----------------
+  //
+  // Gli addetti alla manipolazione vengono da Dipendenti. Il datore di lavoro
+  // resta fuori dall'elenco: è già nominato nelle due righe sopra, come
+  // titolare e come responsabile del piano, e ripeterlo fra gli addetti è
+  // l'errore che altrove abbiamo già corretto — il datore di lavoro non è un
+  // lavoratore. Se l'azienda non ha dipendenti registrati resta la riga
+  // puntinata, che qui è corretta: vuol dire che gli addetti non ci sono
+  // ancora, non che qualcuno ha dimenticato di scriverli.
+  const chiaveNome = (t) => String(t || "").trim().toLowerCase().split(/\s+/).sort().join(" ");
+  const chiaveDatore = chiaveNome(azienda.haccp_manager);
+  const addetti = (dipendenti || [])
+    .map((d) => `${String(d.first_name || "").trim()} ${String(d.last_name || "").trim()}`.trim())
+    .filter(Boolean)
+    .filter((n) => chiaveNome(n) !== chiaveDatore)
+    .join("; ");
+
   b.push(h1("5. Sviluppo del piano di autocontrollo"));
   b.push(h2("5.1 Gruppo di lavoro HACCP"));
   b.push(p("Il gruppo di lavoro è costituito dal titolare, che assume la funzione di responsabile delle procedure di autocontrollo, dagli addetti alla manipolazione degli alimenti e dal consulente tecnico incaricato. Tutti gli operatori che manipolano alimenti sono formati alla manipolazione dei prodotti alimentari e ai rischi della fase di cui sono responsabili."));
@@ -609,7 +655,7 @@ export function corpoManuale(dossier) {
      "Responsabile ultimo della sicurezza degli alimenti: garantisce risorse, attrezzature e formazione, approva il manuale, decide sul destino dei prodotti non conformi"],
     ["Responsabile del piano di autocontrollo", azienda.haccp_manager || "____________________",
      "Applica e fa applicare il manuale, verifica le registrazioni, gestisce le non conformità e i rapporti con l'Autorità competente"],
-    ["Addetti alla manipolazione", "____________________",
+    ["Addetti alla manipolazione", addetti || "____________________",
      "Applicano le procedure di igiene, eseguono le registrazioni di competenza, segnalano ogni anomalia al responsabile"],
     ["Consulenza tecnica", azienda.consultant_name || "____________________",
      "Collabora con il datore di lavoro alla stesura e all'aggiornamento del manuale, eroga la formazione, effettua le verifiche periodiche del sistema"],
@@ -777,7 +823,9 @@ export function corpoManuale(dossier) {
     b.push(par("", { after: 120 }));
     b.push(griglia(["Categoria di prodotto", "Impiego"], [
       ["Detergente per superfici e utensili", "Rimozione dello sporco e dei residui organici da piani di lavoro, banchi, lavelli, utensili e attrezzature smontabili."],
-      ["Detergente sgrassante", "Attrezzature, cappe, filtri, friggitrici e superfici con residui grassi."],
+      ["Detergente sgrassante", azienda.has_fryer
+        ? "Attrezzature, cappe, filtri, friggitrici e superfici con residui grassi."
+        : "Attrezzature, cappe, filtri e superfici con residui grassi."],
       ["Disinfettante idoneo al contatto con gli alimenti", "Sanificazione delle superfici e delle attrezzature a contatto con gli alimenti, dopo la detersione, seguita da risciacquo con acqua potabile."],
       ["Detergente disinfettante", "Dove la scheda tecnica del prodotto ne consente l'impiego combinato in un'unica operazione."],
       ["Detergente per pavimenti", "Pavimenti dei locali di lavorazione, della sala e dei servizi igienici, con attrezzature distinte per i servizi."],
@@ -794,7 +842,9 @@ export function corpoManuale(dossier) {
   b.push(p("I pericoli che possono danneggiare un alimento si distinguono in biologici, chimici e fisici; a questi si aggiunge la presenza involontaria di allergeni, che produce un danno diretto al consumatore sensibile."));
   b.push(scheda([
     ["Biologico", "Batteri e loro tossine, virus, muffe e lieviti. Fonti: materie prime contaminate all'origine, interruzione della catena del freddo, contaminazione crociata fra crudi e pronti al consumo, mani e stato di salute degli operatori, superfici e utensili non sanificati."],
-    ["Chimico", "Residui di detergenti e disinfettanti per risciacquo insufficiente, migrazione da materiali non idonei al contatto, sostanze di degradazione dell'olio di frittura, prodotti per la disinfestazione."],
+    ["Chimico", "Residui di detergenti e disinfettanti per risciacquo insufficiente, migrazione da materiali non idonei al contatto, "
+      + (azienda.has_fryer ? "sostanze di degradazione dell'olio di frittura, " : "")
+      + "prodotti per la disinfestazione."],
     ["Fisico", "Frammenti di vetro, metallo, plastica o legno, schegge di utensili, monili e oggetti personali degli operatori, corpi estranei introdotti con le materie prime."],
     ["Allergeni", "Presenza involontaria di allergeni per contaminazione crociata fra preparazioni, attrezzature condivise e prodotti acquistati già pronti."],
   ]));
@@ -917,7 +967,7 @@ export function corpoManuale(dossier) {
   // e l'altra passano mesi o anni, e due punti lontani non sono una curva. Le
   // superfici restano fisse per un'altra ragione: che i risultati siano
   // confrontabili e che si guardino sempre i punti più critici.
-  b.push(p("Le superfici campionate sono le stesse a ogni tornata, perché i risultati siano confrontabili e perché il controllo ricada sempre sui punti più esposti; l'andamento nel tempo è letto sulla verifica rapida semestrale, che è il controllo frequente. Per le superfici la normativa non fissa limiti numerici; i valori di riferimento sono quelli adottati nel presente piano d'intesa con il laboratorio incaricato, e la presenza di patogeni su una superficie a contatto con gli alimenti comporta comunque un'azione correttiva immediata.", { size: 20 }));
+  b.push(p("La superficie campionata è la stessa a ogni tornata, perché i risultati siano confrontabili e perché il controllo ricada sempre sul punto più esposto; l'andamento nel tempo è letto sulla verifica rapida semestrale, che tocca più superfici ed è il controllo frequente. Per le superfici la normativa non fissa limiti numerici; i valori di riferimento sono quelli adottati nel presente piano d'intesa con il laboratorio incaricato, e la presenza di patogeni su una superficie a contatto con gli alimenti comporta comunque un'azione correttiva immediata.", { size: 20 }));
   b.push(par("", { after: 140 }));
   b.push(h2("9.2 Programma dei controlli"));
 
@@ -990,7 +1040,7 @@ export function corpoManuale(dossier) {
   b.push(p("Collegare i lotti delle materie prime in entrata ai prodotti preparati in laboratorio — quella che si chiama rintracciabilità interna — non è imposto dall'art. 18. Lo confermano gli Orientamenti della Commissione europea del 2010 sull'attuazione degli articoli 11, 12, 14, 17, 18, 19 e 20 del Reg. 178/2002, e l'Intesa Stato-Regioni del 28 luglio 2005, che all'art. 5.2 afferma espressamente che il regolamento non obbliga gli operatori a istituire un collegamento fra i prodotti in entrata e quelli in uscita.", { italic: false }));
   b.push(p("L'azienda la tiene ugualmente, e il motivo è pratico prima che formale."));
   b.push(punto("Se un fornitore richiama un lotto, chi ha il collegamento ritira i prodotti che contengono quel lotto; chi non ce l'ha deve eliminare tutto quello che ha preparato in quei giorni, senza poter dimostrare il contrario."));
-  b.push(punto("L'analisi dei pericoli prevista dall'art. 5 del Reg. (CE) n. 852/2004 si fa sui prodotti e sui processi dell'azienda: per farla occorre descrivere che cosa contiene ciò che si prepara. La composizione delle preparazioni, quindi, serve comunque — ed è da lì che nasce la scheda di produzione."));
+  b.push(punto("L'analisi dei pericoli prevista dall'art. 5 del Reg. (CE) n. 852/2004 si fa sui prodotti e sui processi dell'azienda: per farla occorre descrivere che cosa contiene ciò che si prepara. La composizione delle preparazioni, quindi, serve comunque — ed è da lì che nasce la scheda delle preparazioni."));
   b.push(punto("Gli allergeni dei prodotti venduti sfusi vanno dichiarati al consumatore ai sensi dell'art. 44 del Reg. (UE) n. 1169/2011: si possono dichiarare solo se si sa, per ogni preparazione, da quali ingredienti è composta."));
   b.push(p("Resta il principio di proporzione: si registra quello che serve a ritrovare il prodotto, non tutto quello che si potrebbe registrare. Una scheda compilata a metà documenta che il sistema non è applicato, ed è peggio di una scheda che non esiste.", { italic: true, size: 20 }));
 
@@ -1015,7 +1065,11 @@ export function corpoManuale(dossier) {
     : "I preparati conservati portano un cartellino con la denominazione del prodotto, la data di produzione e il termine entro cui vanno impiegati. Un contenitore senza cartellino non si usa e non si conserva: si elimina."));
 
   b.push(h2("10.4 Un esempio: dalla materia prima al prodotto servito"));
-  b.push(p("Arriva una partita di ricotta con il suo lotto, che viene registrato all'ingresso. Con quella ricotta si prepara una farcitura, che riceve un lotto interno e nella cui scheda compare il lotto della ricotta. Con la farcitura si producono i dolci della giornata, che nella loro scheda richiamano il lotto della farcitura. Se il caseificio richiama il lotto di ricotta, dalla sua scheda si arriva alla farcitura e da questa ai dolci: si ritirano quelli, e solo quelli."));
+  // L'esempio deve parlare delle lavorazioni di QUESTA azienda. Quello
+  // generico — la ricotta, la farcitura, i dolci della giornata — in un bar
+  // descrive un lavoro che lì non si fa, ed è la cosa che fa dire a un
+  // ispettore che il manuale è copiato da un altro.
+  b.push(p(ESEMPIO_RINTRACCIABILITA[azienda.haccp_sector] || ESEMPIO_RINTRACCIABILITA.bar_ristorazione));
 
   b.push(h2("10.5 Conservazione dei documenti"));
   b.push(p("I documenti di acquisto e le registrazioni di rintracciabilità si conservano per un periodo non inferiore a dodici mesi e comunque adeguato alla vita commerciale del prodotto: per i prodotti confezionati, per tutta la durata di conservazione dichiarata e per i sei mesi successivi. È lo stesso criterio adottato per le altre registrazioni dell'autocontrollo."));
@@ -1059,7 +1113,7 @@ export function corpoManuale(dossier) {
   b.push(p("Quando un fornitore cambia la formulazione di un prodotto, l'elenco va aggiornato: è un controllo che si fa alla consegna, leggendo l'etichetta, e non una volta all'anno."));
 
   b.push(h2("11.4 La contaminazione crociata da allergeni"));
-  b.push(p("In un laboratorio piccolo la separazione degli allergeni si ottiene nel tempo più che nello spazio: si lavorano per primi i prodotti che non li contengono e per ultimi quelli che li contengono, sanificando fra una lavorazione e l'altra. Utensili, taglieri, sac à poche e contenitori destinati ai prodotti senza glutine o senza frutta a guscio sono identificati e non si scambiano."));
+  b.push(p("In spazi di lavoro ridotti la separazione degli allergeni si ottiene nel tempo più che nello spazio: si lavorano per primi i prodotti che non li contengono e per ultimi quelli che li contengono, sanificando fra una lavorazione e l'altra. Utensili, taglieri, attrezzi per il dosaggio e contenitori destinati ai prodotti senza glutine o senza frutta a guscio sono identificati e non si scambiano."));
   b.push(p("La dicitura «può contenere tracce di» descrive un rischio reale e residuo, accertato dopo aver fatto quanto possibile per evitarlo. Usarla su tutto per prudenza la rende inutile e priva di valore informativo per chi è allergico, e non mette al riparo da una contestazione.", { italic: true, size: 20 }));
   b.push(p("Le richieste del cliente allergico vengono gestite dal responsabile: se la lavorazione separata non è possibile in sicurezza, il personale lo dice chiaramente invece di rassicurare."));
 
