@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { Building2, ArrowRight, User, FileWarning, Plus, AlertTriangle, X, Gauge } from "lucide-react";
+import { Building2, ArrowRight, User, FileWarning, Plus, AlertTriangle, X, Gauge, Paperclip } from "lucide-react";
 import { useAuth } from "../AuthContext";
 import { supabase } from "../supabaseClient";
+import { uploadAttachment } from "../hooks/useAttachment";
 import { getSubscriptionStatus, pillClassFor } from "../subscriptionStatus";
 
 function legalMissingLabel(c) {
@@ -12,6 +13,34 @@ function legalMissingLabel(c) {
   if (missingTos && missingDpa) return "Termini e Accordo mancanti";
   if (missingTos) return "Termini mancanti";
   return "Accordo mancante";
+}
+
+// Stessa conversione usata per bolle, etichette e registrazione sanitaria: i
+// PDF passano interi, le foto si rimpiccioliscono a 2000 px prima di partire.
+function fileInBase64(file) {
+  return new Promise((resolve, reject) => {
+    if (file.type === "application/pdf") {
+      const r = new FileReader();
+      r.onload = () => resolve({ data: String(r.result).split(",")[1], media_type: "application/pdf" });
+      r.onerror = reject;
+      r.readAsDataURL(file);
+      return;
+    }
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const lato = 2000;
+      const scala = Math.min(1, lato / Math.max(img.width, img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(img.width * scala);
+      canvas.height = Math.round(img.height * scala);
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      resolve({ data: canvas.toDataURL("image/jpeg", 0.85).split(",")[1], media_type: "image/jpeg" });
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Immagine non leggibile")); };
+    img.src = url;
+  });
 }
 
 const CAMPI_VUOTI = {
@@ -137,9 +166,82 @@ export default function MieiClienti({ goTo }) {
   const [errore, setErrore] = useState("");
   const [creata, setCreata] = useState(null);
 
+  // La visura, qui, prima che l'azienda esista.
+  //
+  // E' il momento giusto: questi campi si compilano una volta sola, e se li
+  // si batte a mano l'errore nasce qui e poi viene copiato in ogni nomina,
+  // in ogni verbale e nel frontespizio del manuale. Il file non si puo'
+  // caricare subito — lo storage vuole l'id dell'azienda, che ancora non
+  // c'e' — quindi si tiene da parte e si allega appena la creazione
+  // riesce. Se quel secondo passaggio fallisce, l'azienda resta creata coi
+  // dati giusti: si riallega la visura da Configurazione.
+  const [visuraFile, setVisuraFile] = useState(null);
+  const [visuraData, setVisuraData] = useState("");
+  const [visuraRappresentante, setVisuraRappresentante] = useState("");
+  const [visuraBusy, setVisuraBusy] = useState(false);
+  const [visuraNota, setVisuraNota] = useState("");
+  const [visuraErrore, setVisuraErrore] = useState("");
+
   const set = (k, v) => setCampi((c) => ({ ...c, [k]: v }));
 
-  const apri = () => { setCampi(CAMPI_VUOTI); setErrore(""); setCreata(null); setNuovoAperto(true); };
+  const azzeraVisura = () => {
+    setVisuraFile(null); setVisuraData(""); setVisuraRappresentante("");
+    setVisuraNota(""); setVisuraErrore("");
+  };
+
+  const apri = () => { setCampi(CAMPI_VUOTI); azzeraVisura(); setErrore(""); setCreata(null); setNuovoAperto(true); };
+
+  const onVisura = async (e) => {
+    const f = e.target.files?.[0] || null;
+    setVisuraErrore(""); setVisuraNota("");
+    if (!f) return;
+    if (f.size > 12 * 1024 * 1024) {
+      setVisuraErrore("File troppo grande (limite 12 MB).");
+      e.target.value = "";
+      return;
+    }
+    setVisuraFile(f);
+    setVisuraBusy(true);
+    try {
+      const { data: b64, media_type } = await fileInBase64(f);
+      const { data, error: err } = await supabase.functions.invoke("clever-responder", {
+        body: { file_base64: b64, media_type, tipo: "visura" },
+      });
+      if (err) throw new Error(err.message || "Lettura non riuscita");
+      if (data?.errore) throw new Error(data.errore);
+
+      const letti = [];
+      const metti = (valore, chiave, etichetta) => {
+        const v = String(valore || "").trim();
+        if (!v) return;
+        set(chiave, v);
+        letti.push(etichetta);
+      };
+      metti(data?.denominazione, "name", "ragione sociale");
+      metti(data?.forma_giuridica, "forma_giuridica", "forma giuridica");
+      metti(data?.piva, "piva", "P.IVA");
+      metti(data?.numero_rea, "numero_rea", "numero REA");
+      metti(data?.sede_legale, "sede_legale", "sede legale");
+      metti(data?.sede_operativa, "sede_operativa", "sede operativa");
+      metti(data?.pec, "pec", "PEC");
+      metti(data?.codice_ateco, "codice_ateco", "codice ATECO");
+      metti(data?.attivita, "tipologia_attivita", "attività svolta");
+      if (data?.data_visura) setVisuraData(String(data.data_visura));
+      if (data?.legale_rappresentante) {
+        setVisuraRappresentante(String(data.legale_rappresentante).trim());
+        letti.push("legale rappresentante");
+      }
+      if (letti.length === 0) {
+        setVisuraErrore("Dalla visura non è stato letto nessun campo: compila a mano. Il documento resta allegato alla creazione.");
+      } else {
+        setVisuraNota("Letti dalla visura: " + letti.join(", ") + ". Controllali prima di creare.");
+      }
+    } catch (e2) {
+      setVisuraErrore("Lettura non riuscita (" + e2.message + "): compila a mano. Il documento resta allegato alla creazione.");
+    } finally {
+      setVisuraBusy(false);
+    }
+  };
 
   const crea = async () => {
     if (!campi.name.trim()) { setErrore("La ragione sociale è obbligatoria."); return; }
@@ -160,10 +262,34 @@ export default function MieiClienti({ goTo }) {
       p_active_equipment_checks: campi.active_equipment_checks,
       p_active_medical_surveillance: campi.active_medical_surveillance,
     });
+    if (error) { setBusy(false); setErrore(error.message); return; }
+
+    let avviso = "";
+    // L'azienda ora esiste: si allega la visura e si scrivono i due dati che
+    // la funzione di creazione non prende (la visura stessa e il legale
+    // rappresentante letto da lei).
+    if (visuraFile || visuraData || visuraRappresentante) {
+      try {
+        const aggiornamento = {};
+        if (visuraFile) {
+          aggiornamento.chamber_doc_path = await uploadAttachment(data, visuraFile);
+        }
+        if (visuraData) aggiornamento.chamber_doc_date = visuraData;
+        if (visuraRappresentante) aggiornamento.haccp_manager = visuraRappresentante;
+        const res = await supabase.from("companies").update(aggiornamento).eq("id", data);
+        if (res.error) throw new Error(res.error.message);
+      } catch (e2) {
+        // L'azienda c'è e i campi sono salvi: manca solo l'allegato. L'avviso
+        // non può stare nel riquadro, che fra un attimo si chiude: va accanto
+        // alla riga «è stata creata», che resta sotto gli occhi.
+        avviso = "Azienda creata, ma la visura non è stata allegata (" + e2.message + "): puoi ricaricarla da Configurazione → Generale.";
+      }
+    }
+
     setBusy(false);
-    if (error) { setErrore(error.message); return; }
-    setCreata({ id: data, nome: campi.name.trim() });
+    setCreata({ id: data, nome: campi.name.trim(), avviso });
     setNuovoAperto(false);
+    azzeraVisura();
     if (reloadClienti) await reloadClienti();
   };
 
@@ -183,10 +309,13 @@ export default function MieiClienti({ goTo }) {
       </div>
 
       {creata && (
-        <div className="cliente-creato">
-          <span><strong>{creata.nome}</strong> è stata creata ed è collegata a te.</span>
-          <button className="btn-primary" onClick={() => enter(creata.id)}>Entra <ArrowRight size={14} /></button>
-        </div>
+        <>
+          <div className="cliente-creato">
+            <span><strong>{creata.nome}</strong> è stata creata ed è collegata a te.</span>
+            <button className="btn-primary" onClick={() => enter(creata.id)}>Entra <ArrowRight size={14} /></button>
+          </div>
+          {creata.avviso && <p className="corso-avviso"><AlertTriangle size={14} /> {creata.avviso}</p>}
+        </>
       )}
 
       {nuovoAperto && (
@@ -195,11 +324,32 @@ export default function MieiClienti({ goTo }) {
             <div>
               <h3 style={{ margin: "0 0 6px" }}>Nuovo cliente</h3>
               <p className="sub" style={{ margin: 0 }}>
-                I dati si leggono dalla visura camerale. Solo la ragione sociale è obbligatoria:
-                il resto si può completare dopo, in Configurazione.
+                Carica la visura camerale e i campi si compilano da soli. Solo la ragione sociale è
+                obbligatoria: il resto si può completare dopo, in Configurazione.
               </p>
             </div>
             <button type="button" className="icon-btn" onClick={() => setNuovoAperto(false)} aria-label="Chiudi"><X size={16} /></button>
+          </div>
+
+          <div style={{ marginTop: 12, padding: "12px 14px", border: "1px solid #E1E5DF", borderRadius: 10, background: "#F7F9F6" }}>
+            <label className="field-label" style={{ display: "flex", alignItems: "center", gap: 8, margin: 0 }}>
+              <Paperclip size={14} />
+              {visuraBusy
+                ? "Lettura della visura in corso…"
+                : (visuraFile ? "Visura: " + visuraFile.name + " — sostituisci" : "Carica la visura camerale (PDF o foto, max 12 MB)")}
+              <input type="file" accept="application/pdf,image/*" disabled={visuraBusy || busy} onChange={onVisura} />
+            </label>
+            <p className="sub" style={{ marginTop: 6, marginBottom: 0 }}>
+              Ragione sociale, forma giuridica, P.IVA, numero REA, sede, PEC e codice ATECO vengono
+              letti dalla visura e scritti qui sotto. Il documento resta allegato all'azienda.
+            </p>
+            {visuraNota && <p className="sub" style={{ marginTop: 6, marginBottom: 0, color: "#1f6b3a" }}>{visuraNota}</p>}
+            {visuraRappresentante && (
+              <p className="sub" style={{ marginTop: 6, marginBottom: 0 }}>
+                Legale rappresentante letto: <strong>{visuraRappresentante}</strong> — diventa il responsabile del piano di autocontrollo.
+              </p>
+            )}
+            {visuraErrore && <p className="sub" style={{ marginTop: 6, marginBottom: 0, color: "#a33" }}>{visuraErrore}</p>}
           </div>
 
           <input type="text" className="full-input" placeholder="Ragione sociale"
