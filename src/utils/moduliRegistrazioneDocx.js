@@ -99,7 +99,9 @@ const vuote = (n, c) => Array.from({ length: n }, () => Array.from({ length: c }
 // allegato, e un allegato senza il numero di revisione del documento che
 // accompagna non si sa a quale manuale appartenga.
 export function corpoModuli(azienda = {}, impianti = [], piano = [], postazioni = [], revisione = null) {
-  const responsabile = azienda.haccp_manager || "____________________";
+  // trim: dall'anagrafica i nomi arrivano con lo spazio in coda, e qui si
+  // vede sulla riga della firma di ogni singolo modulo.
+  const responsabile = String(azienda.haccp_manager || "").trim() || "____________________";
   const frigo = !!azienda.has_fryer;
   const ghiaccio = !!azienda.has_ice_machine;
 
