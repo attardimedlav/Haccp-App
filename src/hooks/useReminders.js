@@ -88,29 +88,59 @@ const FASCE = [
 // diversi, uno dei due col tempo direbbe il falso.
 export function elencoPromemoria(dati = {}) {
   const { azienda, piano = [], vasche = [], controlliVasche = [], manutenzioni = [] } = dati;
-  const ora = Number(azienda?.reminder_hour) || 8;
-  const oraTesto = `${pad2(ora)}:00`;
+
+  // Due fasce invece di una sola, chieste da un OSA: le temperature si
+  // leggono quando si apre, le pulizie si registrano quando si chiude. Con
+  // un orario unico una delle due arriva sempre nel momento sbagliato — e un
+  // promemoria che arriva quando il lavoro non si può fare è il promemoria
+  // che insegna a ignorare anche gli altri.
+  //
+  // La fascia non la sceglie l'utente evento per evento: la decide la natura
+  // del controllo, perché è quella a dire quando si fa.
+  const oraMattina = Number(azienda?.reminder_hour) || 8;
+  const oraSera = Number(azienda?.reminder_hour_evening) || 20;
+  const testoOra = (o) => `${pad2(o)}:00`;
+  const oraTesto = testoOra(oraMattina);
+  const oraSeraTesto = testoOra(oraSera);
   const eventi = [];
 
   const righePiano = piano
     .filter((r) => r.active !== false)
     .filter((r) => !r.requires_flag || azienda?.[r.requires_flag]);
 
-  // 1. Il giro di ogni giorno.
-  {
-    eventi.push({
-      key: "giornaliero",
-      titolo: "Temperature e pulizie di fine turno",
-      quando: aperti(azienda).length === 7
-        ? `Ogni giorno alle ${oraTesto}`
-        : `Alle ${oraTesto} nei giorni di apertura`,
-      rrule: aperti(azienda).length === 7
-        ? "FREQ=DAILY"
-        : `FREQ=WEEKLY;BYDAY=${aperti(azienda).map((n) => GIORNI_ICS[n]).join(",")}`,
-      inizio: primoGiornoUtile(azienda, ora),
-      descrizione: "Lettura delle temperature di tutti gli impianti e pulizie quotidiane previste dal piano.",
-    });
-  }
+  // 1. Il giro di ogni giorno, diviso in due.
+  //
+  //    Prima era un evento solo, «Temperature e pulizie di fine turno», a
+  //    un'ora sola: il titolo stesso diceva che le due cose si fanno in
+  //    momenti diversi della giornata.
+  const regolaGiornaliera = aperti(azienda).length === 7
+    ? "FREQ=DAILY"
+    : `FREQ=WEEKLY;BYDAY=${aperti(azienda).map((n) => GIORNI_ICS[n]).join(",")}`;
+  const tuttiIGiorni = aperti(azienda).length === 7;
+
+  eventi.push({
+    key: "temperature",
+    titolo: "Lettura delle temperature",
+    fascia: "mattina",
+    quando: tuttiIGiorni
+      ? `Ogni giorno alle ${oraTesto}`
+      : `Alle ${oraTesto} nei giorni di apertura`,
+    rrule: regolaGiornaliera,
+    inizio: primoGiornoUtile(azienda, oraMattina),
+    descrizione: "Lettura e registrazione della temperatura di tutti gli impianti, alla stessa ora ogni giorno.",
+  });
+
+  eventi.push({
+    key: "pulizie-giorno",
+    titolo: "Pulizie di fine turno",
+    fascia: "sera",
+    quando: tuttiIGiorni
+      ? `Ogni giorno alle ${oraSeraTesto}`
+      : `Alle ${oraSeraTesto} nei giorni di apertura`,
+    rrule: regolaGiornaliera,
+    inizio: primoGiornoUtile(azienda, oraSera),
+    descrizione: "Pulizie quotidiane previste dal piano e registrazione nella scheda Sanificazione.",
+  });
 
   // 2. Il giro degli infestanti, con la periodicità dell'azienda e non
   //    con quella che faceva comodo a chi ha scritto il codice.
@@ -118,11 +148,12 @@ export function elencoPromemoria(dati = {}) {
   eventi.push({
     key: "infestanti",
     titolo: "Giro di monitoraggio infestanti",
+    fascia: "mattina",
     quando: giorniGiro === 7
       ? `Ogni settimana alle ${oraTesto}`
       : `Ogni ${giorniGiro} giorni alle ${oraTesto}`,
     rrule: regolaDaGiorni(giorniGiro),
-    inizio: primoGiornoUtile(azienda, ora),
+    inizio: primoGiornoUtile(azienda, oraMattina),
     descrizione: "Controllo delle postazioni della planimetria e registrazione del giro.",
   });
 
@@ -134,9 +165,10 @@ export function elencoPromemoria(dati = {}) {
     eventi.push({
       key: "pulizie-" + f.id,
       titolo: f.titolo,
-      quando: `Ogni ${giorni} giorni alle ${oraTesto}`,
+      fascia: "sera",
+      quando: `Ogni ${giorni} giorni alle ${oraSeraTesto}`,
       rrule: regolaDaGiorni(giorni),
-      inizio: primoGiornoUtile(azienda, ora),
+      inizio: primoGiornoUtile(azienda, oraSera),
       descrizione: sue.slice(0, 8).map((r) => r.operation).join("; ") +
         (sue.length > 8 ? ` e altre ${sue.length - 8}` : ""),
     });
@@ -152,9 +184,10 @@ export function elencoPromemoria(dati = {}) {
     eventi.push({
       key: "vasca-" + v.id,
       titolo: `Pulizia della vasca: ${v.name}`,
+      fascia: "mattina",
       quando: `Ogni ${mesi} mesi, dal ${prossima.toLocaleDateString("it-IT")}`,
       rrule: `FREQ=MONTHLY;INTERVAL=${mesi}`,
-      inizio: primoGiornoUtile(azienda, ora, prossima),
+      inizio: primoGiornoUtile(azienda, oraMattina, prossima),
       descrizione: "Svuotamento, pulizia e sanificazione della vasca, con registrazione.",
     });
   });
@@ -177,9 +210,10 @@ export function elencoPromemoria(dati = {}) {
     eventi.push({
       key: "manut-" + m.id,
       titolo: `Manutenzione: ${m.equipment}`,
+      fascia: "mattina",
       quando: `Il ${d.toLocaleDateString("it-IT")}`,
       rrule: null,
-      inizio: primoGiornoUtile(azienda, ora, d),
+      inizio: primoGiornoUtile(azienda, oraMattina, d),
       descrizione: m.intervention_type || "",
     });
   });
@@ -211,57 +245,16 @@ export function buildReminderICS(dati = {}) {
   return lines.join("\r\n");
 }
 
-// Consegna del file .ics.
-//
-// Il collegamento "data:" con l'attributo download funziona sul computer ma
-// non sull'iPhone: Safari e Chrome per iOS ignorano il download e non
-// succede nulla. Sui dispositivi Apple il file si apre come Blob di tipo
-// text/calendar: Safari mostra subito l'elenco degli eventi con "Aggiungi
-// tutti". Chrome e le altre app su iOS non aprono i Blob: lì si usa il
-// pannello Condividi, da cui si sceglie Calendario o "Salva in File".
-function isIOS() {
-  const ua = navigator.userAgent || "";
-  return /iPad|iPhone|iPod/.test(ua) ||
-    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-}
-
-function isSafariIOS() {
-  const ua = navigator.userAgent || "";
-  return isIOS() && /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS|GSA/.test(ua);
-}
-
-export async function downloadReminderICS(dati) {
+export function downloadReminderICS(dati) {
   // Compatibilità con la vecchia chiamata, che passava il solo nome:
   // meglio due promemoria generici che un errore in faccia all'utente.
   const payload = typeof dati === "string" ? { azienda: { name: dati } } : (dati || {});
   const ics = buildReminderICS(payload);
-  const nome = "promemoria-haccp.ics";
-  const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
-
-  if (isIOS()) {
-    if (isSafariIOS()) {
-      window.location.href = URL.createObjectURL(blob);
-      return;
-    }
-    try {
-      const file = new File([blob], nome, { type: "text/calendar" });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: "Promemoria HACCP" });
-        return;
-      }
-    } catch (e) {
-      if (e && e.name === "AbortError") return;
-    }
-    window.alert("Per aggiungere i promemoria al calendario apri questa pagina con Safari.");
-    return;
-  }
-
-  const url = URL.createObjectURL(blob);
+  const dataUri = "data:text/calendar;charset=utf-8," + encodeURIComponent(ics);
   const link = document.createElement("a");
-  link.href = url;
-  link.download = nome;
+  link.href = dataUri;
+  link.download = "promemoria-haccp.ics";
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-  setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
