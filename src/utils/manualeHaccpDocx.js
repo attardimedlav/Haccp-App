@@ -328,6 +328,38 @@ export function vale(voce, azienda) {
   return !!azienda?.[flag];
 }
 
+// La stessa regola dentro una procedura, riga per riga.
+//
+// Una procedura intera si accende o si spegne con requires_flag. Ma ci sono
+// procedure che valgono per tutti e hanno dentro un pezzo che vale solo per
+// qualcuno: PRO 09 descrive la gestione dei rifiuti — che riguarda ogni
+// azienda alimentare — e, in coda, gli oli esausti della friggitrice. In
+// un'azienda senza friggitrice quel capoverso dichiara un rifiuto speciale
+// che non esiste, un contratto con una ditta autorizzata che non c'è e dei
+// formulari di conferimento che nessuno potrà mai esibire. Sono tre carte
+// mancanti create dal manuale stesso.
+export function bloccoVale(bl, azienda) {
+  if (!bl?.f) return true;
+  return !!azienda?.[bl.f];
+}
+
+// I documenti di verifica e le azioni correttive sono testo semplice: si
+// scrivono uno per riga (o separati da punto e virgola) e ogni pezzo può
+// portare la stessa condizione fra parentesi quadre.
+export function pezziCondizionati(testo, azienda) {
+  const pezzi = String(testo || "")
+    .split(/[\n;]+/)
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .map((x) => {
+      const cond = x.match(/^\[([a-z0-9_]+)\]\s*/i);
+      if (!cond) return x;
+      return azienda?.[cond[1]] ? x.slice(cond[0].length).trim() : "";
+    })
+    .filter(Boolean);
+  return pezzi.join("; ");
+}
+
 // Quali cicli entrano in questo manuale, con il loro numero progressivo e,
 // per quelli critici, il numero del CCP.
 //
@@ -819,7 +851,14 @@ export function corpoManuale(dossier) {
   if (cp.length) {
     b.push(par("", { after: 160 }));
     b.push(p("Punti di controllo governati da buone prassi e procedure:"));
-    b.push(griglia(["Fase", "Controllo"], cp.map((c) => [c.name, (c.righe || []).map((x) => x.phase).join(" · ")]), [3000, 6360]));
+    // Anche qui le righe vanno filtrate: nel quadro riassuntivo passavano
+    // tutte, comprese quelle legate a un'attrezzatura spenta. Il risultato
+    // era un manuale che nella tabella dei pericoli non nominava la
+    // friggitrice e tre righe sotto elencava «Oli esausti di frittura» fra
+    // le fasi controllate — la stessa azienda, due risposte diverse.
+    b.push(griglia(["Fase", "Controllo"],
+      cp.map((c) => [c.name, (c.righe || []).filter((x) => vale(x, azienda)).map((x) => x.phase).join(" · ")]),
+      [3000, 6360]));
   }
   b.push(saltoPagina());
 
@@ -831,7 +870,7 @@ export function corpoManuale(dossier) {
   procedureAttive.forEach((pr) => {
     b.push(h2(`${pr.code} — ${pr.title}`));
     if (pr.purpose) b.push(p("Scopo: " + pr.purpose));
-    (pr.body || []).forEach((bl) => {
+    (pr.body || []).filter((bl) => bloccoVale(bl, azienda)).forEach((bl) => {
       if (bl.t === "h") b.push(h3(bl.x));
       else if (bl.t === "b") b.push(punto(bl.x));
       else if (bl.t === "tab") {
@@ -843,8 +882,10 @@ export function corpoManuale(dossier) {
         }
       } else b.push(p(bl.x));
     });
-    if (pr.corrective_action) b.push(p("Azioni correttive: " + pr.corrective_action));
-    if (pr.verification_docs) b.push(par("Documenti di verifica: " + pr.verification_docs, { italic: true, size: 20, after: 160 }));
+    const azioni = pezziCondizionati(pr.corrective_action, azienda);
+    if (azioni) b.push(p("Azioni correttive: " + azioni));
+    const docVerifica = pezziCondizionati(pr.verification_docs, azienda);
+    if (docVerifica) b.push(par("Documenti di verifica: " + docVerifica, { italic: true, size: 20, after: 160 }));
   });
   b.push(saltoPagina());
 
