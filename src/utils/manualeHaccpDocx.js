@@ -638,12 +638,22 @@ export function corpoManuale(dossier) {
   // lavoratore. Se l'azienda non ha dipendenti registrati resta la riga
   // puntinata, che qui è corretta: vuol dire che gli addetti non ci sono
   // ancora, non che qualcuno ha dimenticato di scriverli.
+  // In anagrafica i nomi si scrivono spesso tutti maiuscoli, come sugli
+  // attestati. Nel manuale, accanto a «Lipari Domenico», un «CINZIA D'ALIO»
+  // stona: si riportano con le sole iniziali maiuscole, rispettando
+  // apostrofi e trattini (D'Alio, De Luca, Lo Cascio-Rossi).
+  const inizialiMaiuscole = (t) =>
+    String(t || "")
+      .toLowerCase()
+      .replace(/(^|[\s'’\-])([a-zàèéìòóùç])/g, (_, p, c) => p + c.toUpperCase());
+
   const chiaveNome = (t) => String(t || "").trim().toLowerCase().split(/\s+/).sort().join(" ");
   const chiaveDatore = chiaveNome(azienda.haccp_manager);
   const addetti = (dipendenti || [])
     .map((d) => `${String(d.first_name || "").trim()} ${String(d.last_name || "").trim()}`.trim())
     .filter(Boolean)
     .filter((n) => chiaveNome(n) !== chiaveDatore)
+    .map(inizialiMaiuscole)
     .join("; ");
 
   b.push(h1("5. Sviluppo del piano di autocontrollo"));
