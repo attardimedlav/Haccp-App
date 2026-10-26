@@ -1377,9 +1377,17 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
   }).length;
 
   // Tutti i lavoratori sono soggetti a sorveglianza sanitaria tranne il datore
-  // di lavoro (identificato dal ruolo di sicurezza "RSPP Datore di Lavoro").
+  // di lavoro.
+  //
+  // Qui il filtro guardava il solo ruolo "RSPP Datore di Lavoro", e quindi
+  // lasciava dentro il datore che in anagrafica ha "Datore di Lavoro" — o che
+  // come datore risulta soltanto dalle nomine. Si usa lo stesso riconoscitore
+  // del quadro della formazione: il datore di lavoro non è un lavoratore, e
+  // deve essere lo stesso in ogni schermata, altrimenti una lo chiede e
+  // l'altra no.
+  const eDatoreSorveglianza = eDatoreDi(employees, appointments);
   const medicalComplianceList = employees
-    .filter((emp) => emp.security_role !== "RSPP Datore di Lavoro")
+    .filter((emp) => !eDatoreSorveglianza(emp))
     .map((emp) => {
       const fullName = `${emp.first_name} ${emp.last_name}`;
       const visits = medicalVisits
