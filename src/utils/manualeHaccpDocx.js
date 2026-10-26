@@ -919,7 +919,14 @@ export function corpoManuale(dossier) {
 
   procedureAttive.forEach((pr) => {
     b.push(h2(`${pr.code} — ${pr.title}`));
-    if (pr.purpose) b.push(p("Scopo: " + pr.purpose));
+    // Anche lo scopo passa dal filtro: PRO 10 dichiarava di verificare
+    // l'acqua «per la produzione di ghiaccio» pure dove il ghiaccio si
+    // compra confezionato. I pezzi si separano col punto e virgola, come nei
+    // documenti di verifica.
+    // Il punto finale si rimette qui: se il pezzo che cade è l'ultimo, la
+    // frase resterebbe senza.
+    const scopo = pezziCondizionati(pr.purpose, azienda);
+    if (scopo) b.push(p("Scopo: " + scopo + (/[.!?]$/.test(scopo) ? "" : ".")));
     (pr.body || []).filter((bl) => bloccoVale(bl, azienda)).forEach((bl) => {
       if (bl.t === "h") b.push(h3(bl.x));
       else if (bl.t === "b") b.push(punto(bl.x));
