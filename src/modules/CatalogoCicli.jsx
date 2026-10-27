@@ -46,15 +46,27 @@ const CAMPI_RIGA = [
 //   riga che apre con # -> sottotitolo
 //   riga che apre con - -> voce di elenco puntato
 //   riga che apre con | -> riga di tabella (la prima è l'intestazione)
+//
+// In testa alla riga si può mettere una condizione fra parentesi quadre:
+//   [has_fryer] Gli oli esausti sono raccolti in contenitore omologato...
+// Quella riga finisce nel manuale solo per le aziende che hanno la
+// friggitrice. Serve quando una procedura vale per tutti ma un suo pezzo no:
+// la gestione dei rifiuti riguarda ogni azienda, gli oli esausti solo chi
+// frigge. Senza la condizione l'alternativa era spegnere l'intera procedura
+// — e un manuale senza la procedura dei rifiuti non sta in piedi — oppure
+// lasciarci dentro un paragrafo che descrive un'attrezzatura che l'azienda
+// non ha: dichiarare controlli che non esistono è il modo più rapido per
+// farsi contestare il manuale.
 function corpoInTesto(body) {
   const fuori = [];
   (body || []).forEach((bl) => {
-    if (bl.t === "h") fuori.push("# " + bl.x);
-    else if (bl.t === "b") fuori.push("- " + bl.x);
+    const q = bl.f ? "[" + bl.f + "] " : "";
+    if (bl.t === "h") fuori.push(q + "# " + bl.x);
+    else if (bl.t === "b") fuori.push(q + "- " + bl.x);
     else if (bl.t === "tab") {
-      fuori.push("| " + (bl.i || []).join(" | "));
+      fuori.push(q + "| " + (bl.i || []).join(" | "));
       (bl.r || []).forEach((r) => fuori.push("| " + r.join(" | ")));
-    } else fuori.push(bl.x);
+    } else fuori.push(q + bl.x);
   });
   return fuori.join("\n");
 }
@@ -63,18 +75,23 @@ function testoInCorpo(testo) {
   const blocchi = [];
   let tabella = null;
   String(testo || "").split("\n").forEach((riga) => {
-    const r = riga.trim();
+    let r = riga.trim();
+    // La condizione in testa alla riga, se c'è: [has_fryer] ...
+    let f = null;
+    const cond = r.match(/^\[([a-z0-9_]+)\]\s*/i);
+    if (cond) { f = cond[1]; r = r.slice(cond[0].length).trim(); }
+    const con = (bl) => (f ? { ...bl, f } : bl);
     if (r.startsWith("|")) {
       const celle = r.replace(/^\|/, "").split("|").map((c) => c.trim());
-      if (!tabella) { tabella = { t: "tab", i: celle, r: [] }; blocchi.push(tabella); }
+      if (!tabella) { tabella = con({ t: "tab", i: celle, r: [] }); blocchi.push(tabella); }
       else tabella.r.push(celle);
       return;
     }
     tabella = null;
     if (!r) return;
-    if (r.startsWith("# ")) blocchi.push({ t: "h", x: r.slice(2).trim() });
-    else if (r.startsWith("- ")) blocchi.push({ t: "b", x: r.slice(2).trim() });
-    else blocchi.push({ t: "p", x: r });
+    if (r.startsWith("# ")) blocchi.push(con({ t: "h", x: r.slice(2).trim() }));
+    else if (r.startsWith("- ")) blocchi.push(con({ t: "b", x: r.slice(2).trim() }));
+    else blocchi.push(con({ t: "p", x: r }));
   });
   return blocchi;
 }
@@ -203,14 +220,14 @@ export default function CatalogoCicli() {
       </div>
       <textarea placeholder="Scopo" value={bozza.purpose || ""} onChange={(e) => setBozza({ ...bozza, purpose: e.target.value })} className="full-input nc-textarea" />
       <textarea
-        placeholder={"Corpo della procedura.\nRiga normale = paragrafo\n# sottotitolo\n- voce di elenco\n| colonna | colonna |  (la prima riga con le barre è l'intestazione della tabella)"}
+        placeholder={"Corpo della procedura.\nRiga normale = paragrafo\n# sottotitolo\n- voce di elenco\n| colonna | colonna |  (la prima riga con le barre è l'intestazione della tabella)\n[has_fryer] riga che entra nel manuale solo se l'azienda ha quella dotazione"}
         value={bozza.testo || ""}
         onChange={(e) => setBozza({ ...bozza, testo: e.target.value })}
         className="full-input nc-textarea"
         style={{ minHeight: 220 }}
       />
       <textarea placeholder="Azioni correttive" value={bozza.corrective_action || ""} onChange={(e) => setBozza({ ...bozza, corrective_action: e.target.value })} className="full-input nc-textarea" />
-      <textarea placeholder="Documenti di verifica" value={bozza.verification_docs || ""} onChange={(e) => setBozza({ ...bozza, verification_docs: e.target.value })} className="full-input nc-textarea" />
+      <textarea placeholder={"Documenti di verifica (uno per riga; anche qui vale [has_fryer] davanti alla riga)"} value={bozza.verification_docs || ""} onChange={(e) => setBozza({ ...bozza, verification_docs: e.target.value })} className="full-input nc-textarea" />
       <select value={bozza.requires_flag || ""} onChange={(e) => setBozza({ ...bozza, requires_flag: e.target.value })} className="full-input">
         {FLAG.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
       </select>
