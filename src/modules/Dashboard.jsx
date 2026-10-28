@@ -170,7 +170,24 @@ export default function Dashboard({ goTo, openWorkSafety }) {
       });
 
     if (company?.active_medical_surveillance) {
-      collect(medicalVisits.items, "visitemediche", Stethoscope,
+      // Vale solo l'ultima visita di ciascuna persona, come per i corsi qui
+      // sopra: una visita nuova sostituisce la precedente, non vi si aggiunge.
+      // Senza questo filtro la Panoramica continuava a segnalare come scaduta
+      // la visita vecchia di chi ne aveva appena fatta una — e chi registra
+      // il documento giusto si vede l'avviso rosso lo stesso, che è il modo
+      // più rapido per smettere di fidarsi della Panoramica.
+      const visiteInVigore = Object.values(
+        medicalVisits.items
+          .filter((v) => v.expiry_date || v.visit_date)
+          .reduce((acc, v) => {
+            const chiave = (v.employee_name || "").trim().toLowerCase() || "visita-" + v.id;
+            const quando = (x) => new Date(x.visit_date || x.expiry_date || 0);
+            if (!acc[chiave] || quando(v) > quando(acc[chiave])) acc[chiave] = v;
+            return acc;
+          }, {})
+      );
+
+      collect(visiteInVigore, "visitemediche", Stethoscope,
         () => "Visita medica",
         (v) => [v.employee_name, v.job_role].filter(Boolean).join(", "));
     }
