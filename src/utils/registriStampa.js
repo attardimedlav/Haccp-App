@@ -114,6 +114,26 @@ export function htmlRegistroSanificazione({ mese, azienda, piano, interventi, ch
   const fatto = (r, iso) => (interventi || []).some((s) =>
     s.area === r.area && (s.operation || "") === r.operation && String(s.created_at).slice(0, 10) === iso);
 
+  const suoi = (r) => (interventi || []).filter((s) =>
+    s.area === r.area && (s.operation || "") === r.operation && String(s.created_at).slice(0, 7) === mese);
+
+  // Il prodotto impiegato, accanto all'operazione: un registro che dice
+  // «il prodotto è scritto da un'altra parte» non è un registro. Si
+  // riportano i prodotti effettivamente registrati nel mese — se nel mese
+  // ne sono stati usati due, si leggono tutti e due. Quando per quella
+  // riga non risulta nessuna esecuzione, si riporta il prodotto previsto
+  // dal piano, detto per quello che è: una previsione, non un fatto.
+  const prodotto = (r) => {
+    const usati = [...new Set(suoi(r).map((s) => s.sanitizer).filter(Boolean))];
+    if (usati.length) return usati.join(", ");
+    return r.product ? `${r.product} (previsto dal piano)` : "";
+  };
+
+  const cella = (r) => {
+    const p = prodotto(r);
+    return `<td>${esc(r.operation)}<br><span class="nota">${esc(r.area)}${p ? " · " + esc(p) : ""}</span></td>`;
+  };
+
   const intestazioneGiorni = Array.from({ length: gg }, (_, i) =>
     `<th style="width:14pt">${i + 1}<br><span style="font-weight:normal">${letteraGiorno(mese, i + 1)}</span></th>`).join("");
 
@@ -126,19 +146,15 @@ export function htmlRegistroSanificazione({ mese, azienda, piano, interventi, ch
         ? `<td class="c festivo vuoto">·</td>`
         : `<td class="c">${fatto(r, iso) ? "✓" : '<span class="vuoto">—</span>'}</td>`;
     }
-    return `<tr><td>${esc(r.operation)}<br><span class="nota">${esc(r.area)}</span></td>${celle}</tr>`;
+    return `<tr>${cella(r)}${celle}</tr>`;
   };
 
   // Le periodiche non stanno in un calendario giornaliero: si elencano
   // con le date in cui sono state eseguite nel mese.
   const righePeriodiche = periodiche.map((r) => {
-    const date = (interventi || [])
-      .filter((s) => s.area === r.area && (s.operation || "") === r.operation &&
-        String(s.created_at).slice(0, 7) === mese)
-      .map((s) => fmt(s.created_at))
-      .join(", ");
+    const date = suoi(r).map((s) => fmt(s.created_at)).join(", ");
     return `<tr>
-      <td style="width:34%">${esc(r.operation)}<br><span class="nota">${esc(r.area)}</span></td>
+      <td style="width:34%">${esc(r.operation)}<br><span class="nota">${esc(r.area)}${prodotto(r) ? " · " + esc(prodotto(r)) : ""}</span></td>
       <td style="width:14%" class="c">ogni ${esc(r.frequency_days)} giorni</td>
       <td>${date || '<span class="vuoto">nessuna esecuzione registrata nel mese</span>'}</td>
     </tr>`;
@@ -153,7 +169,7 @@ ${testata(azienda, "Registro delle pulizie e sanificazioni", mese, "M04")}
   <tr><th style="width:17%">Operazione</th>${intestazioneGiorni}</tr>
   ${quotidiane.map(rigaOperazione).join("") || '<tr><td colspan="' + (gg + 1) + '">Nessun intervento quotidiano previsto dal piano.</td></tr>'}
 </table>
-<p class="nota">✓ intervento eseguito e registrato · «—» non registrato · «·» giorno di chiusura. Il prodotto impiegato per ciascun intervento è riportato nel registro informatico.</p>
+<p class="nota">✓ intervento eseguito e registrato · «—» non registrato · «·» giorno di chiusura. Accanto al punto di intervento è riportato il prodotto impiegato, come risulta dalle registrazioni del mese; dove non risultano esecuzioni è indicato il prodotto previsto dal piano di pulizia allegato al manuale. Le schede tecniche e di sicurezza dei prodotti sono conservate in azienda.</p>
 
 ${periodiche.length ? `<h2>Interventi periodici</h2>
 <table>
