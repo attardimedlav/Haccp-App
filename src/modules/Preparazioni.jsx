@@ -901,7 +901,6 @@ export default function Preparazioni() {
                             ["Consumare entro", fmtData(p.expiry_date)],
                             etichettaConservazione(p.storage_method),
                           ],
-                          piede: company?.name || "",
                         }, formatoEtichetta(company));
                       }}
                     ><Tag size={15} /></button>
