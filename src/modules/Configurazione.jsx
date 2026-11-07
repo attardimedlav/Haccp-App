@@ -131,6 +131,12 @@ export default function Configurazione({ onVai, subTabIniziale }) {
   // riscala e l'etichetta esce tagliata o piccola in mezzo alla carta.
   const [labelWidth, setLabelWidth] = useState(62);
   const [labelHeight, setLabelHeight] = useState(29);
+  // Il rotolo dell'etichetta di vendita e' un altro, piu' grande: deve
+  // ospitare ingredienti e allergeni con i caratteri alti almeno quanto vuole
+  // il Reg. 1169/2011. Vuoto vuol dire "non ce l'ho": l'etichetta di vendita
+  // resta un foglio, e non si inventa una misura al posto del cliente.
+  const [labelSaleWidth, setLabelSaleWidth] = useState("");
+  const [labelSaleHeight, setLabelSaleHeight] = useState("");
 
   // I dati che servono a costruire i promemoria del calendario: il piano
   // di pulizia, le vasche, il piano analitico con i referti e le
@@ -232,6 +238,8 @@ export default function Configurazione({ onVai, subTabIniziale }) {
       setReminderHourEvening(Number(company.reminder_hour_evening) || 20);
       setLabelWidth(Number(company.label_width_mm) || 62);
       setLabelHeight(Number(company.label_height_mm) || 29);
+      setLabelSaleWidth(company.label_sale_width_mm ? String(company.label_sale_width_mm) : "");
+      setLabelSaleHeight(company.label_sale_height_mm ? String(company.label_sale_height_mm) : "");
       setHasHood(company.has_hood !== false);
       setIceMachineDays(String(company.ice_machine_cleaning_days || 30));
       setManualSource(company.haccp_manual_source === "esterno" ? "esterno" : "app");
@@ -292,6 +300,8 @@ export default function Configurazione({ onVai, subTabIniziale }) {
     reminder_hour_evening: Number(reminderHourEvening) || 20,
     label_width_mm: Math.max(10, Math.min(120, Number(labelWidth) || 62)),
     label_height_mm: Math.max(10, Math.min(200, Number(labelHeight) || 29)),
+    label_sale_width_mm: Number(labelSaleWidth) ? Math.max(10, Math.min(120, Number(labelSaleWidth))) : null,
+    label_sale_height_mm: Number(labelSaleHeight) ? Math.max(10, Math.min(200, Number(labelSaleHeight))) : null,
     has_hood: hasHood,
     ice_machine_cleaning_days: Math.max(1, parseInt(iceMachineDays, 10) || 30),
     haccp_manual_source: manualSource,
@@ -1244,8 +1254,39 @@ export default function Configurazione({ onVai, subTabIniziale }) {
             <p className="sub" style={{ marginTop: 0 }}>
               Si legge sulla confezione del rotolo: 50 x 30 e 62 x 29 sono le misure piu' comuni.
               Se non corrisponde, il browser riscala il cartellino e l'etichetta esce tagliata o
-              piccola in mezzo alla carta. Non riguarda l'etichetta delle preparazioni destinate
-              alla vendita, che e' un foglio e non un cartellino. Si salva con la configurazione.
+              piccola in mezzo alla carta. Vale per i cartellini di abbattimento, congelamento,
+              bonifica e per il cartellino interno delle preparazioni. Si salva con la
+              configurazione.
+            </p>
+
+            <h4 style={{ margin: "14px 0 2px" }}>Etichetta di vendita</h4>
+            <div className="config-grid-2" style={{ marginBottom: 8 }}>
+              <label className="field-label" style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                Larghezza (mm)
+                <input
+                  type="number" min="10" max="120" value={labelSaleWidth} disabled={!isConsultant}
+                  onChange={(e) => setLabelSaleWidth(e.target.value)}
+                  placeholder="non impostato"
+                  className="full-input" style={{ width: 130 }}
+                />
+              </label>
+              <label className="field-label" style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                Altezza (mm)
+                <input
+                  type="number" min="10" max="200" value={labelSaleHeight} disabled={!isConsultant}
+                  onChange={(e) => setLabelSaleHeight(e.target.value)}
+                  placeholder="non impostato"
+                  className="full-input" style={{ width: 130 }}
+                />
+              </label>
+            </div>
+            <p className="sub" style={{ marginTop: 0 }}>
+              E' il rotolo, piu' grande, su cui si stampa l'etichetta del prodotto destinato alla
+              vendita, quella con ingredienti e allergeni. Il Reg. UE 1169/2011 impone un'altezza
+              minima dei caratteri, quindi il testo non si puo' rimpicciolire a piacere: se non ci
+              sta, l'app lo dice invece di stampare un'etichetta fuori norma. Un 50 x 80 in
+              verticale regge una lista ingredienti normale. Lasciando i campi vuoti l'etichetta di
+              vendita resta su foglio, come prima.
             </p>
           </div>
         </>

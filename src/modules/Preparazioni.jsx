@@ -1,9 +1,9 @@
 import React, { useState } from "react";
-import { Plus, Trash2, Check, Printer, Info, AlertTriangle, Search, ChevronDown, ChevronRight, BookOpen, Pencil, X } from "lucide-react";
+import { Plus, Trash2, Check, Printer, Info, AlertTriangle, Search, ChevronDown, ChevronRight, BookOpen, Pencil, X, Tag } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { supabase } from "../supabaseClient";
-import { stampaHtml } from "../utils/etichetta";
+import { stampaHtml, stampaEtichetta as stampaCartellino, formatoEtichetta, formatoEtichettaVendita } from "../utils/etichetta";
 
 // Preparazioni e cartellino (tracciabilità interna).
 //
@@ -49,10 +49,26 @@ function sommaGiorni(dataIso, giorni) {
 
 const cella = { font: "inherit", fontSize: 13.5, padding: "9px 10px", border: "1px solid #D8DED6", borderRadius: 8, background: "#fff", color: "#1B2A22", width: "100%", boxSizing: "border-box" };
 
-// L'etichetta si manda in stampa da sola: esce solo il cartellino, non la
-// pagina dell'app. Da telefono la stessa finestra di stampa permette di
-// salvarla come PDF o di mandarla alla stampante.
-function stampaEtichetta(p, righeIngredienti) {
+// L'ETICHETTA DI VENDITA — quella che va sul prodotto destinato al cliente
+// finale. E' una cosa diversa dal cartellino interno, che serve solo a
+// identificare la vaschetta in frigo e non ha obblighi: qui ci sono
+// denominazione, ingredienti, allergeni e conservazione, cioe' le indicazioni
+// che la legge vuole che il consumatore legga.
+//
+// Due forme, decise con Leandro il 07/11/2026:
+//
+//   - se l'azienda ha dichiarato in Configurazione il rotolo dell'etichetta di
+//     vendita, si stampa di quella misura, con i caratteri dimensionati in
+//     millimetri per rispettare l'altezza minima del Reg. UE 1169/2011
+//     (x >= 1,2 mm; 0,9 mm solo sotto gli 80 cm² di superficie);
+//   - se non l'ha dichiarato resta il foglio, che e' il ripiego per chi non ha
+//     una stampante di etichette. Non si inventa una misura al posto suo.
+//
+// Sul rotolo i caratteri NON si rimpiccioliscono per far stare il testo: se
+// non ci sta, `stampaHtml` ferma la stampa e l'app lo dice. Un'etichetta
+// illeggibile e' una non conformita', una che non esce e' un rotolo da
+// cambiare.
+function etichettaVendita(p, righeIngredienti, formato, seNonCiSta) {
   const tracce = (p.may_contain_traces || []).length
     ? `<div class="sez"><span class="et">PUÒ CONTENERE TRACCE DI</span><div class="alle">${p.may_contain_traces.join(" · ").toUpperCase()}</div></div>`
     : "";
@@ -69,7 +85,9 @@ function stampaEtichetta(p, righeIngredienti) {
     ? `<div class="lotti"><span class="et">Materie prime tracciate (non obbligatorie in etichetta)</span><div>${righeIngredienti.join(" · ")}</div></div>`
     : "";
 
-  const html = `<!doctype html><html lang="it"><head><meta charset="utf-8"><title>${p.product_name}</title><style>
+  // Il foglio: misure in pixel, pensate per un A4 e per essere lette da
+  // lontano. E' quello che c'era e resta per chi non ha la stampante.
+  const cssFoglio = `
     @page { margin: 10mm; }
     body { font-family: Arial, Helvetica, sans-serif; color: #000; margin: 0; padding: 6mm; }
     h1 { font-size: 30px; margin: 0 0 2px; }
@@ -83,7 +101,39 @@ function stampaEtichetta(p, righeIngredienti) {
     .ing { font-size: 15px; }
     .alle { font-size: 22px; font-weight: bold; letter-spacing: 0.5px; }
     .nessuno { font-size: 15px; }
-    .lotti { margin-top: 14px; padding-top: 8px; border-top: 1px dashed #666; font-size: 11px; color: #333; }
+    .lotti { margin-top: 14px; padding-top: 8px; border-top: 1px dashed #666; font-size: 11px; color: #333; }`;
+
+  // Il rotolo: misure in millimetri, perche' il vincolo di legge e' in
+  // millimetri. L'altezza x dell'Arial e' circa la meta' del corpo, quindi
+  // 2,4 mm di corpo danno una x intorno a 1,25 mm e soddisfano il minimo di
+  // 1,2 mm. Le diciture piccole — INGREDIENTI, ALLERGENI — sono etichette di
+  // sezione, non l'informazione obbligatoria, e stanno un filo sotto.
+  const cssRotolo = (f) => `
+    @page { size: ${f.larghezzaMm}mm ${f.altezzaMm}mm; margin: 0; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: Arial, Helvetica, sans-serif; color: #000;
+      width: ${f.larghezzaMm}mm; padding: 2mm 2.2mm;
+      font-size: 2.4mm; line-height: 1.25;
+    }
+    h1 { font-size: 3.6mm; line-height: 1.1; margin: 0 0 0.6mm; }
+    .et { font-size: 2.1mm; letter-spacing: 0.3px; color: #000; display: block; }
+    .scad { font-size: 4.6mm; font-weight: bold; line-height: 1; }
+    .cons { font-size: 2.4mm; margin-top: 0.4mm; }
+    hr { border: none; border-top: 0.3mm solid #000; margin: 1.2mm 0; }
+    .riga { font-size: 2.4mm; margin-bottom: 1mm; }
+    .riga b { font-size: 2.4mm; }
+    .sez { margin-bottom: 1.2mm; }
+    .ing { font-size: 2.4mm; }
+    .alle { font-size: 2.8mm; font-weight: bold; }
+    .nessuno { font-size: 2.4mm; }
+    /* I lotti delle materie prime non vanno in un'etichetta destinata al
+       consumatore: sul rotolo si tolgono del tutto. */
+    .lotti { display: none; }`;
+
+  const html = `<!doctype html><html lang="it"><head><meta charset="utf-8"><title>${p.product_name}</title><style>
+    ${formato ? cssRotolo(formato) : cssFoglio}
   </style></head><body>
     <h1>${p.product_name}</h1>
     <span class="et">SCADENZA</span>
@@ -100,7 +150,9 @@ function stampaEtichetta(p, righeIngredienti) {
   // su iPhone lasciava aperta una scheda vuota da chiudere a mano. Il
   // meccanismo sta in utils/etichetta.js, lo stesso usato dalle etichette
   // dell'abbattimento e del congelamento.
-  stampaHtml(html);
+  stampaHtml(html, formato
+    ? { altezzaMaxMm: formato.altezzaMm, seNonCiSta }
+    : {});
 }
 
 // Il catalogo delle ricette.
@@ -805,7 +857,7 @@ export default function Preparazioni() {
       {!apertoForm && (
         <p className="login-info" style={{ margin: "16px 0" }}>
           <Info size={14} style={{ flexShrink: 0, marginTop: 1 }} />
-          L'etichetta riporta scadenza, conservazione, lotto del prodotto finito, ingredienti e allergeni. I lotti delle materie prime restano registrati qui: servono in caso di allerta, non vanno stampati.
+          Da ogni preparazione si stampano due cose diverse. Il <strong>cartellino interno</strong> identifica la vaschetta in frigo: denominazione, lotto, date e conservazione, niente di più, perché non è destinato al consumatore. L'<strong>etichetta di vendita</strong> è quella che va sul prodotto venduto e porta anche ingredienti e allergeni. I lotti delle materie prime restano registrati qui: servono in caso di allerta, non vanno in etichetta.
         </p>
       )}
 
@@ -836,7 +888,40 @@ export default function Preparazioni() {
                     <span className="lot-tag">Lotto {p.lot_number}</span>
                   </div>
                   <span style={{ display: "flex", gap: 2, flexShrink: 0 }}>
-                    <button className="icon-btn icon-btn-ok" title="Stampa etichetta" onClick={() => stampaEtichetta(p, lotti.map((a) => `${nomeProdotto(a.product_id)} ${a.lot_number || "senza lotto"}`))}><Printer size={15} /></button>
+                    <button
+                      className="icon-btn"
+                      title="Cartellino interno — per identificare il prodotto in frigo"
+                      onClick={() => {
+                        setErrore("");
+                        stampaCartellino({
+                          titolo: p.product_name,
+                          righe: [
+                            ["Lotto", p.lot_number],
+                            ["Prodotto il", `${fmtData(p.production_date)}${p.production_time ? " " + p.production_time.slice(0, 5) : ""}`],
+                            ["Consumare entro", fmtData(p.expiry_date)],
+                            etichettaConservazione(p.storage_method),
+                          ],
+                          piede: company?.name || "",
+                        }, formatoEtichetta(company));
+                      }}
+                    ><Tag size={15} /></button>
+                    <button
+                      className="icon-btn icon-btn-ok"
+                      title="Etichetta di vendita — con ingredienti e allergeni"
+                      onClick={() => {
+                        setErrore("");
+                        etichettaVendita(
+                          p,
+                          lotti.map((a) => `${nomeProdotto(a.product_id)} ${a.lot_number || "senza lotto"}`),
+                          formatoEtichettaVendita(company),
+                          (servono) => setErrore(
+                            `L'etichetta di vendita di «${p.product_name}» non entra nel rotolo impostato: servirebbero circa ${servono} mm di altezza. ` +
+                            "I caratteri non si possono rimpicciolire oltre il minimo di legge: monta un rotolo più alto e cambia la misura in Configurazione, " +
+                            "oppure riporta gli ingredienti sul cartello del banco, come consente l'art. 19 del D.Lgs. 231/2017."
+                          ),
+                        );
+                      }}
+                    ><Printer size={15} /></button>
                     <button className="icon-btn" title="Elimina" onClick={() => elimina(p)}><Trash2 size={14} /></button>
                   </span>
                 </div>
