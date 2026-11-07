@@ -125,3 +125,20 @@ export function stampaHtml(doc) {
 // Le date si scrivono uguali su tutte le etichette: scriverle a mano in ogni
 // scheda e' il modo per ritrovarsele in tre formati diversi.
 export const dataEtichetta = fmtData;
+
+// La misura del rotolo di quell'azienda, da passare a stampaEtichetta.
+//
+// Sta qui e non nei punti di stampa perche' i punti sono tre — abbattimento,
+// congelamento, bonifica — e una misura ripetuta in tre posti e' una misura
+// che prima o poi diventa diversa in uno dei tre.
+//
+// Il valore si imposta in Configurazione, perche' il rotolo lo compra il
+// cliente e nessuno puo' saperlo per lui. Se non l'ha impostato restano i
+// 62 x 29 mm, che e' il formato piu' diffuso: cosi' chi non ha una stampante
+// di etichette non deve configurare niente.
+export function formatoEtichetta(azienda = {}) {
+  return {
+    larghezzaMm: Number(azienda?.label_width_mm) || 62,
+    altezzaMm: Number(azienda?.label_height_mm) || 29,
+  };
+}
