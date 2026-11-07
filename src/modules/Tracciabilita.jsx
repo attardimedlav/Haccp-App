@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Info, ScanLine, PenLine, Check, X, Pencil, Package, BookOpen, Merge, Search, Printer, Camera, PackageX, RotateCcw } from "lucide-react";
+import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Info, ScanLine, PenLine, Check, X, Pencil, Package, BookOpen, Merge, Search, Printer, Camera, PackageX, RotateCcw, Scissors } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { supabase } from "../supabaseClient";
 import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
+import { stampaEtichette, formatoEtichetta } from "../utils/etichetta";
 
 // Ricevimenti merce (tracciabilità in entrata).
 //
@@ -90,6 +91,25 @@ export default function Tracciabilita() {
 
   const [vista, setVista] = useState("arrivi");
   const daValutare = prodotti.filter((p) => !p.allergens_checked_at).length;
+
+  // IL FRAZIONAMENTO DI UN LOTTO
+  //
+  // Il taglio da 10 kg diventa tre pezzi, e l'etichetta del fornitore e' una
+  // sola: gli altri due pezzi restano in cella senza niente addosso, e da li'
+  // non si risale piu' al lotto. L'OSA chiedeva di fotografare l'etichetta e
+  // ristamparla; e' una cattiva idea per due motivi — a 203 dpi la foto di
+  // un'etichetta e' un francobollo grigio illeggibile, e riprodurre
+  // l'etichetta del fornitore su un pezzo che ha diviso lui fa sembrare che
+  // la confezione sia uscita cosi' dal macello.
+  //
+  // Qui invece i cartellini nascono dai dati dell'arrivo, che l'app ha gia':
+  // prodotto, fornitore, lotto e scadenza del fornitore restano quelli
+  // originali — la rintracciabilita' si regge su quelli — e si aggiunge il
+  // fatto nuovo, cioe' che e' stata l'azienda a dividere, quel giorno, in
+  // quanti pezzi. Il progressivo «1 di 3» serve a vedere a colpo d'occhio se
+  // in cella ne manca uno.
+  const [frazione, setFrazione] = useState(null);   // { id, pezzi, operatore }
+  const [frazionando, setFrazionando] = useState(false);
 
   // fase: "carica" | "verifica"
   const [fase, setFase] = useState("carica");
@@ -230,6 +250,56 @@ export default function Tracciabilita() {
   };
 
   const nomeProdotto = (id) => prodotti.find((p) => p.id === id)?.name || "Prodotto";
+
+  // Registra il frazionamento e stampa i cartellini in una volta sola.
+  //
+  // Prima si scrive, poi si stampa: se la registrazione non riesce non devono
+  // esserci in giro cartellini di un frazionamento che nel registro non
+  // risulta. I cartellini escono in un unico documento di N pagine, non in N
+  // stampe separate.
+  const fraziona = async (item) => {
+    const pezzi = Math.max(2, Math.min(50, parseInt(frazione?.pezzi, 10) || 0));
+    if (pezzi < 2) { setErrore("Indica in quanti pezzi è stato diviso il lotto: almeno due."); return; }
+    setFrazionando(true);
+    setErrore("");
+    const quando = oggi();
+    const operatore = (frazione?.operatore || "").trim();
+    const { error } = await supabase.from("lot_splits").insert({
+      company_id: company.id,
+      traceability_record_id: item.id,
+      product_name: nomeProdotto(item.product_id),
+      supplier_name: item.supplier_name || null,
+      lot_number: item.lot_number || null,
+      expiry_date: item.expiry_date || null,
+      pieces: pezzi,
+      split_date: quando,
+      operator: operatore || null,
+      created_by: session?.user?.id || null,
+    });
+    setFrazionando(false);
+    if (error) { setErrore("Frazionamento non registrato: " + error.message); return; }
+
+    stampaEtichette(
+      Array.from({ length: pezzi }, (_, i) => ({
+        titolo: nomeProdotto(item.product_id),
+        righe: [
+          ["Pezzo", `${i + 1} di ${pezzi}`],
+          ["Lotto", item.lot_number || "non riportato"],
+          ["Fornitore", item.supplier_name || ""],
+          ["Scadenza", item.expiry_date ? fmtData(item.expiry_date) : ""],
+          ["Frazionato il", fmtData(quando)],
+          ["Operatore", operatore],
+          "Lotto e scadenza sono quelli del fornitore. Il frazionamento è stato eseguito in azienda.",
+        ],
+        piede: company?.name || "",
+      })),
+      formatoEtichetta(company),
+    );
+
+    setFrazione(null);
+    setAvviso(`Frazionamento registrato: ${pezzi} pezzi. Controlla che siano usciti tutti i cartellini.`);
+  };
+
   const prodottoDiNome = (nome) => prodotti.find((p) => normalizza(p.name) === normalizza(nome));
   const fornitoriDi = (productId) => new Set(items.filter((a) => a.product_id === productId).map((a) => normalizza(a.supplier_name)));
 
@@ -581,9 +651,51 @@ export default function Tracciabilita() {
                         onClick={() => update(item.id, { exhausted_at: item.exhausted_at ? null : new Date().toISOString() })}>
                         {item.exhausted_at ? <RotateCcw size={13} /> : <PackageX size={13} />}
                       </button>
+                      <button
+                        className="icon-btn"
+                        title="Fraziona il lotto e stampa i cartellini dei pezzi"
+                        aria-label="Fraziona il lotto"
+                        onClick={() => { setErrore(""); setAvviso(""); setFrazione(frazione?.id === item.id ? null : { id: item.id, pezzi: "", operatore: "" }); }}
+                      ><Scissors size={13} /></button>
                       <button className="icon-btn icon-btn-ok" onClick={() => setModRiga({ id: item.id, prodotto: nomeProdotto(item.product_id), quantita: item.quantity == null ? "" : String(item.quantity).replace(".", ","), unita: item.unit || "", lotto: item.lot_number || "", scadenza: item.expiry_date || "" })} aria-label="Modifica prodotto" title="Modifica"><Pencil size={13} /></button>
                       <button className="icon-btn" onClick={() => { if (window.confirm("Eliminare solo questo prodotto dal documento?")) remove(item.id); }} aria-label="Elimina prodotto"><Trash2 size={13} /></button>
                     </span>
+
+                    {frazione?.id === item.id && (
+                      <div style={{ flex: "1 1 100%", marginTop: 8, padding: "10px 12px", background: "#F3F6F2", border: "1px solid #D8DED6", borderRadius: 8 }}>
+                        <p className="sub" style={{ margin: "0 0 8px" }}>
+                          In quanti pezzi è stato diviso. Escono altrettanti cartellini numerati, con
+                          lotto e scadenza del fornitore e la data del frazionamento: l'etichetta
+                          originale resta su uno dei pezzi o allegata al documento di consegna.
+                        </p>
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                          <label className="field-label" style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                            Pezzi
+                            <input
+                              type="number" min="2" max="50" value={frazione.pezzi}
+                              onChange={(e) => setFrazione({ ...frazione, pezzi: e.target.value })}
+                              className="full-input" style={{ width: 80 }} autoFocus
+                            />
+                          </label>
+                          <label className="field-label" style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: "1 1 180px" }}>
+                            Operatore
+                            <input
+                              type="text" value={frazione.operatore}
+                              onChange={(e) => setFrazione({ ...frazione, operatore: e.target.value })}
+                              className="full-input" placeholder="chi ha diviso"
+                            />
+                          </label>
+                          <button type="button" className="btn-primary" disabled={frazionando} onClick={() => fraziona(item)}>
+                            <Printer size={15} /> {frazionando ? "Registro…" : "Registra e stampa"}
+                          </button>
+                          <button
+                            type="button" className="btn-primary"
+                            style={{ background: "#fff", color: "#6E7C73", border: "1px solid #D8DED6" }}
+                            onClick={() => setFrazione(null)}
+                          >Annulla</button>
+                        </div>
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>
