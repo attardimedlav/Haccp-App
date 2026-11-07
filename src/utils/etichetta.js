@@ -41,23 +41,36 @@ function fmtData(iso) {
 //     piede: "ATTARDIMEDLAV",
 //   });
 export function stampaEtichetta(et = {}, opzioni = {}) {
+  const copie = Math.max(1, Math.min(20, Number(opzioni.copie) || 1));
+  stampaEtichette(Array.from({ length: copie }, () => et), opzioni);
+}
+
+// Piu' etichette diverse in una stampa sola.
+//
+// Serve al frazionamento di un lotto: tre pezzi, tre cartellini che si
+// distinguono solo per il progressivo. Chiamare tre volte stampaEtichetta
+// aprirebbe tre finestre di stampa una dietro l'altra, e alla terza
+// l'operatore ha gia' sbagliato: qui esce un documento solo, di tre pagine,
+// dove ogni pagina e' un'etichetta.
+export function stampaEtichette(elenco = [], opzioni = {}) {
   const larghezza = Number(opzioni.larghezzaMm) || 62;
   const altezza = Number(opzioni.altezzaMm) || 29;
-  const copie = Math.max(1, Math.min(20, Number(opzioni.copie) || 1));
 
-  const righe = (et.righe || [])
-    .filter((r) => Array.isArray(r) ? String(r[1] ?? "").trim() !== "" : String(r ?? "").trim() !== "")
-    .map((r) => Array.isArray(r)
-      ? `<tr><th>${esc(r[0])}</th><td>${esc(r[1])}</td></tr>`
-      : `<tr><td colspan="2">${esc(r)}</td></tr>`)
-    .join("");
+  const una = (et = {}) => {
+    const righe = (et.righe || [])
+      .filter((r) => Array.isArray(r) ? String(r[1] ?? "").trim() !== "" : String(r ?? "").trim() !== "")
+      .map((r) => Array.isArray(r)
+        ? `<tr><th>${esc(r[0])}</th><td>${esc(r[1])}</td></tr>`
+        : `<tr><td colspan="2">${esc(r)}</td></tr>`)
+      .join("");
 
-  const una = `
+    return `
     <div class="et">
       <div class="tit">${esc(et.titolo || "")}</div>
       ${righe ? `<table>${righe}</table>` : ""}
       ${et.piede ? `<div class="pie">${esc(et.piede)}</div>` : ""}
     </div>`;
+  };
 
   const doc = `<!doctype html><html lang="it"><head><meta charset="utf-8"><title>Etichetta</title>
 <style>
@@ -88,7 +101,7 @@ export function stampaEtichetta(et = {}, opzioni = {}) {
   td { font-size: 6.8pt; font-weight: bold; padding: 0.05mm 0; line-height: 1.15; vertical-align: baseline; }
   td[colspan] { font-size: 5.6pt; font-weight: normal; line-height: 1.1; padding-top: 0.4mm; }
   .pie { font-size: 5pt; margin-top: 0.4mm; }
-</style></head><body>${una.repeat(copie)}</body></html>`;
+</style></head><body>${(elenco.length ? elenco : [{}]).map(una).join("")}</body></html>`;
 
   stampaHtml(doc);
 }
