@@ -38,7 +38,6 @@ function fmtData(iso) {
 //   stampaEtichetta({
 //     titolo: "Salmone",
 //     righe: [["Lotto", "L-240"], ["Congelato il", "16/10/2026"]],
-//     piede: "ATTARDIMEDLAV",
 //   });
 export function stampaEtichetta(et = {}, opzioni = {}) {
   const copie = Math.max(1, Math.min(20, Number(opzioni.copie) || 1));
@@ -68,7 +67,6 @@ export function stampaEtichette(elenco = [], opzioni = {}) {
     <div class="et">
       <div class="tit">${esc(et.titolo || "")}</div>
       ${righe ? `<table>${righe}</table>` : ""}
-      ${et.piede ? `<div class="pie">${esc(et.piede)}</div>` : ""}
     </div>`;
   };
 
@@ -100,7 +98,9 @@ export function stampaEtichette(elenco = [], opzioni = {}) {
   }
   td { font-size: 6.8pt; font-weight: bold; padding: 0.05mm 0; line-height: 1.15; vertical-align: baseline; }
   td[colspan] { font-size: 5.6pt; font-weight: normal; line-height: 1.1; padding-top: 0.4mm; }
-  .pie { font-size: 5pt; margin-top: 0.4mm; }
+  /* Niente nome dell'azienda in fondo: su un 50 x 30 quella riga mangia
+     spazio e non dice niente a nessuno — chi guarda il cartellino e' gia'
+     dentro quell'azienda. Lo spazio serve al prodotto e al lotto. */
 </style></head><body>${(elenco.length ? elenco : [{}]).map(una).join("")}</body></html>`;
 
   stampaHtml(doc);
