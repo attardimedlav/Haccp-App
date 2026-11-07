@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Plus, Trash2, AlertTriangle, CheckCircle2, Snowflake, Timer, ThermometerSnowflake, XCircle, Package, Printer } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
-import { stampaEtichetta, dataEtichetta } from "../utils/etichetta";
+import { stampaEtichetta, dataEtichetta, formatoEtichetta } from "../utils/etichetta";
 
 // I due soli trattamenti previsti dal Reg. (CE) n. 853/2004, Allegato III,
 // sezione VIII, capitolo III, lettera D, per il pesce destinato al consumo
@@ -190,7 +190,7 @@ function AbbattimentoCotti({ company }) {
                           "Conservare in frigorifero. Consumare entro il termine indicato in manuale.",
                         ],
                         piede: company?.name || "",
-                      })}>
+                      }, formatoEtichetta(company))}>
                       <Printer size={14} />
                     </button>
                     <button className="icon-btn" onClick={() => { if (window.confirm("Eliminare questo ciclo?")) remove(c.id); }} aria-label="Elimina"><Trash2 size={14} /></button>
@@ -376,7 +376,7 @@ function RegistroCongelamento({ company }) {
                   "Prodotto congelato. Scongelare in frigorifero a non più di +4 °C. Non ricongelare.",
                 ],
                 piede: company?.name || "",
-              })}>
+              }, formatoEtichetta(company))}>
               <Printer size={14} />
             </button>
             <button className="icon-btn" onClick={() => remove(x.id)} aria-label="Elimina"><Trash2 size={14} /></button>
@@ -725,7 +725,7 @@ export default function AbbattimentoPesce() {
                               "Pesce bonificato ai sensi del Reg. CE 853/2004. Mantenere identificato fino al servizio.",
                             ],
                             piede: company?.name || "",
-                          })}>
+                          }, formatoEtichetta(company))}>
                           <Printer size={14} />
                         </button>
                         <button className="icon-btn" onClick={() => removeBatch(b.id)} aria-label="Elimina"><Trash2 size={14} /></button>

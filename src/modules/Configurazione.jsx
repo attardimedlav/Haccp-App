@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { CheckCircle2, CalendarClock, Download, Wrench, Droplets, SprayCan, Settings2, RefreshCw, Lock, Users, BookOpen, Layers, ListOrdered, FileText, Paperclip, KeyRound, PenLine, Trash2, ClipboardCheck } from "lucide-react";
+import { CheckCircle2, CalendarClock, Download, Wrench, Droplets, SprayCan, Settings2, RefreshCw, Lock, Users, BookOpen, Layers, ListOrdered, FileText, Paperclip, KeyRound, PenLine, Trash2, ClipboardCheck, Printer } from "lucide-react";
 import { useAuth } from "../AuthContext";
 import { useTable } from "../hooks/useTable";
 import { downloadReminderICS, elencoPromemoria } from "../hooks/useReminders";
@@ -126,6 +126,11 @@ export default function Configurazione({ onVai, subTabIniziale }) {
   // registrano alla chiusura. Con un orario solo una delle due arriva sempre
   // nel momento sbagliato.
   const [reminderHourEvening, setReminderHourEvening] = useState(20);
+  // La misura del rotolo di etichette che l'azienda ha comprato. Il
+  // cartellino nasce di questa dimensione: se non corrisponde, il browser lo
+  // riscala e l'etichetta esce tagliata o piccola in mezzo alla carta.
+  const [labelWidth, setLabelWidth] = useState(62);
+  const [labelHeight, setLabelHeight] = useState(29);
 
   // I dati che servono a costruire i promemoria del calendario: il piano
   // di pulizia, le vasche, il piano analitico con i referti e le
@@ -225,7 +230,8 @@ export default function Configurazione({ onVai, subTabIniziale }) {
       setClosingWeekdays(Array.isArray(company.closing_weekdays) ? company.closing_weekdays.map(Number) : []);
       setReminderHour(Number(company.reminder_hour) || 8);
       setReminderHourEvening(Number(company.reminder_hour_evening) || 20);
-      setReminderHourEvening(Number(company.reminder_hour_evening) || 20);
+      setLabelWidth(Number(company.label_width_mm) || 62);
+      setLabelHeight(Number(company.label_height_mm) || 29);
       setHasHood(company.has_hood !== false);
       setIceMachineDays(String(company.ice_machine_cleaning_days || 30));
       setManualSource(company.haccp_manual_source === "esterno" ? "esterno" : "app");
@@ -284,6 +290,8 @@ export default function Configurazione({ onVai, subTabIniziale }) {
     closing_weekdays: closingWeekdays,
     reminder_hour: Number(reminderHour) || 8,
     reminder_hour_evening: Number(reminderHourEvening) || 20,
+    label_width_mm: Math.max(10, Math.min(120, Number(labelWidth) || 62)),
+    label_height_mm: Math.max(10, Math.min(200, Number(labelHeight) || 29)),
     has_hood: hasHood,
     ice_machine_cleaning_days: Math.max(1, parseInt(iceMachineDays, 10) || 30),
     haccp_manual_source: manualSource,
@@ -1204,6 +1212,40 @@ export default function Configurazione({ onVai, subTabIniziale }) {
               fasce del piano di pulizia, le vasche, il piano analitico e le manutenzioni già
               programmate. Nei giorni di chiusura non suona nulla. Se cambi una frequenza, riscarica
               il file e sostituisci il precedente.
+            </p>
+          </div>
+
+          <div className="reminder-block">
+            <div className="reminder-head">
+              <Printer size={17} color="#2F6F4E" />
+              <div>
+                <h3>Formato dell'etichetta</h3>
+                <p className="sub">La misura del rotolo montato sulla stampante dell'azienda. I cartellini di abbattimento, congelamento e bonifica nascono di questa dimensione.</p>
+              </div>
+            </div>
+            <div className="config-grid-2" style={{ marginBottom: 8 }}>
+              <label className="field-label" style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                Larghezza (mm)
+                <input
+                  type="number" min="10" max="120" value={labelWidth} disabled={!isConsultant}
+                  onChange={(e) => setLabelWidth(e.target.value)}
+                  className="full-input" style={{ width: 90 }}
+                />
+              </label>
+              <label className="field-label" style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                Altezza (mm)
+                <input
+                  type="number" min="10" max="200" value={labelHeight} disabled={!isConsultant}
+                  onChange={(e) => setLabelHeight(e.target.value)}
+                  className="full-input" style={{ width: 90 }}
+                />
+              </label>
+            </div>
+            <p className="sub" style={{ marginTop: 0 }}>
+              Si legge sulla confezione del rotolo: 50 x 30 e 62 x 29 sono le misure piu' comuni.
+              Se non corrisponde, il browser riscala il cartellino e l'etichetta esce tagliata o
+              piccola in mezzo alla carta. Non riguarda l'etichetta delle preparazioni destinate
+              alla vendita, che e' un foglio e non un cartellino. Si salva con la configurazione.
             </p>
           </div>
         </>
