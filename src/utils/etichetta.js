@@ -98,7 +98,13 @@ export function stampaEtichetta(et = {}, opzioni = {}) {
 // Un iframe nascosto e non una finestra nuova: window.open lo bloccano i
 // browser quando la stampa non parte da un click diretto, e su iPhone lascia
 // aperta una scheda vuota che l'operatore deve chiudere a mano.
-export function stampaHtml(doc) {
+// Le opzioni servono all'etichetta di vendita, che ha un obbligo che il
+// cartellino interno non ha: l'altezza minima dei caratteri del Reg. UE
+// 1169/2011. Se il testo non entra nel rotolo a quella dimensione non si puo'
+// rimpicciolire — si deve dirlo. Passando `altezzaMaxMm` e `seNonCiSta` la
+// stampa viene fermata prima di partire e l'app avvisa, invece di stampare
+// un'etichetta tagliata o fuori norma senza che nessuno se ne accorga.
+export function stampaHtml(doc, opzioni = {}) {
   const telaio = document.createElement("iframe");
   telaio.setAttribute("aria-hidden", "true");
   telaio.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;";
@@ -106,7 +112,25 @@ export function stampaHtml(doc) {
 
   const via = () => { try { document.body.removeChild(telaio); } catch { /* già tolto */ } };
 
+  // Il browser lavora in pixel CSS: 1 mm sono 96/25,4 px. La conversione sta
+  // qui una volta sola, cosi' chi chiama ragiona in millimetri come il rotolo.
+  const PX_PER_MM = 96 / 25.4;
+
   telaio.onload = () => {
+    const limite = Number(opzioni.altezzaMaxMm) || 0;
+    if (limite && typeof opzioni.seNonCiSta === "function") {
+      try {
+        const corpo = telaio.contentDocument.body;
+        const altezzaMm = corpo.scrollHeight / PX_PER_MM;
+        // Un millimetro di tolleranza: gli arrotondamenti del browser non
+        // devono far scattare l'avviso su un'etichetta che in realta' entra.
+        if (altezzaMm > limite + 1) {
+          via();
+          opzioni.seNonCiSta(Math.ceil(altezzaMm));
+          return;
+        }
+      } catch { /* se non si riesce a misurare, si stampa: meglio provare */ }
+    }
     try {
       telaio.contentWindow.focus();
       telaio.contentWindow.print();
@@ -141,4 +165,16 @@ export function formatoEtichetta(azienda = {}) {
     larghezzaMm: Number(azienda?.label_width_mm) || 62,
     altezzaMm: Number(azienda?.label_height_mm) || 29,
   };
+}
+
+// Il rotolo dell'etichetta di vendita, che e' un'altra cosa dal cartellino.
+//
+// Qui non c'e' un valore predefinito e il ritorno e' null quando l'azienda non
+// l'ha impostato: senza rotolo dichiarato l'etichetta di vendita resta un
+// foglio, come prima. Inventarsi una misura vorrebbe dire stampare
+// un'etichetta destinata al consumatore su una carta che nessuno ha scelto.
+export function formatoEtichettaVendita(azienda = {}) {
+  const l = Number(azienda?.label_sale_width_mm) || 0;
+  const h = Number(azienda?.label_sale_height_mm) || 0;
+  return l && h ? { larghezzaMm: l, altezzaMm: h } : null;
 }
