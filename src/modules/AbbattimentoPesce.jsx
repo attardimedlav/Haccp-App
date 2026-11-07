@@ -189,7 +189,6 @@ function AbbattimentoCotti({ company }) {
                           ["Operatore", c.operator],
                           "Conservare in frigorifero. Consumare entro il termine indicato in manuale.",
                         ],
-                        piede: company?.name || "",
                       }, formatoEtichetta(company))}>
                       <Printer size={14} />
                     </button>
@@ -375,7 +374,6 @@ function RegistroCongelamento({ company }) {
                   ["Operatore", x.operator],
                   "Prodotto congelato. Scongelare in frigorifero a non più di +4 °C. Non ricongelare.",
                 ],
-                piede: company?.name || "",
               }, formatoEtichetta(company))}>
               <Printer size={14} />
             </button>
@@ -724,7 +722,6 @@ export default function AbbattimentoPesce() {
                               ["Operatore", b.operator],
                               "Pesce bonificato ai sensi del Reg. CE 853/2004. Mantenere identificato fino al servizio.",
                             ],
-                            piede: company?.name || "",
                           }, formatoEtichetta(company))}>
                           <Printer size={14} />
                         </button>
