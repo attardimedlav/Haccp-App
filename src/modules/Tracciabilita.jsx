@@ -291,7 +291,6 @@ export default function Tracciabilita() {
           ["Operatore", operatore],
           "Lotto e scadenza sono quelli del fornitore. Il frazionamento è stato eseguito in azienda.",
         ],
-        piede: company?.name || "",
       })),
       formatoEtichetta(company),
     );
