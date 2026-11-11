@@ -7,6 +7,7 @@ import { WATER_TANK_CONTROL_TYPE } from "./AcquePotabili";
 import { PLAN_TYPE } from "./Documenti";
 import { expiryInfo, FORMAZIONE_ROLE, eDatoreDi } from "./SicurezzaLavoro";
 import { riassuntoPerArea } from "../utils/pianoPulizie";
+import { inForza, nomiCessati, nonCessato } from "../utils/dipendenti";
 
 const CHECK_PERIODICITY = [
 ];
@@ -48,11 +49,11 @@ export default function Dashboard({ goTo, openWorkSafety }) {
   const vasche = useTable("water_tanks", company?.id);
   const water = useTable("water_controls", company?.id);
   const docs = useTable("haccp_documents", company?.id);
-  const workSafety = useTable("work_safety_appointments", company?.id);
-  const trainings = useTable("work_safety_trainings", company?.id);
+  const workSafetyTutte = useTable("work_safety_appointments", company?.id);
+  const trainingsTutti = useTable("work_safety_trainings", company?.id);
   const equipmentChecks = useTable("equipment_checks", company?.id);
-  const medicalVisits = useTable("medical_visits", company?.id);
-  const employees = useTable("employees", company?.id);
+  const medicalVisitsTutte = useTable("medical_visits", company?.id);
+  const employeesTutti = useTable("employees", company?.id);
   const manutenzioni = useTable("maintenance_logs", company?.id);
   const fornitori = useTable("suppliers", company?.id);
   const olio = useTable("frying_oil_logs", company?.id);
@@ -64,7 +65,42 @@ export default function Dashboard({ goTo, openWorkSafety }) {
   const referti = useTable("analysis_results", company?.id);
   const chiusure = useTable("company_closures", company?.id);
   const spegnimenti = useTable("equipment_downtime", company?.id);
-  const corsiHaccp = useTable("training_records", company?.id);
+  const corsiHaccpTutti = useTable("training_records", company?.id);
+
+  // CHI NON È PIÙ IN FORZA NON PRODUCE AVVISI.
+  //
+  // Si toglie qui, una volta sola, e da qui in giù tutta la Panoramica lavora
+  // su elenchi già puliti: i conteggi, le scadenze, i "mai registrato". Se
+  // invece si filtrasse avviso per avviso, basterebbe dimenticarne uno perché
+  // un'azienda continui a ricevere la scadenza del corso di chi se n'è andato.
+  //
+  // Si tolgono anche i documenti intestati a quella persona — nomine, corsi,
+  // visite — perché sono proprio quelli a generare le scadenze. Non vengono
+  // cancellati da nessuna parte: restano nelle loro schede, dove servono a
+  // dimostrare che quando lavorava lì era in regola. Qui smettono soltanto di
+  // chiedere qualcosa.
+  //
+  // Conseguenza voluta: se l'unico addetto antincendio se ne va, la Panoramica
+  // comincia a segnalare l'incarico mancante. È giusto così — l'obbligo
+  // dell'azienda non se n'è andato con lui.
+  const usciti = nomiCessati(employeesTutti.items);
+  const employees = { ...employeesTutti, items: inForza(employeesTutti.items) };
+  const workSafety = {
+    ...workSafetyTutte,
+    items: workSafetyTutte.items.filter((a) => nonCessato(a.person_name, usciti)),
+  };
+  const trainings = {
+    ...trainingsTutti,
+    items: trainingsTutti.items.filter((t) => workSafety.items.some((a) => a.id === t.appointment_id)),
+  };
+  const medicalVisits = {
+    ...medicalVisitsTutte,
+    items: medicalVisitsTutte.items.filter((v) => nonCessato(v.employee_name, usciti)),
+  };
+  const corsiHaccp = {
+    ...corsiHaccpTutti,
+    items: corsiHaccpTutti.items.filter((c) => nonCessato(c.employee_name, usciti)),
+  };
 
   // Tutti gli indicatori di questo blocco riguardano solo il modulo HACCP: se
   // è disattivato (azienda seguita solo per la sicurezza sul lavoro) restano

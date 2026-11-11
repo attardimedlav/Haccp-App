@@ -11,6 +11,7 @@ import ArchivioCorsi from "./ChiusuraCorso";
 import DocumentiSicurezza from "./DocumentiSicurezza";
 import FirmaDocumento from "./FirmaDocumento";
 import { generateNominaAttachment, findRlsName, findDatoreName } from "../utils/nominaTemplates";
+import { inForza } from "../utils/dipendenti";
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
 const FUNZIONE_LETTURA = "clever-responder";
@@ -356,7 +357,11 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
   const { items: appointments, add: addAppointment, remove: removeAppointment, update: updateAppointment, loading: appointmentsLoading } = useTable("work_safety_appointments", company?.id);
   const { items: equipmentChecks, add: addEquipmentCheck, remove: removeEquipmentCheck, loading: equipmentLoading } = useTable("equipment_checks", company?.id);
   const { items: medicalVisits, add: addMedicalVisit, remove: removeMedicalVisit, loading: medicalLoading } = useTable("medical_visits", company?.id);
-  const { items: employees, add: addEmployee } = useTable("employees", company?.id);
+  const { items: employeesTutti, add: addEmployee } = useTable("employees", company?.id);
+  // Il quadro della formazione, la sorveglianza sanitaria e i suggerimenti
+  // dei nomi guardano solo chi e' in forza. I documenti dei cessati restano
+  // dove sono: si consultano, ma non chiedono piu' niente.
+  const employees = inForza(employeesTutti);
   const { items: trainings, add: addTraining, remove: removeTraining } = useTable("work_safety_trainings", company?.id);
 
   const showEquipmentTab = !!company?.active_equipment_checks;
@@ -1286,7 +1291,11 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
     setMedError("");
     try {
       const typedName = medEmployeeName.trim();
-      const alreadyInOrganigramma = employees.some(
+      // Qui si guarda l'elenco INTERO, cessati compresi: se la persona c'e'
+      // gia' ma e' stata cessata, va rimessa in forza dalla sua scheda, non
+      // creata una seconda volta. Due righe con lo stesso nome spezzerebbero
+      // tutti i collegamenti, che in quest'app si reggono sul nome.
+      const alreadyInOrganigramma = employeesTutti.some(
         (emp) => `${emp.first_name} ${emp.last_name}`.trim() === typedName
       );
       if (!alreadyInOrganigramma) {

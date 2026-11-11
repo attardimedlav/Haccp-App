@@ -3,6 +3,7 @@ import { AlertTriangle, CheckCircle2, ShieldAlert, Clock } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { expiryInfo, MEDICO_ROLE, FORMAZIONE_ROLE, eDatoreDi } from "./SicurezzaLavoro";
+import { inForza } from "../utils/dipendenti";
 
 // Controllo di conformità: elenca gli adempimenti del D.Lgs. 81/08 che per
 // questa azienda risultano mancanti, scaduti o in scadenza.
@@ -39,7 +40,10 @@ function mesiFa(dateStr, mesi) {
 
 export default function Conformita() {
   const { company } = useAuth();
-  const { items: employees } = useTable("employees", company?.id);
+  const { items: employeesTutti } = useTable("employees", company?.id);
+  // La conformita' si misura su chi lavora qui adesso: un cessato non e'
+  // una lacuna da colmare.
+  const employees = inForza(employeesTutti);
   const { items: appointments } = useTable("work_safety_appointments", company?.id);
   const { items: trainings } = useTable("work_safety_trainings", company?.id);
   const { items: medicalVisits } = useTable("medical_visits", company?.id);

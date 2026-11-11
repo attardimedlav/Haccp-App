@@ -4,6 +4,7 @@ import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
 import { supabase } from "../supabaseClient";
+import { inForza } from "../utils/dipendenti";
 
 const VALIDITY_OPTIONS = [1, 2, 3, 5];
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
@@ -96,7 +97,10 @@ export default function Formazione() {
   // Le persone sono le stesse della sezione sicurezza sul lavoro: qui si
   // leggono per scegliere chi ha fatto il corso, e chi non c'è si aggiunge
   // all'elenco invece di restare un nome scritto a mano.
-  const { items: dipendenti, add: addDipendente, reload: ricaricaDipendenti } = useTable("employees", company?.id);
+  const { items: dipendentiTutti, add: addDipendente, reload: ricaricaDipendenti } = useTable("employees", company?.id);
+  // Chi non e' piu' in forza esce di scena qui, una volta sola: il modulo
+  // della formazione lavora solo su chi c'e' adesso.
+  const dipendenti = inForza(dipendentiTutti);
 
   const [name, setName] = useState("");
   const [course, setCourse] = useState("");

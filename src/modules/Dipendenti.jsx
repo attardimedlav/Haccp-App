@@ -1,11 +1,12 @@
 import React, { useState } from "react";
-import { Plus, Trash2, User, Pencil, Check, X } from "lucide-react";
+import { Plus, Trash2, User, Pencil, Check, X, UserMinus, UserCheck } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { dataNascitaDaCf } from "../utils/codiceFiscale";
 import { supabase } from "../supabaseClient";
 import { SECURITY_ROLE_OPTIONS } from "./Organigramma";
 import { DATORE_ROLES } from "./SicurezzaLavoro";
+import { inForza, cessati } from "../utils/dipendenti";
 import { generateNominaAttachment, findRlsName, findDatoreName } from "../utils/nominaTemplates";
 
 // Verifica di un codice fiscale. NON lo genera: il codice fiscale vero lo
@@ -188,7 +189,7 @@ async function rinominaPersona({ companyId, employeeId, nomeVecchio, nome, cogno
 
 export default function Dipendenti() {
   const { company } = useAuth();
-  const { items, add, remove, loading, reload } = useTable("employees", company?.id);
+  const { items, add, remove, update, loading, reload } = useTable("employees", company?.id);
   const { items: appointments, add: addAppointment, reload: reloadAppointments } = useTable("work_safety_appointments", company?.id);
   // Servono solo per contare i collegamenti prima di rinominare una persona.
   const { items: medicalVisits, reload: reloadVisits } = useTable("medical_visits", company?.id);
@@ -218,6 +219,26 @@ export default function Dipendenti() {
   const [eMansione, setEMansione] = useState("");
   const [eReparto, setEReparto] = useState("");
   const [eRuoloSicurezza, setERuoloSicurezza] = useState("Dipendente");
+  // La cessazione: chi non lavora piu' qui. Non si cancella — i suoi
+  // attestati e le sue visite restano agli atti e dimostrano che finche' c'e'
+  // stato era in regola — ma da quella data in poi non genera piu' avvisi ne'
+  // conteggi, perche' non e' piu' un obbligo di questa azienda.
+  const [cessazione, setCessazione] = useState(null);   // { id, data }
+  const [cessBusy, setCessBusy] = useState(false);
+  const attivi = inForza(items);
+  const usciti = cessati(items);
+
+  const confermaCessazione = async () => {
+    if (!cessazione?.data) return;
+    setCessBusy(true);
+    try {
+      await update(cessazione.id, { ended_at: cessazione.data });
+      setCessazione(null);
+    } finally {
+      setCessBusy(false);
+    }
+  };
+
   const [eBusy, setEBusy] = useState(false);
   const [eErr, setEErr] = useState("");
 
@@ -406,7 +427,7 @@ export default function Dipendenti() {
         <div className="empty"><p>Nessun dipendente registrato. Aggiungine uno per iniziare a usarlo nelle altre sezioni.</p></div>
       ) : (
         <ul className="log-list">
-          {items.map((item) => {
+          {attivi.map((item) => {
             const inModifica = editId === item.id;
             const legami = inModifica
               ? conteggioCollegamenti(nomeCompleto(item.first_name, item.last_name),
@@ -417,7 +438,7 @@ export default function Dipendenti() {
               && nomeCompleto(eNome, eCognome) !== nomeCompleto(item.first_name, item.last_name);
 
             return (
-              <li key={item.id} className={"log-row" + (inModifica ? " editing log-row-wrap" : "")}>
+              <li key={item.id} className={"log-row" + (inModifica ? " editing log-row-wrap" : "") + (cessazione?.id === item.id ? " log-row-wrap" : "")}>
                 <User size={15} color="#2F6F4E" />
                 {inModifica ? (
                   <>
@@ -483,13 +504,65 @@ export default function Dipendenti() {
                     {item.department && <span className="log-note">{item.department}</span>}
                     <button className="icon-btn" onClick={() => apriModifica(item)}
                       aria-label="Modifica nome e mansione"><Pencil size={14} /></button>
+                    {/* Cessare non e' eliminare: la riga resta, con tutto il suo
+                        storico, e smette soltanto di produrre obblighi. Il
+                        cestino accanto cancella davvero, e serve solo quando una
+                        persona e' stata inserita per sbaglio. */}
+                    <button className="icon-btn" onClick={() => setCessazione({ id: item.id, data: new Date().toISOString().slice(0, 10) })}
+                      aria-label="Non lavora piu' qui" title="Non lavora piu' qui"><UserMinus size={14} /></button>
                     <button className="icon-btn" onClick={() => remove(item.id)} aria-label="Elimina"><Trash2 size={14} /></button>
                   </>
+                )}
+                {cessazione?.id === item.id && (
+                  <div style={{ flex: "1 1 100%", marginTop: 8, padding: "10px 12px", background: "#F3F6F2", border: "1px solid #D8DED6", borderRadius: 8 }}>
+                    <p className="sub" style={{ margin: "0 0 6px" }}>
+                      Da quando non lavora piu' qui. Attestati e visite restano agli atti; da questa
+                      data in poi non compare piu' negli avvisi ne' nei conteggi.
+                    </p>
+                    <span style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                      <input type="date" value={cessazione.data} aria-label="Data di cessazione"
+                        onChange={(e) => setCessazione({ ...cessazione, data: e.target.value })}
+                        className="note-input edit-input" style={{ maxWidth: 180 }} />
+                      <button className="btn-primary" disabled={cessBusy || !cessazione.data}
+                        onClick={confermaCessazione}>{cessBusy ? "Salvo..." : "Conferma"}</button>
+                      <button className="btn-primary" style={{ background: "#fff", color: "#6E7C73", border: "1px solid #D8DED6" }}
+                        onClick={() => setCessazione(null)}>Annulla</button>
+                    </span>
+                  </div>
                 )}
               </li>
             );
           })}
         </ul>
+      )}
+
+      {/* NON PIU' IN FORZA.
+          In fondo e staccati, perche' non sono lavoro da fare: sono archivio.
+          Restano raggiungibili perche' il giorno che un controllo chiede della
+          formazione di due anni fa, l'attestato di chi nel frattempo se n'e'
+          andato deve essere li', non da ricostruire. */}
+      {usciti.length > 0 && (
+        <div style={{ marginTop: 26 }}>
+          <h3 style={{ marginBottom: 4 }}>Non piu' in forza</h3>
+          <p className="sub" style={{ marginTop: 0 }}>
+            Non generano avvisi ne' scadenze. I loro documenti restano dove sono, nelle rispettive
+            schede, e si consultano come prima.
+          </p>
+          <ul className="log-list">
+            {usciti.map((item) => (
+              <li key={item.id} className="log-row" style={{ opacity: 0.75 }}>
+                <User size={15} color="#6E7C73" />
+                <span className="log-main"><strong>{item.first_name} {item.last_name}</strong></span>
+                <span className="doc-type-tag">
+                  Cessato il {String(item.ended_at).slice(0, 10).split("-").reverse().join("/")}
+                </span>
+                {item.job_role && <span className="log-unit">{item.job_role}</span>}
+                <button className="icon-btn" onClick={() => update(item.id, { ended_at: null })}
+                  aria-label="Rimetti in forza" title="E' tornato: rimettilo in forza"><UserCheck size={14} /></button>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   );

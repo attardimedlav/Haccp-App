@@ -4,6 +4,7 @@ import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { ROLE_OPTIONS, MEDICO_ROLE, expiryInfo } from "./SicurezzaLavoro";
 import { generateNominaAttachment, findRlsName, findDatoreName } from "../utils/nominaTemplates";
+import { inForza } from "../utils/dipendenti";
 
 export const SECURITY_ROLE_OPTIONS = [
   "Dipendente",
@@ -18,7 +19,10 @@ export const SECURITY_ROLE_OPTIONS = [
 
 export default function Organigramma({ onVaiAiDipendenti }) {
   const { company } = useAuth();
-  const { items: employees, remove: removeEmployee, loading: employeesLoading } = useTable("employees", company?.id);
+  const { items: employeesTutti, remove: removeEmployee, loading: employeesLoading } = useTable("employees", company?.id);
+  // L'organigramma fotografa l'azienda di oggi: chi non c'e' piu' non va
+  // esposto in un documento affisso ai sensi del D.Lgs. 81/08.
+  const employees = inForza(employeesTutti);
   const { items: appointments, add: addAppointment } = useTable("work_safety_appointments", company?.id);
   const { items: trainings } = useTable("work_safety_trainings", company?.id);
 
