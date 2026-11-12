@@ -1,7 +1,7 @@
 import React from "react";
 import {
   Network, FileText, ShieldCheck, Users, HeartPulse, Flame, HardHat,
-  Stethoscope, Paperclip, GraduationCap, Wrench, ShieldAlert, Check, AlertTriangle,
+  Stethoscope, Paperclip, GraduationCap, Wrench, ShieldAlert, Check, AlertTriangle, Award,
 } from "lucide-react";
 import { useAuth } from "../AuthContext";
 import { expiryInfo, MEDICO_ROLE, ALLEGATO_TYPE_OPTIONS, eDatoreDi } from "./SicurezzaLavoro";
@@ -65,6 +65,7 @@ export default function FascicoloSicurezza({
   medicalVisits = [],
   equipmentChecks = [],
   dvrDocs = [],
+  quadro = null,
   vaiA,
 }) {
   const { company } = useAuth();
@@ -294,6 +295,27 @@ export default function FascicoloSicurezza({
           ))}
         </ul>
       </Blocco>
+
+      {/* Il quadro della formazione, lo stesso che sta negli Attestati: qui
+          serve per leggere in un colpo d'occhio quando scadono i corsi di
+          ciascuno, senza cambiare scheda. */}
+      {quadro && (
+        <div className="dish-row" style={{ display: "block", padding: "14px 16px", marginBottom: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <Award size={17} color="#2F6F4E" />
+            <strong style={{ fontSize: 15 }}>Quadro della formazione</strong>
+            {vaiA && (
+              <button type="button" className="link-btn" style={{ marginLeft: "auto" }} onClick={() => vaiA("nomine")}>
+                Apri
+              </button>
+            )}
+          </div>
+          <p className="sub" style={{ margin: "4px 0 0" }}>
+            Le scadenze degli attestati, incarico per incarico. In rosso chi va formato.
+          </p>
+          <div style={{ marginTop: 8 }}>{quadro}</div>
+        </div>
+      )}
 
       <Blocco
         icona={GraduationCap}

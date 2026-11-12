@@ -1431,6 +1431,75 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
   const nomiInElenco = new Set(medicalComplianceList.map((r) => r.fullName));
   const altreVisite = medicalVisits.filter((v) => !nomiInElenco.has(v.employee_name));
 
+  // Il quadro della formazione, scritto una volta sola.
+  //
+  // Si vede in due posti — qui negli Attestati, dove lo si costruisce, e nel
+  // Fascicolo, dove serve per leggere le scadenze dei corsi a colpo d'occhio.
+  // Sono la stessa cosa, non due copie: il giorno che si aggiunge un riquadro
+  // o si cambia una regola, cambia in tutti e due i posti insieme.
+  const quadroFormazione = (
+    <div className="org-chart">
+      <div className="org-chart-head">
+        <h3>{company?.name || "Azienda"}</h3>
+        <p className="org-intro">
+          Quadro della formazione — scadenza dell'attestato più recente per ciascun incarico.
+          Documento a uso interno, non destinato all'affissione.
+        </p>
+      </div>
+
+      <div className="org-top">
+        <p className="org-box-title"><HardHat size={15} /> DATORE DI LAVORO / LEGALE RAPPRESENTANTE</p>
+        {quadroNomi(["RSPP Datore di Lavoro"], ["Datore di Lavoro", "RSPP Datore di Lavoro"]).length > 0 ? (
+          <ul className="org-names quadro-names">
+            {quadroNomi(["RSPP Datore di Lavoro"], ["Datore di Lavoro", "RSPP Datore di Lavoro"]).map((n) => (
+              <li key={n}><span className="quadro-nome">{n}</span></li>
+            ))}
+          </ul>
+        ) : <p className="org-empty">Da nominare</p>}
+      </div>
+
+      <div className="org-row org-row-2">
+        <QuadroBox icon={Award} tone="rspp" title="RESPONSABILE DEL SERVIZIO DI PREVENZIONE E PROTEZIONE (RSPP)"
+          righe={quadroRighe(["RSPP Datore di Lavoro", "RSPP Esterno"])} />
+        <QuadroBox icon={Stethoscope} tone="medico" title="MEDICO COMPETENTE"
+          nomi={quadroNomi([MEDICO_ROLE])} />
+      </div>
+
+      <div className="org-row org-row-3">
+        <QuadroBox icon={Award} tone="soccorso" title="ADDETTI AL PRIMO SOCCORSO"
+          righe={quadroRighe(["Addetto al Primo Soccorso"])} />
+        <QuadroBox icon={Award} tone="rls" title="RAPPRESENTANTE DEI LAVORATORI PER LA SICUREZZA (RLS)"
+          righe={quadroRighe(["RLS"])} />
+        <QuadroBox icon={Award} tone="antincendio" title="ADDETTI ALLA PREVENZIONE INCENDI"
+          righe={quadroRighe(["Addetto Antincendio"])} />
+      </div>
+
+      <div className="org-row org-row-2">
+        <QuadroBox icon={HardHat} tone="neutro" title="PREPOSTI" note="art. 37 D.Lgs. 81/08"
+          righe={quadroRighe(["Preposto"])} />
+        <QuadroBox icon={Award} tone="neutro" title="FORMAZIONE DEI LAVORATORI"
+          note="art. 37 D.Lgs. 81/08 — tutti i lavoratori in anagrafica"
+          righe={quadroRigheFormazione()} />
+      </div>
+
+      <div className="quadro-legenda">
+        <span className="pill pill-ok">valido</span>
+        <span className="pill pill-warn">in scadenza entro 60 giorni</span>
+        <span className="pill pill-alert">scaduto, oppure lavoratore senza attestato</span>
+      </div>
+
+      <div className="quadro-azione">
+        <button type="button" className="btn-primary" onClick={() => setSubTab("corsi")}>
+          <GraduationCap size={15} /> Vai ai corsi
+        </button>
+        <span className="sub">
+          Chi è in rosso qui sopra è chi va formato: nella scheda <strong>Corsi</strong> lo
+          trovi già spuntato.
+        </span>
+      </div>
+    </div>
+  );
+
   // conScadenza: la pillola della scadenza si ripete solo dove serve. Sulla riga
   // del lavoratore c'e' gia' quella della visita piu' recente, quindi la si mostra
   // nel dettaglio solo se le visite sono piu' d'una.
@@ -1488,6 +1557,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
             medicalVisits={medicalVisits.filter((v) => nonCessato(v.employee_name, usciti))}
             equipmentChecks={equipmentChecks}
             dvrDocs={dvrDocs}
+            quadro={quadroFormazione}
             vaiA={setSubTab}
           />
         );
@@ -1663,68 +1733,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
             </button>
           </div>
 
-          {nomineView === "quadro" && (
-            <div className="org-chart">
-              <div className="org-chart-head">
-                <h3>{company?.name || "Azienda"}</h3>
-                <p className="org-intro">
-                  Quadro della formazione — scadenza dell'attestato più recente per ciascun incarico.
-                  Documento a uso interno, non destinato all'affissione.
-                </p>
-              </div>
-
-              <div className="org-top">
-                <p className="org-box-title"><HardHat size={15} /> DATORE DI LAVORO / LEGALE RAPPRESENTANTE</p>
-                {quadroNomi(["RSPP Datore di Lavoro"], ["Datore di Lavoro", "RSPP Datore di Lavoro"]).length > 0 ? (
-                  <ul className="org-names quadro-names">
-                    {quadroNomi(["RSPP Datore di Lavoro"], ["Datore di Lavoro", "RSPP Datore di Lavoro"]).map((n) => (
-                      <li key={n}><span className="quadro-nome">{n}</span></li>
-                    ))}
-                  </ul>
-                ) : <p className="org-empty">Da nominare</p>}
-              </div>
-
-              <div className="org-row org-row-2">
-                <QuadroBox icon={Award} tone="rspp" title="RESPONSABILE DEL SERVIZIO DI PREVENZIONE E PROTEZIONE (RSPP)"
-                  righe={quadroRighe(["RSPP Datore di Lavoro", "RSPP Esterno"])} />
-                <QuadroBox icon={Stethoscope} tone="medico" title="MEDICO COMPETENTE"
-                  nomi={quadroNomi([MEDICO_ROLE])} />
-              </div>
-
-              <div className="org-row org-row-3">
-                <QuadroBox icon={Award} tone="soccorso" title="ADDETTI AL PRIMO SOCCORSO"
-                  righe={quadroRighe(["Addetto al Primo Soccorso"])} />
-                <QuadroBox icon={Award} tone="rls" title="RAPPRESENTANTE DEI LAVORATORI PER LA SICUREZZA (RLS)"
-                  righe={quadroRighe(["RLS"])} />
-                <QuadroBox icon={Award} tone="antincendio" title="ADDETTI ALLA PREVENZIONE INCENDI"
-                  righe={quadroRighe(["Addetto Antincendio"])} />
-              </div>
-
-              <div className="org-row org-row-2">
-                <QuadroBox icon={HardHat} tone="neutro" title="PREPOSTI" note="art. 37 D.Lgs. 81/08"
-                  righe={quadroRighe(["Preposto"])} />
-                <QuadroBox icon={Award} tone="neutro" title="FORMAZIONE DEI LAVORATORI"
-                  note="art. 37 D.Lgs. 81/08 — tutti i lavoratori in anagrafica"
-                  righe={quadroRigheFormazione()} />
-              </div>
-
-              <div className="quadro-legenda">
-                <span className="pill pill-ok">valido</span>
-                <span className="pill pill-warn">in scadenza entro 60 giorni</span>
-                <span className="pill pill-alert">scaduto, oppure lavoratore senza attestato</span>
-              </div>
-
-              <div className="quadro-azione">
-                <button type="button" className="btn-primary" onClick={() => setSubTab("corsi")}>
-                  <GraduationCap size={15} /> Vai ai corsi
-                </button>
-                <span className="sub">
-                  Chi è in rosso qui sopra è chi va formato: nella scheda <strong>Corsi</strong> lo
-                  trovi già spuntato.
-                </span>
-              </div>
-            </div>
-          )}
+          {nomineView === "quadro" && quadroFormazione}
 
           {nomineView === "elenco" && (
           <>
