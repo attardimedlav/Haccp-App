@@ -93,6 +93,7 @@ const PERIODICI = new Set(["infestanti", "acquepotabili", "acquafiltrata", "veri
 const EVENTI = new Set(["cessioni", "nonconformita"]);
 
 const WORK_SAFETY_SUB_ITEMS = [
+  { id: "fascicolo", label: "Fascicolo", icon: FolderOpen },
   { id: "organigramma", label: "Organigramma", icon: Network },
   { id: "dvr", label: "DVR", icon: FileText },
   { id: "allegati", label: "Allegati al DVR", icon: Paperclip },
@@ -168,7 +169,9 @@ function Shell() {
   // dall'organigramma all'anagrafica del personale.
   const [configSubTab, setConfigSubTab] = useState("generale");
   const vaiAConfig = (sub) => { setConfigSubTab(sub); setTab("config"); };
-  const [workSafetySubTab, setWorkSafetySubTab] = useState("organigramma");
+  // Entrando in "Sicurezza sul lavoro" si apre il fascicolo: e' il colpo
+  // d'occhio da cui si capisce cosa manca, e da li' si va nella scheda giusta.
+  const [workSafetySubTab, setWorkSafetySubTab] = useState("fascicolo");
   const [workSafetyExpanded, setWorkSafetyExpanded] = useState(false);
   // L'autocontrollo alimentare sta in un gruppo a fisarmonica come la sicurezza
   // sul lavoro: la barra ha ormai troppe voci per tenerle tutte aperte insieme.
