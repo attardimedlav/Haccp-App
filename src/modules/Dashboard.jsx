@@ -8,7 +8,6 @@ import { PLAN_TYPE } from "./Documenti";
 import { expiryInfo, FORMAZIONE_ROLE, eDatoreDi } from "./SicurezzaLavoro";
 import { riassuntoPerArea } from "../utils/pianoPulizie";
 import { inForza, nomiCessati, nonCessato } from "../utils/dipendenti";
-import FascicoloSicurezza from "./FascicoloSicurezza";
 
 const CHECK_PERIODICITY = [
 ];
@@ -827,23 +826,6 @@ export default function Dashboard({ goTo, openWorkSafety }) {
           </button>
         )}
       </div>
-
-      {/* Gli adempimenti della sicurezza nell'ordine del fascicolo. Sta qui,
-          sotto ai numeri, perche' e' la parte che l'azienda legge con calma:
-          in alto restano gli avvisi, che sono quelli che chiedono di agire
-          oggi. I dati sono quelli gia' caricati e gia' ripuliti dei cessati
-          qui sopra: il fascicolo non rifa' nessuna interrogazione, legge solo
-          in piu' il DVR con i suoi allegati. */}
-      {company?.active_work_safety && (
-        <FascicoloSicurezza
-          employees={employees.items}
-          appointments={workSafety.items}
-          trainings={trainings.items}
-          medicalVisits={medicalVisits.items}
-          equipmentChecks={equipmentChecks.items}
-          openWorkSafety={goToWorkSafety}
-        />
-      )}
     </div>
   );
 }
