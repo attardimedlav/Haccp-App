@@ -3,7 +3,6 @@ import {
   Network, FileText, ShieldCheck, Users, HeartPulse, Flame, HardHat,
   Stethoscope, Paperclip, GraduationCap, Wrench, ShieldAlert, Check, AlertTriangle,
 } from "lucide-react";
-import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { expiryInfo, MEDICO_ROLE, ALLEGATO_TYPE_OPTIONS, eDatoreDi } from "./SicurezzaLavoro";
 
@@ -17,11 +16,15 @@ import { expiryInfo, MEDICO_ROLE, ALLEGATO_TYPE_OPTIONS, eDatoreDi } from "./Sic
 // compone: organigramma, DVR, le figure una per una con la loro nomina e il
 // loro attestato, la sorveglianza sanitaria, i verbali.
 //
-// Questa e' la stessa roba, messa in quell'ordine. Non inserisce e non
-// modifica niente: da ogni riquadro si va alla scheda dove si rimedia. I dati
-// arrivano gia' caricati e gia' ripuliti dei lavoratori non piu' in forza
-// dalla Panoramica, che e' l'unico posto dove quel filtro viene applicato;
-// qui si legge in piu' solo il DVR con i suoi allegati.
+// Questa e' la stessa roba, messa in quell'ordine. E' la prima scheda di
+// "Sicurezza sul lavoro", quella che si apre entrando: prima si vede come sta
+// il fascicolo, poi si va nella scheda che serve. Non inserisce e non modifica
+// niente — da ogni riquadro il tasto porta dove si rimedia.
+//
+// Tutti i dati arrivano gia' caricati da SicurezzaLavoro e gia' ripuliti dei
+// lavoratori non piu' in forza: qui non si interroga il database una seconda
+// volta e soprattutto non si riscrive quel filtro, che sta scritto in un
+// posto solo.
 //
 // Non c'e' niente da migrare: un ordine di presentazione e' codice, non dato.
 // Il giorno in cui si pubblica, tutte le aziende — quelle gia' fatte e quelle
@@ -61,12 +64,12 @@ export default function FascicoloSicurezza({
   trainings = [],
   medicalVisits = [],
   equipmentChecks = [],
-  openWorkSafety,
+  dvrDocs = [],
+  vaiA,
 }) {
   const { company } = useAuth();
-  const { items: dvrDocs } = useTable("dvr_documents", company?.id);
 
-  const vai = (id) => (openWorkSafety ? () => openWorkSafety(id) : undefined);
+  const vai = (id) => (vaiA ? () => vaiA(id) : undefined);
 
   const dvrItems = dvrDocs.filter((d) => d.kind === "dvr");
   const allegati = dvrDocs.filter((d) => d.kind === "allegato");

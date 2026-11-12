@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Award, HardHat, Wrench, Stethoscope, Network, Pencil, X, Check, ShieldAlert, GraduationCap, FileSignature, Wand2, PenLine, Lock, ShieldCheck, Users, Eye, HeartPulse, Flame } from "lucide-react";
+import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Award, HardHat, Wrench, Stethoscope, Network, Pencil, X, Check, ShieldAlert, GraduationCap, FileSignature, Wand2, PenLine, Lock, ShieldCheck, Users, Eye, HeartPulse, Flame, FolderOpen } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
@@ -11,7 +11,8 @@ import ArchivioCorsi from "./ChiusuraCorso";
 import DocumentiSicurezza from "./DocumentiSicurezza";
 import FirmaDocumento from "./FirmaDocumento";
 import { generateNominaAttachment, findRlsName, findDatoreName } from "../utils/nominaTemplates";
-import { inForza } from "../utils/dipendenti";
+import { inForza, nomiCessati, nonCessato } from "../utils/dipendenti";
+import FascicoloSicurezza from "./FascicoloSicurezza";
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
 const FUNZIONE_LETTURA = "clever-responder";
@@ -169,6 +170,10 @@ export function eDatoreDi(employees, appointments) {
   };
 }
 
+// La prima scheda: gli adempimenti nell'ordine del fascicolo, come li chiede
+// un'ispezione. Sta davanti a tutte perche' e' quella da cui si capisce dove
+// si e' messi, e da li' si entra nelle altre, che sono il banco di lavoro.
+const FASCICOLO_SUB_TAB = { id: "fascicolo", label: "Fascicolo", icon: FolderOpen };
 const ORGANIGRAMMA_SUB_TAB = { id: "organigramma", label: "Organigramma", icon: Network };
 const CONFORMITA_SUB_TAB = { id: "conformita", label: "Conformità", icon: ShieldAlert };
 
@@ -367,6 +372,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
   const showEquipmentTab = !!company?.active_equipment_checks;
   const showMedicalTab = !!company?.active_medical_surveillance;
   const visibleSubTabs = [
+    FASCICOLO_SUB_TAB,
     ORGANIGRAMMA_SUB_TAB,
     ...DVR_SUB_TABS,
     CORSI_SUB_TAB,
@@ -1467,6 +1473,25 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
           </button>
         ))}
       </div>
+
+      {/* Le nomine, gli attestati e le visite di chi non e' piu' in forza
+          restano consultabili nelle loro schede, ma nel fascicolo non entrano:
+          li' si guarda cosa l'azienda deve avere oggi. Il filtro e' lo stesso
+          usato in Panoramica e nell'email mensile. */}
+      {subTab === "fascicolo" && (() => {
+        const usciti = nomiCessati(employeesTutti);
+        return (
+          <FascicoloSicurezza
+            employees={employees}
+            appointments={appointments.filter((a) => nonCessato(a.person_name, usciti))}
+            trainings={trainings}
+            medicalVisits={medicalVisits.filter((v) => nonCessato(v.employee_name, usciti))}
+            equipmentChecks={equipmentChecks}
+            dvrDocs={dvrDocs}
+            vaiA={setSubTab}
+          />
+        );
+      })()}
 
       {subTab === "organigramma" && <Organigramma onVaiAiDipendenti={onVaiAiDipendenti} />}
 
