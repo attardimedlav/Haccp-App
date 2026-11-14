@@ -651,3 +651,43 @@ nav { display: flex; flex-direction: column; gap: 2px; }
 .corso-legenda-stati { margin-left: auto; gap: 0; }
 @media (max-width: 640px) { .corso-legenda-stati { margin-left: 0; } }
 @media print { .corso-ico, .corso-ico-dot { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+
+/* ---- Fascicolo della sicurezza ----
+   La scheda si legge quasi sempre in piedi, col telefono in mano, davanti a
+   chi fa domande: quindi sul telefono le righe si impilano e i caratteri
+   crescono invece di restringersi. Sullo schermo grande resta compatta. */
+.fasc-blocco { padding: 14px 16px; margin-bottom: 10px; }
+.fasc-testa { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.fasc-titolo { font-size: 15px; }
+.fasc-apri { margin-left: auto; }
+.fasc-corpo { margin-top: 8px; }
+.fasc-sotto { margin: 4px 0 0; }
+.fasc-blocco .log-row { flex-wrap: wrap; }
+.fasc-blocco .lot-tag { margin-left: 0; }
+/* .lot-tag è verde di suo e qui sta più in basso di .pill-alert, quindi
+   senza questa riga "attestato mancante" verrebbe scritto in verde: il
+   colore direbbe il contrario di quello che c'è scritto. */
+.fasc-blocco .lot-tag.pill-alert { background: #FBEEEC; color: #B3432E; }
+.fasc-blocco .lot-tag.pill-warn { background: #FFF6E5; color: #7A5A1E; border: 1px solid #F0DDAE; }
+.fasc-blocco .lot-tag.pill-ok { background: #E6EFE8; color: #2F6F4E; }
+
+@media (max-width: 640px) {
+  .fasc-blocco { padding: 14px; }
+  .fasc-titolo { font-size: 16px; }
+  .fasc-sotto { font-size: 13px; }
+  /* Il tasto va a capo da solo e si tocca largo, invece di schiacciarsi
+     all'estremità della riga del titolo. */
+  .fasc-apri { margin-left: 0; width: 100%; font-size: 14px; padding: 8px 0; }
+  .fasc-blocco .log-row { flex-direction: column; align-items: flex-start; gap: 6px; font-size: 14.5px; }
+  .fasc-blocco .log-main { min-width: 0; }
+  .fasc-blocco .lot-tag, .fasc-blocco .doc-type-tag { font-size: 12.5px; padding: 3px 9px; }
+
+  /* Il quadro della formazione, sul telefono: una colonna (c'era già) ma con
+     i caratteri leggibili. Vale anche nella scheda Attestati, dove è lo
+     stesso quadro. */
+  .org-box-title { font-size: 12.5px; }
+  .org-names, .org-names li { font-size: 14.5px; }
+  .org-box-note { font-size: 12px; }
+  .quadro-riga .pill { font-size: 12px; padding: 3px 9px; }
+  .quadro-legenda { font-size: 12.5px; }
+}
