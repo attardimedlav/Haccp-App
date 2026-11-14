@@ -41,19 +41,19 @@ function Stato({ cls, testo }) {
 
 function Blocco({ icona: Icona, titolo, sottotitolo, stato, onVai, children }) {
   return (
-    <div className="dish-row" style={{ display: "block", padding: "14px 16px", marginBottom: 10 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+    <div className="dish-row fasc-blocco">
+      <div className="fasc-testa">
         <Icona size={17} color="#2F6F4E" />
-        <strong style={{ fontSize: 15 }}>{titolo}</strong>
+        <strong className="fasc-titolo">{titolo}</strong>
         {stato}
         {onVai && (
-          <button type="button" className="link-btn" style={{ marginLeft: "auto" }} onClick={onVai}>
+          <button type="button" className="link-btn fasc-apri" onClick={onVai}>
             Apri
           </button>
         )}
       </div>
-      {sottotitolo && <p className="sub" style={{ margin: "4px 0 0" }}>{sottotitolo}</p>}
-      {children && <div style={{ marginTop: 8 }}>{children}</div>}
+      {sottotitolo && <p className="sub fasc-sotto">{sottotitolo}</p>}
+      {children && <div className="fasc-corpo">{children}</div>}
     </div>
   );
 }
@@ -169,9 +169,9 @@ export default function FascicoloSicurezza({
   const ultimoDvr = dvrItems.map((d) => d.doc_date).filter(Boolean).sort().reverse()[0];
 
   return (
-    <div style={{ marginTop: 18 }}>
+    <div className="fascicolo" style={{ marginTop: 18 }}>
       <h3 style={{ marginBottom: 2 }}>Fascicolo della sicurezza</h3>
-      <p className="sub" style={{ marginTop: 0 }}>
+      <p className="sub fasc-sotto" style={{ marginTop: 0 }}>
         Gli adempimenti del D.Lgs. 81/08 nell'ordine in cui compongono il fascicolo e in cui vengono
         chiesti in un controllo. Da ogni riquadro si va alla scheda dove si registra o si allega.
       </p>
@@ -300,20 +300,20 @@ export default function FascicoloSicurezza({
           serve per leggere in un colpo d'occhio quando scadono i corsi di
           ciascuno, senza cambiare scheda. */}
       {quadro && (
-        <div className="dish-row" style={{ display: "block", padding: "14px 16px", marginBottom: 10 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <div className="dish-row fasc-blocco">
+          <div className="fasc-testa">
             <Award size={17} color="#2F6F4E" />
-            <strong style={{ fontSize: 15 }}>Quadro della formazione</strong>
+            <strong className="fasc-titolo">Quadro della formazione</strong>
             {vaiA && (
-              <button type="button" className="link-btn" style={{ marginLeft: "auto" }} onClick={() => vaiA("nomine")}>
+              <button type="button" className="link-btn fasc-apri" onClick={() => vaiA("nomine")}>
                 Apri
               </button>
             )}
           </div>
-          <p className="sub" style={{ margin: "4px 0 0" }}>
+          <p className="sub fasc-sotto">
             Le scadenze degli attestati, incarico per incarico. In rosso chi va formato.
           </p>
-          <div style={{ marginTop: 8 }}>{quadro}</div>
+          <div className="fasc-corpo">{quadro}</div>
         </div>
       )}
 
