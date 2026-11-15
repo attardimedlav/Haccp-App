@@ -378,7 +378,15 @@ nav { display: flex; flex-direction: column; gap: 2px; }
   .print-menu-sottotitolo {
     font-size: 12.5px; font-style: italic; color: #4C5A52; margin: 0 0 5mm;
   }
-  .print-menu-rombo { font-size: 11px; color: #B08D57; letter-spacing: 6px; margin: 0; }
+  /* Il riferimento di legge sotto il titolo: piccolo, ma leggibile senza
+     occhiali. Dice che cosa e' il foglio, quindi non va trattato come una
+     nota a pie' di pagina. */
+  .print-menu-norma {
+    font-family: Calibri, Carlito, Arial, sans-serif;
+    font-size: 8.5px; letter-spacing: .6px; color: #6E7C73;
+    margin: 2.5mm 0 0; text-transform: uppercase;
+  }
+  .print-menu-rombo { font-size: 11px; color: #B08D57; letter-spacing: 6px; margin: 3mm 0 0; }
 
   /* Le voci si incolonnano al centro come la testata: un menu allineato a
      sinistra sotto un titolo centrato sembra un elenco rimasto a meta'.
