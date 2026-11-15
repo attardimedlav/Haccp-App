@@ -7,6 +7,7 @@ import { uploadAttachment } from "../hooks/useAttachment";
 import { eanValido, cercaSuOpenFoodFacts, fotocameraDisponibile, leggiCodiceDallaFotocamera } from "../utils/codiceABarre";
 import { allergeniDaIngredienti } from "../utils/allergeniDaIngredienti";
 import { revisioneMenu, ALLERGENI } from "../utils/revisioneMenu";
+import { pdfAPezzi, uniscePiatti } from "../utils/menuAPezzi";
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
 const FUNZIONE_LETTURA = "clever-responder";
 
@@ -53,6 +54,7 @@ export default function Allergeni() {
   const { items: revisioni, add: aggiungiRevisione } = useTable("menu_reviews", company?.id);
   const [leggendoMenu, setLeggendoMenu] = useState(false);
   const [propostiScelti, setPropostiScelti] = useState({});
+  const [avanzamento, setAvanzamento] = useState("");
   // Il catalogo condiviso del consulente: un prodotto letto una volta vale
   // per tutti i clienti. Qui si legge soltanto; scegliendolo se ne fa una
   // copia nel catalogo dell'azienda.
@@ -509,42 +511,63 @@ export default function Allergeni() {
   // col suo foglio, chi vuole passa al menu dell'app. Non si importa in
   // blocco di proposito — ogni voce ha allergeni da confermare, e una
   // conferma data a venti piatti insieme non e' una conferma.
+  // Una lettura sola: un blocco di pagine o un'immagine.
+  //
+  // Quando la funzione risponde con un errore suo, supabase-js lo nasconde
+  // dietro "non-2xx status code", che non dice niente a nessuno. Il motivo
+  // vero sta nel corpo della risposta: si legge di li', altrimenti davanti
+  // al cliente si resta senza sapere che fare.
+  const leggiPezzo = async (base64, media_type) => {
+    const { data, error } = await supabase.functions.invoke(FUNZIONE_LETTURA, {
+      body: { file_base64: base64, media_type, tipo: "menu", company_id: company?.id },
+    });
+    if (error) {
+      let dettaglio = error.message || "Lettura non riuscita";
+      try {
+        const corpo = await error.context?.json?.();
+        if (corpo?.errore) dettaglio = corpo.errore;
+      } catch { /* resta il messaggio generico */ }
+      if (/non leggibile/i.test(dettaglio)) {
+        dettaglio = "Questa parte del menu non è stata letta. Se è una foto, rifalla con il foglio " +
+          "dritto e ben illuminato; se è una pagina molto fitta, fotografala in due pezzi.";
+      }
+      throw new Error(dettaglio);
+    }
+    if (data?.errore) throw new Error(data.errore);
+    return data;
+  };
+
   const leggiMenu = async (e) => {
     const f = e.target.files?.[0] || null;
     e.target.value = "";
     if (!f) return;
     if (f.size > MAX_FILE_BYTES) { setErrore("File troppo grande (limite 8 MB)."); return; }
-    setLeggendoMenu(true); setErrore(""); setAvviso("");
+    setLeggendoMenu(true); setErrore(""); setAvviso(""); setAvanzamento("");
     try {
-      const { data: b64, media_type } = await fileInBase64(f);
-      const { data, error } = await supabase.functions.invoke(FUNZIONE_LETTURA, {
-        body: { file_base64: b64, media_type, tipo: "menu", company_id: company?.id },
-      });
-      // Quando la funzione risponde con un errore suo, supabase-js lo
-      // nasconde dietro "non-2xx status code", che non dice niente a
-      // nessuno. Il motivo vero sta nel corpo della risposta: si legge di
-      // lì, altrimenti davanti al cliente si resta senza sapere che fare.
-      if (error) {
-        let dettaglio = error.message || "Lettura non riuscita";
-        try {
-          const corpo = await error.context?.json?.();
-          if (corpo?.errore) dettaglio = corpo.errore;
-        } catch { /* resta il messaggio generico */ }
-        if (/non leggibile/i.test(dettaglio)) {
-          dettaglio = "Il menu non è stato letto per intero. Se è un foglio lungo, allega una pagina " +
-            "per volta; se è una foto, rifalla con il foglio dritto e ben illuminato.";
+      // Una lettura sola per ogni blocco di pagine. Un menu di diciannove
+      // pagine mandato tutto insieme non arriva in fondo: la funzione viene
+      // fermata dal server a metà strada.
+      const pezzi = await pdfAPezzi(f);
+      const letture = [];
+      if (pezzi) {
+        for (const b of pezzi.blocchi) {
+          setAvanzamento(`Pagine ${b.da}-${b.a} di ${pezzi.totale}…`);
+          letture.push(await leggiPezzo(b.base64, "application/pdf"));
         }
-        throw new Error(dettaglio);
+      } else {
+        const { data: b64, media_type } = await fileInBase64(f);
+        letture.push(await leggiPezzo(b64, media_type));
       }
-      if (data?.errore) throw new Error(data.errore);
+      setAvanzamento("");
 
       const referto = revisioneMenu({
-        piatti: data?.piatti || [],
+        piatti: uniscePiatti(letture.map((d) => d?.piatti || [])),
         // Le scritte generali del menu: legenda, avvisi, rimandi. Sono
-        // quelle su cui si controllano le diciture.
-        testo: data?.note || "",
+        // quelle su cui si controllano le diciture, e stanno in genere su
+        // una pagina sola: si tengono tutte, da qualunque blocco arrivino.
+        testo: letture.map((d) => d?.note).filter(Boolean).join("\n"),
         vociApp: items,
-        vetrina: data?.vetrina === true,
+        vetrina: letture.some((d) => d?.vetrina === true),
       });
 
       // Il file si conserva: fra sei mesi, davanti a un controllo, serve
@@ -557,7 +580,7 @@ export default function Allergeni() {
         attachment_path: allegato,
         file_name: f.name,
         piatti: referto.piatti,
-        testo: data?.note || null,
+        testo: letture.map((d) => d?.note).filter(Boolean).join("\n") || null,
         rilievi: referto.rilievi,
       });
       setPropostiScelti({});
@@ -568,6 +591,7 @@ export default function Allergeni() {
       setErrore("Lettura del menu non riuscita: " + err.message);
     } finally {
       setLeggendoMenu(false);
+      setAvanzamento("");
     }
   };
 
@@ -715,7 +739,7 @@ export default function Allergeni() {
 
         <label className="file-drop" htmlFor="menu-allegato" style={{ maxWidth: 420 }}>
           <Camera size={15} />
-          <span>{leggendoMenu ? "Sto leggendo il menu…" : "Allega il tuo menu (foto o PDF)"}</span>
+          <span>{leggendoMenu ? (avanzamento || "Sto leggendo il menu…") : "Allega il tuo menu (foto o PDF)"}</span>
           <input id="menu-allegato" type="file" accept=".pdf,image/*" hidden disabled={leggendoMenu} onChange={leggiMenu} />
         </label>
         <p className="sub" style={{ margin: "6px 0 0" }}>
