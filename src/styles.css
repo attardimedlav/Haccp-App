@@ -413,6 +413,15 @@ nav { display: flex; flex-direction: column; gap: 2px; }
     font-family: Calibri, Carlito, Arial, sans-serif;
     font-size: 10px; letter-spacing: 1.4px; text-transform: uppercase; color: #97A199; margin: 0;
   }
+  /* La voce di cui non si sa ancora niente. Si stampa in rosso e si vede
+     da lontano, apposta: un menu con dei buchi non deve poter essere
+     appeso per distrazione. Non e' un difetto del foglio, e' un foglio che
+     dice la verita' finche' qualcuno non la completa. */
+  .print-menu-dacompletare {
+    font-family: Calibri, Carlito, Arial, sans-serif;
+    font-size: 10px; letter-spacing: 1.4px; text-transform: uppercase;
+    color: #B3432E; margin: 0;
+  }
   /* Le tracce: sotto gli allergeni, piu' piccole, in corsivo e in grigio.
      Si devono leggere, ma non devono avere lo stesso peso di quello che il
      prodotto contiene davvero: e' la differenza fra un obbligo e
