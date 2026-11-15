@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Info, FlaskConical, Check, X, Lock } from "lucide-react";
+import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Info, FlaskConical, Check, X, Lock, ScanLine } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { supabase } from "../supabaseClient";
@@ -17,6 +17,36 @@ import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
 // piano invece di essere fissata dall'app.
 
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
+const FUNZIONE_LETTURA = "clever-responder";
+
+// Stessa conversione delle altre letture dell'app: i PDF interi, le foto
+// ridotte a 2000 px. Una foto da dodici megapixel non si legge meglio di
+// una da due, e costa il triplo.
+function fileInBase64(file) {
+  return new Promise(function (resolve, reject) {
+    if (file.type === "application/pdf") {
+      const r = new FileReader();
+      r.onload = function () { resolve({ data: String(r.result).split(",")[1], media_type: "application/pdf" }); };
+      r.onerror = reject;
+      r.readAsDataURL(file);
+      return;
+    }
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = function () {
+      const lato = 2000;
+      const scala = Math.min(1, lato / Math.max(img.width, img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(img.width * scala);
+      canvas.height = Math.round(img.height * scala);
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      resolve({ data: canvas.toDataURL("image/jpeg", 0.85).split(",")[1], media_type: "image/jpeg" });
+    };
+    img.onerror = function () { URL.revokeObjectURL(url); reject(new Error("Immagine non leggibile")); };
+    img.src = url;
+  });
+}
 
 const MATRICI = [
   "Acqua di rete",
@@ -188,6 +218,73 @@ export default function ControlliAnalitici() {
     setNotaReferto("");
     setFile(null);
     setErroreReferto("");
+    setLettura("");
+  };
+
+  // --- Lettura del rapporto di prova ---
+  //
+  // I referti arrivano dal laboratorio come PDF, e ricopiarne a mano
+  // numero, date, laboratorio e valori e' il lavoro che non si fa mai:
+  // si allega il file e si rimanda la compilazione, e il piano resta
+  // scoperto pur avendo l'analisi in mano.
+  //
+  // La lettura NON salva niente: riempie i campi del modulo, e chi
+  // registra guarda e conferma. Un rapporto di prova e' un documento di
+  // terzi con dentro un giudizio, e quel giudizio non lo scrive l'app.
+  // Per questo l'esito arriva proposto ma resta modificabile, e se il
+  // rapporto non dichiara un giudizio ne' riporta limiti l'app lo lascia
+  // in bianco invece di sceglierlo al posto di chi firma.
+  const [leggendo, setLeggendo] = useState(false);
+  const [lettura, setLettura] = useState("");
+
+  const leggiReferto = async function () {
+    if (!file) { setErroreReferto("Prima allega il file del rapporto."); return; }
+    setLeggendo(true); setErroreReferto(""); setLettura("");
+    try {
+      const conv = await fileInBase64(file);
+      const risposta = await supabase.functions.invoke(FUNZIONE_LETTURA, {
+        body: { file_base64: conv.data, media_type: conv.media_type, tipo: "referto", company_id: companyId },
+      });
+      if (risposta.error) {
+        let dettaglio = risposta.error.message || "Lettura non riuscita";
+        try {
+          const corpo = await risposta.error.context.json();
+          if (corpo && corpo.errore) dettaglio = corpo.errore;
+        } catch (e) { /* resta il messaggio generico */ }
+        throw new Error(dettaglio);
+      }
+      const d = risposta.data || {};
+      if (d.errore) throw new Error(d.errore);
+
+      const letti = [];
+      if (d.laboratorio) { setLaboratorio(String(d.laboratorio)); letti.push("laboratorio"); }
+      if (d.numero_referto) { setNumeroReferto(String(d.numero_referto)); letti.push("numero"); }
+      if (d.data_prelievo) { setDataPrelievo(String(d.data_prelievo).slice(0, 10)); letti.push("data del prelievo"); }
+      if (d.data_referto) { setDataReferto(String(d.data_referto).slice(0, 10)); letti.push("data del referto"); }
+      // I valori: i parametri come li scrive il rapporto, e in testa il
+      // campione, perche' "acqua - rubinetto cucina" e' meta'
+      // dell'informazione quando fra due anni si rilegge il registro.
+      const pezzi = [];
+      if (d.campione) pezzi.push(String(d.campione));
+      if (d.parametri) pezzi.push(String(d.parametri));
+      if (pezzi.length) { setValori(pezzi.join(" — ")); letti.push("parametri"); }
+      if (ESITI.indexOf(d.esito) >= 0) { setEsito(d.esito); letti.push("esito"); }
+
+      if (!letti.length) {
+        setErroreReferto("Dal file non e' stato letto nessun dato: compila a mano, il documento resta allegato.");
+      } else {
+        setLettura(
+          "Letti dal rapporto: " + letti.join(", ") + "." +
+          (d.superamenti ? " Fuori limite: " + d.superamenti + "." : "") +
+          (ESITI.indexOf(d.esito) < 0 ? " Il giudizio non e' dichiarato nel rapporto: l'esito scegilo tu." : "") +
+          " Controlla i campi prima di salvare."
+        );
+      }
+    } catch (err) {
+      setErroreReferto("Lettura del rapporto non riuscita: " + err.message);
+    } finally {
+      setLeggendo(false);
+    }
   };
 
   const scegliFile = function (e) {
@@ -198,6 +295,7 @@ export default function ControlliAnalitici() {
       setFile(null); e.target.value = ""; return;
     }
     setFile(f);
+    setLettura("");
   };
 
   const salvaReferto = async function (piano) {
@@ -538,6 +636,29 @@ export default function ControlliAnalitici() {
                         onChange={scegliFile} hidden
                       />
                     </label>
+
+                    {/* La lettura si fa a comando, non appena si sceglie il file:
+                        allegare un rapporto e compilare a mano e' legittimo, e
+                        ogni lettura si paga. */}
+                    <div className="row-form" style={{ margin: "8px 0 0" }}>
+                      <button
+                        type="button" className="btn-primary"
+                        style={{ background: "#fff", color: "#2F6F4E", border: "1px solid #2F6F4E" }}
+                        disabled={!file || leggendo}
+                        onClick={leggiReferto}
+                      >
+                        <ScanLine size={15} /> {leggendo ? "Sto leggendo il rapporto…" : "Leggi i dati dal rapporto"}
+                      </button>
+                      <span className="sub" style={{ margin: 0 }}>
+                        Compila i campi qui sopra dal PDF del laboratorio. La lettura si paga a consumo.
+                      </span>
+                    </div>
+
+                    {lettura && (
+                      <span className="sub" style={{ display: "block", marginTop: 6, color: "#2F6F4E" }}>
+                        <Check size={13} /> {lettura}
+                      </span>
+                    )}
 
                     {erroreReferto && <span className="file-error"><AlertTriangle size={13} /> {erroreReferto}</span>}
                     <div className="row-form" style={{ margin: "10px 0 0" }}>
