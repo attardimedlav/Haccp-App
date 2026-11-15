@@ -76,6 +76,11 @@ const PIATTI = [
   ["maionese", ["Uova", "Senape"]],
   ["salsa rosa", ["Uova", "Senape"]],
   ["tartare", ["Senape"]],
+  ["frutti di mare", ["Molluschi", "Crostacei"]],
+  ["insalata di mare", ["Molluschi", "Crostacei", "Pesce"]],
+  ["zuppa di pesce", ["Pesce", "Molluschi", "Crostacei", "Sedano"]],
+  ["grigliata mista", ["Pesce", "Molluschi", "Crostacei"]],
+  ["crudo di mare", ["Pesce", "Molluschi", "Crostacei"]],
   ["cous cous", ["Glutine", "Sedano"]],
   ["couscous", ["Glutine", "Sedano"]],
   // Pizza e lievitati
@@ -169,6 +174,19 @@ export function allergeniProbabili(nomePiatto, ingredienti = "") {
 // preincartato, perché in quel caso serve pure l'elenco degli ingredienti
 // (art. 19 del D.Lgs. 231/2017), che per la sola somministrazione non è
 // obbligatorio.
+// Gli allergeni di un piatto possono arrivare come elenco o come una riga
+// sola separata da virgole: si accettano tutti e due e si tiene solo quello
+// che sta nei quattordici dell'Allegato II. Una lettura automatica scrive
+// quello che le riesce, e la forma esatta della risposta non e' un motivo per
+// perdere il lavoro dell'OSA.
+function allergeniPuliti(valore) {
+  const pezzi = Array.isArray(valore)
+    ? valore
+    : String(valore || "").split(/[,;·|]+/);
+  const trovati = pezzi.map((x) => normalizza(x));
+  return ALLERGENI.filter((a) => trovati.includes(normalizza(a)));
+}
+
 export function revisioneMenu({ piatti = [], testo = "", vociApp = [], vetrina = false } = {}) {
   const rilievi = [];
   const nomiInApp = new Set(vociApp.map((v) => normalizza(v.dish || v.nome)));
@@ -176,7 +194,7 @@ export function revisioneMenu({ piatti = [], testo = "", vociApp = [], vetrina =
   const esaminati = piatti
     .filter((p) => normalizza(p?.nome))
     .map((p) => {
-      const dichiarati = (p.allergeni || []).filter((a) => ALLERGENI.includes(a));
+      const dichiarati = allergeniPuliti(p.allergeni);
       const probabili = allergeniProbabili(p.nome, p.ingredienti);
       return {
         nome: String(p.nome).trim(),
