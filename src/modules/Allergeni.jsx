@@ -520,12 +520,29 @@ export default function Allergeni() {
       const { data, error } = await supabase.functions.invoke(FUNZIONE_LETTURA, {
         body: { file_base64: b64, media_type, tipo: "menu", company_id: company?.id },
       });
-      if (error) throw new Error(error.message || "Lettura non riuscita");
+      // Quando la funzione risponde con un errore suo, supabase-js lo
+      // nasconde dietro "non-2xx status code", che non dice niente a
+      // nessuno. Il motivo vero sta nel corpo della risposta: si legge di
+      // lì, altrimenti davanti al cliente si resta senza sapere che fare.
+      if (error) {
+        let dettaglio = error.message || "Lettura non riuscita";
+        try {
+          const corpo = await error.context?.json?.();
+          if (corpo?.errore) dettaglio = corpo.errore;
+        } catch { /* resta il messaggio generico */ }
+        if (/non leggibile/i.test(dettaglio)) {
+          dettaglio = "Il menu non è stato letto per intero. Se è un foglio lungo, allega una pagina " +
+            "per volta; se è una foto, rifalla con il foglio dritto e ben illuminato.";
+        }
+        throw new Error(dettaglio);
+      }
       if (data?.errore) throw new Error(data.errore);
 
       const referto = revisioneMenu({
         piatti: data?.piatti || [],
-        testo: data?.testo || "",
+        // Le scritte generali del menu: legenda, avvisi, rimandi. Sono
+        // quelle su cui si controllano le diciture.
+        testo: data?.note || "",
         vociApp: items,
         vetrina: data?.vetrina === true,
       });
@@ -540,7 +557,7 @@ export default function Allergeni() {
         attachment_path: allegato,
         file_name: f.name,
         piatti: referto.piatti,
-        testo: data?.testo || null,
+        testo: data?.note || null,
         rilievi: referto.rilievi,
       });
       setPropostiScelti({});
