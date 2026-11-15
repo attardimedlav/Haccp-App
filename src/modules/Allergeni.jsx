@@ -6,8 +6,7 @@ import { supabase } from "../supabaseClient";
 import { uploadAttachment } from "../hooks/useAttachment";
 import { eanValido, cercaSuOpenFoodFacts, fotocameraDisponibile, leggiCodiceDallaFotocamera } from "../utils/codiceABarre";
 import { allergeniDaIngredienti } from "../utils/allergeniDaIngredienti";
-
-const ALLERGENI = ["Glutine", "Latte", "Uova", "Soia", "Frutta a guscio", "Pesce", "Crostacei", "Sedano", "Senape", "Solfiti", "Arachidi", "Sesamo", "Lupini", "Molluschi"];
+import { revisioneMenu, ALLERGENI } from "../utils/revisioneMenu";
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
 const FUNZIONE_LETTURA = "clever-responder";
 
@@ -48,6 +47,12 @@ export default function Allergeni() {
   // nelle preparazioni. Non è il catalogo della tracciabilità, che si riempie
   // dalle bolle e qui non c'entra niente.
   const { items: prodotti, add: aggiungiProdotto, reload: ricaricaProdotti } = useTable("menu_products", company?.id);
+  // I menu che l'azienda ha allegato, con il referto di ciascuno. Non si
+  // sovrascrivono: il menu di marzo e quello di ottobre sono due documenti
+  // diversi, e serve poter dire che cosa era appeso quel giorno.
+  const { items: revisioni, add: aggiungiRevisione } = useTable("menu_reviews", company?.id);
+  const [leggendoMenu, setLeggendoMenu] = useState(false);
+  const [propostiScelti, setPropostiScelti] = useState({});
   // Il catalogo condiviso del consulente: un prodotto letto una volta vale
   // per tutti i clienti. Qui si legge soltanto; scegliendolo se ne fa una
   // copia nel catalogo dell'azienda.
@@ -497,6 +502,82 @@ export default function Allergeni() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  // ---- Il menu che l'azienda ha già ---------------------------------
+  //
+  // Si allega il foglio che e' appeso, l'app lo legge e dice cosa manca.
+  // Poi, voce per voce, lo si puo' portare dentro l'app: chi vuole resta
+  // col suo foglio, chi vuole passa al menu dell'app. Non si importa in
+  // blocco di proposito — ogni voce ha allergeni da confermare, e una
+  // conferma data a venti piatti insieme non e' una conferma.
+  const leggiMenu = async (e) => {
+    const f = e.target.files?.[0] || null;
+    e.target.value = "";
+    if (!f) return;
+    if (f.size > MAX_FILE_BYTES) { setErrore("File troppo grande (limite 8 MB)."); return; }
+    setLeggendoMenu(true); setErrore(""); setAvviso("");
+    try {
+      const { data: b64, media_type } = await fileInBase64(f);
+      const { data, error } = await supabase.functions.invoke(FUNZIONE_LETTURA, {
+        body: { file_base64: b64, media_type, tipo: "menu", company_id: company?.id },
+      });
+      if (error) throw new Error(error.message || "Lettura non riuscita");
+      if (data?.errore) throw new Error(data.errore);
+
+      const referto = revisioneMenu({
+        piatti: data?.piatti || [],
+        testo: data?.testo || "",
+        vociApp: items,
+        vetrina: data?.vetrina === true,
+      });
+
+      // Il file si conserva: fra sei mesi, davanti a un controllo, serve
+      // poter dire che cosa era appeso quel giorno. Se il caricamento non
+      // riesce il referto resta valido lo stesso.
+      let allegato = null;
+      try { allegato = await uploadAttachment(company.id, f); } catch { /* il referto vale comunque */ }
+
+      await aggiungiRevisione({
+        attachment_path: allegato,
+        file_name: f.name,
+        piatti: referto.piatti,
+        testo: data?.testo || null,
+        rilievi: referto.rilievi,
+      });
+      setPropostiScelti({});
+      setAvviso(referto.rilievi.length
+        ? "Menu letto. Qui sotto trovi i rilievi e i piatti da sistemare."
+        : "Menu letto: non sono emersi rilievi. Controlla comunque i piatti qui sotto.");
+    } catch (err) {
+      setErrore("Lettura del menu non riuscita: " + err.message);
+    } finally {
+      setLeggendoMenu(false);
+    }
+  };
+
+  // Porta dentro l'app un piatto letto dal menu allegato. Gli allergeni
+  // proposti entrano solo se l'OSA li ha spuntati: la dichiarazione resta
+  // sua, e una proposta non confermata non deve finire su un foglio esposto.
+  const importaPiatto = async (p) => {
+    const scelti = propostiScelti[p.nome] || [];
+    await add({
+      dish: p.nome,
+      allergens: [...p.dichiarati, ...scelti.filter((a) => !p.dichiarati.includes(a))],
+      traces: [],
+      product_ids: [],
+      ingredients_text: p.ingredienti || null,
+      note: "Ripreso dal menu che l'azienda aveva già, letto il " + new Date().toLocaleDateString("it-IT"),
+      updated_at: new Date().toISOString(),
+    });
+    setAvviso(`«${p.nome}» è ora una voce del menu dell'app: apri la matita per collegarci i prodotti.`);
+  };
+
+  const spuntaProposto = (piatto, allergene) => {
+    setPropostiScelti((prec) => {
+      const ora = prec[piatto] || [];
+      return { ...prec, [piatto]: ora.includes(allergene) ? ora.filter((a) => a !== allergene) : [...ora, allergene] };
+    });
+  };
+
   const submit = async (e) => {
     e.preventDefault();
     if (!dish.trim()) return;
@@ -597,6 +678,121 @@ export default function Allergeni() {
           prodotti effettivamente in uso.
         </span>
       </p>
+
+      {/* Il menu che l'azienda ha già.
+          Sta prima del modulo perché è il primo passo di chi arriva qui con
+          un foglio in mano: si vede dove si è, e solo dopo si comincia a
+          scrivere. Chi il menu nell'app ce l'ha già salta tutto il riquadro,
+          che è chiuso. */}
+      <details className="no-print" style={{ margin: "0 0 16px" }}>
+        <summary style={{ cursor: "pointer", fontWeight: 600, color: "#2F6F4E", fontSize: "0.92rem" }}>
+          Hai già un menu? Allegalo e te lo rivedo
+        </summary>
+
+        <p className="sub" style={{ margin: "8px 0" }}>
+          Allega il menu che esponi — una foto o un PDF. L'app lo legge, ti dice quali piatti sono
+          senza allergeni, quali li hanno forse incompleti e che cosa manca al foglio per essere in
+          regola. Poi, se vuoi, porti dentro i piatti uno per uno. Il tuo menu resta il tuo: non
+          viene cambiato né sostituito.
+        </p>
+
+        <label className="file-drop" htmlFor="menu-allegato" style={{ maxWidth: 420 }}>
+          <Camera size={15} />
+          <span>{leggendoMenu ? "Sto leggendo il menu…" : "Allega il tuo menu (foto o PDF)"}</span>
+          <input id="menu-allegato" type="file" accept=".pdf,image/*" hidden disabled={leggendoMenu} onChange={leggiMenu} />
+        </label>
+        <p className="sub" style={{ margin: "6px 0 0" }}>
+          La lettura si paga a consumo, come quella delle etichette: una frazione di centesimo.
+        </p>
+
+        {revisioni.length > 0 && (() => {
+          const ultima = revisioni[0];
+          const piatti = Array.isArray(ultima.piatti) ? ultima.piatti : [];
+          const rilievi = Array.isArray(ultima.rilievi) ? ultima.rilievi : [];
+          const colore = { grave: "pill-alert", medio: "pill-warn", lieve: "pill-ok" };
+          return (
+            <div style={{ marginTop: 14 }}>
+              <p className="appt-section-label" style={{ margin: "0 0 6px" }}>
+                Referto del {new Date(ultima.created_at).toLocaleDateString("it-IT")}
+                {ultima.file_name ? ` — ${ultima.file_name}` : ""}
+              </p>
+
+              {rilievi.length === 0 ? (
+                <p className="sub" style={{ margin: 0 }}>Nessun rilievo sul foglio.</p>
+              ) : (
+                <ul className="log-list">
+                  {rilievi.map((r, i) => (
+                    <li key={i} className="log-row" style={{ alignItems: "flex-start" }}>
+                      <span className={"lot-tag " + (colore[r.gravita] || "pill-warn")} style={{ marginLeft: 0 }}>
+                        {r.gravita}
+                      </span>
+                      <span className="log-main" style={{ display: "block", minWidth: 0 }}>
+                        <strong>{r.titolo}</strong>
+                        <span className="sub" style={{ display: "block", margin: "2px 0 0" }}>{r.dettaglio}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {piatti.length > 0 && (
+                <>
+                  <p className="appt-section-label" style={{ margin: "14px 0 6px" }}>
+                    I piatti letti dal menu ({piatti.length})
+                  </p>
+                  <ul className="log-list">
+                    {piatti.map((p) => {
+                      const scelti = propostiScelti[p.nome] || [];
+                      return (
+                        <li key={p.nome} className="log-row" style={{ alignItems: "flex-start", flexWrap: "wrap" }}>
+                          <span className="log-main" style={{ display: "block", minWidth: 0 }}>
+                            <strong>{p.nome}</strong>
+                            <span className="sub" style={{ display: "block", margin: "2px 0 0" }}>
+                              {p.dichiarati.length
+                                ? "Dichiarati nel menu: " + p.dichiarati.join(", ")
+                                : "Nel menu non è dichiarato nessun allergene."}
+                            </span>
+                            {p.proposti.length > 0 && (
+                              <span style={{ display: "block", margin: "6px 0 0" }}>
+                                <span className="sub" style={{ display: "block" }}>
+                                  Da valutare — spunta quelli che ci sono davvero nella tua ricetta:
+                                </span>
+                                <span className="chip-grid" style={{ marginTop: 4 }}>
+                                  {p.proposti.map((a) => (
+                                    <button
+                                      key={a} type="button"
+                                      className={"chip" + (scelti.includes(a) ? " chip-on" : "")}
+                                      onClick={() => spuntaProposto(p.nome, a)}
+                                    >{a}</button>
+                                  ))}
+                                </span>
+                              </span>
+                            )}
+                          </span>
+                          {p.giaInApp ? (
+                            <span className="doc-type-tag">già in menu</span>
+                          ) : (
+                            <button type="button" className="link-btn" onClick={() => importaPiatto(p)}>
+                              <Plus size={14} /> Aggiungi al menu dell'app
+                            </button>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </>
+              )}
+
+              {revisioni.length > 1 && (
+                <p className="sub" style={{ margin: "10px 0 0" }}>
+                  Menu allegati in precedenza: {revisioni.slice(1).map((r) =>
+                    new Date(r.created_at).toLocaleDateString("it-IT")).join(", ")}. Restano archiviati.
+                </p>
+              )}
+            </div>
+          );
+        })()}
+      </details>
 
       <form onSubmit={submit} className="traccia-form no-print">
         {inModifica && (
