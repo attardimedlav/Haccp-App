@@ -76,6 +76,7 @@ export default function Allergeni() {
   const [tracce, setTracce] = useState([]);
   const [note, setNote] = useState("");
   const [sezione, setSezione] = useState("");
+  const [nessunAllergene, setNessunAllergene] = useState(false);
   const [cerca, setCerca] = useState("");
   // Correzione di un prodotto gia' in catalogo: nome, ingredienti, allergeni.
   const [modProd, setModProd] = useState(null);
@@ -474,7 +475,7 @@ export default function Allergeni() {
   };
 
   const svuotaForm = () => {
-    setDish(""); setScelti([]); setManuali([]); setTracce([]); setNote(""); setSezione("");
+    setDish(""); setScelti([]); setManuali([]); setTracce([]); setNote(""); setSezione(""); setNessunAllergene(false);
     setAvviso(""); setErrore(""); setCerca(""); setEan(""); setInModifica(null);
   };
 
@@ -488,6 +489,7 @@ export default function Allergeni() {
     setTracce(item.traces || []);
     setNote(item.note || "");
     setSezione(item.menu_section || "");
+    setNessunAllergene(!!item.allergens_none_confirmed);
     setCerca(""); setEan(""); setErrore(""); setAvviso("");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -502,6 +504,7 @@ export default function Allergeni() {
     setTracce(item.traces || []);
     setNote(item.note || "");
     setSezione(item.menu_section || "");
+    setNessunAllergene(!!item.allergens_none_confirmed);
     setCerca(""); setEan(""); setErrore("");
     setAvviso("Copia della voce: cambia il nome e correggi i componenti, poi aggiungila al menu.");
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -619,6 +622,10 @@ export default function Allergeni() {
       // Il capitolo del menu dell'OSA si conserva: senza, il foglio
       // stampato torna a essere un elenco unico di centocinquanta voci.
       menu_section: p.sezione || null,
+      // Un piatto importato senza allergeni NON e' un piatto senza
+      // allergeni: e' un piatto di cui non si sa ancora niente. La
+      // conferma la da' l'operatore, voce per voce.
+      allergens_none_confirmed: false,
       allergens: [...p.dichiarati, ...scelti.filter((a) => !p.dichiarati.includes(a))],
       traces: [],
       product_ids: [],
@@ -685,6 +692,11 @@ export default function Allergeni() {
       product_ids: scelti,
       ingredients_text: ingredientiVoce || null,
       menu_section: sezione.trim() || null,
+      // La conferma "nessun allergene" ha senso solo su una voce senza
+      // allergeni: se ce ne sono, quella spunta non vuol dire niente e si
+      // azzera da sola, altrimenti resterebbe appiccicata alla riga dopo
+      // una correzione e direbbe il contrario di quello che c'e' scritto.
+      allergens_none_confirmed: allergeniVoce.length === 0 && nessunAllergene,
       note: note.trim() || null,
       updated_at: new Date().toISOString(),
     };
@@ -727,6 +739,10 @@ export default function Allergeni() {
     }
     return gruppi;
   })();
+
+  const daCompletare = vociInOrdine.filter(
+    (v) => !(v.allergens || []).length && !v.allergens_none_confirmed
+  );
 
   const ricerca = normalizza(cerca);
   const cercaAttiva = ricerca.length >= 2;
@@ -1175,6 +1191,17 @@ export default function Allergeni() {
           })}
         </div>
 
+        {/* La differenza fra "non contiene niente" e "non lo sappiamo ancora".
+            Sul foglio esposto sono due frasi opposte, e solo l'operatore puo'
+            dire quale sia: la casella compare appunto quando non e' spuntato
+            nessun allergene. */}
+        {allergeniVoce.length === 0 && (
+          <label className="checkbox-row" style={{ marginTop: 8 }}>
+            <input type="checkbox" checked={nessunAllergene} onChange={(e) => setNessunAllergene(e.target.checked)} />
+            Confermo che questa voce non contiene nessuno dei 14 allergeni
+          </label>
+        )}
+
         <p className="appt-section-label" style={{ margin: "14px 0 0" }}>Può contenere (tracce)</p>
         <p className="sub" style={{ margin: 0 }}>
           Solo la contaminazione crociata dichiarata dal produttore — «nello stesso stabilimento si
@@ -1229,6 +1256,23 @@ export default function Allergeni() {
         </span>
       </div>
 
+      {/* Quante voci non dicono ancora niente. E' la domanda da farsi prima
+          di stampare: un menu esposto con dei buchi e' peggio di un menu non
+          ancora pronto, perche' sembra completo. */}
+      {daCompletare.length > 0 && (
+        <p className="login-info no-print" style={{ margin: "8px 0 0", background: "#FBEEEC", color: "#B3432E" }}>
+          <AlertTriangle size={14} />
+          {daCompletare.length === 1
+            ? "Una voce non ha allergeni dichiarati: "
+            : `${daCompletare.length} voci non hanno allergeni dichiarati: `}
+          {daCompletare.slice(0, 6).map((v) => v.dish).join(", ")}
+          {daCompletare.length > 6 ? ` e altre ${daCompletare.length - 6}` : ""}.
+          {" "}Aprile con la matita e indica gli allergeni, oppure conferma che non ne contengono
+          nessuno dei 14. Finché restano così, sul foglio stampato escono con scritto
+          «Allergeni da completare».
+        </p>
+      )}
+
       {loading ? (
         <p className="sub">Caricamento…</p>
       ) : items.length === 0 ? (
@@ -1252,7 +1296,11 @@ export default function Allergeni() {
                 <div className="chip-grid">
                   {item.allergens.map((a) => <span key={a} className="chip chip-static">{a}</span>)}
                 </div>
-              ) : <span className="none-label">Nessun allergene dichiarato</span>}
+              ) : item.allergens_none_confirmed ? (
+                <span className="none-label">Nessuno dei 14 allergeni — confermato</span>
+              ) : (
+                <span className="lot-tag pill-alert" style={{ marginLeft: 0 }}>allergeni da completare</span>
+              )}
               {item.ingredients_text && <p className="pest-note">{item.ingredients_text}</p>}
               {item.note && <p className="pest-note">{item.note}</p>}
             </li>
@@ -1300,7 +1348,11 @@ export default function Allergeni() {
                     ))}
                   </p>
                 ) : (
-                  <p className="print-menu-nessuno">Senza allergeni dichiarati</p>
+                  item.allergens_none_confirmed ? (
+                    <p className="print-menu-nessuno">Nessuno dei 14 allergeni</p>
+                  ) : (
+                    <p className="print-menu-dacompletare">Allergeni da completare</p>
+                  )
                 )}
                 {item.traces && item.traces.length > 0 && (
                   <p className="print-menu-tracce">Può contenere: {item.traces.join(", ").toLowerCase()}</p>
