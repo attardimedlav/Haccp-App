@@ -75,6 +75,7 @@ export default function Allergeni() {
   // e uova quando invece li puo' contenere.
   const [tracce, setTracce] = useState([]);
   const [note, setNote] = useState("");
+  const [sezione, setSezione] = useState("");
   const [cerca, setCerca] = useState("");
   // Correzione di un prodotto gia' in catalogo: nome, ingredienti, allergeni.
   const [modProd, setModProd] = useState(null);
@@ -473,7 +474,7 @@ export default function Allergeni() {
   };
 
   const svuotaForm = () => {
-    setDish(""); setScelti([]); setManuali([]); setTracce([]); setNote("");
+    setDish(""); setScelti([]); setManuali([]); setTracce([]); setNote(""); setSezione("");
     setAvviso(""); setErrore(""); setCerca(""); setEan(""); setInModifica(null);
   };
 
@@ -486,6 +487,7 @@ export default function Allergeni() {
     setManuali(item.allergens || []);
     setTracce(item.traces || []);
     setNote(item.note || "");
+    setSezione(item.menu_section || "");
     setCerca(""); setEan(""); setErrore(""); setAvviso("");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -499,6 +501,7 @@ export default function Allergeni() {
     setManuali(item.allergens || []);
     setTracce(item.traces || []);
     setNote(item.note || "");
+    setSezione(item.menu_section || "");
     setCerca(""); setEan(""); setErrore("");
     setAvviso("Copia della voce: cambia il nome e correggi i componenti, poi aggiungila al menu.");
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -613,6 +616,9 @@ export default function Allergeni() {
     const scelti = propostiDi(p);
     await add({
       dish: p.nome,
+      // Il capitolo del menu dell'OSA si conserva: senza, il foglio
+      // stampato torna a essere un elenco unico di centocinquanta voci.
+      menu_section: p.sezione || null,
       allergens: [...p.dichiarati, ...scelti.filter((a) => !p.dichiarati.includes(a))],
       traces: [],
       product_ids: [],
@@ -678,6 +684,7 @@ export default function Allergeni() {
       traces: tracceVoce,
       product_ids: scelti,
       ingredients_text: ingredientiVoce || null,
+      menu_section: sezione.trim() || null,
       note: note.trim() || null,
       updated_at: new Date().toISOString(),
     };
@@ -690,6 +697,37 @@ export default function Allergeni() {
   // Il catalogo prodotti si riempie da solo leggendo le bolle: dentro c'è
   // ogni riga di fattura, con i nomi da magazzino. Mostrarlo tutto qui rende
   // la pagina illeggibile, quindi si vede solo quello che si cerca.
+  // L'ordine delle voci.
+  //
+  // Le righe arrivano dal database dalla più recente alla più vecchia, che va
+  // bene per un registro ma non per un menu: importando un menu di diciannove
+  // pagine, i dolci dell'ultima pagina finivano in testa e gli antipasti in
+  // fondo. Un menu si legge nell'ordine in cui è stato scritto, quindi qui si
+  // rigira: prima la voce inserita per prima. Per un menu importato quello è
+  // l'ordine del foglio dell'OSA, pagina dopo pagina.
+  const vociInOrdine = [...items].sort(
+    (a, b) => new Date(a.created_at || 0) - new Date(b.created_at || 0)
+  );
+
+  // Le voci raggruppate per capitolo, nell'ordine in cui i capitoli
+  // compaiono nel menu. Un menu si legge per capitoli — stuzzicheria,
+  // antipasti, primi — e senza quelli il foglio stampato di un'attivita'
+  // con centocinquanta voci diventa un elenco che nessuno espone.
+  //
+  // Le voci senza capitolo non si inventano una sezione: restano di
+  // seguito, come prima. Un'azienda con sei piatti e nessun capitolo deve
+  // continuare ad avere il menu semplice che aveva.
+  const vociConSezione = (() => {
+    const gruppi = [];
+    for (const v of vociInOrdine) {
+      const titolo = (v.menu_section || "").trim();
+      const ultimo = gruppi[gruppi.length - 1];
+      if (ultimo && ultimo.sezione === titolo) ultimo.voci.push(v);
+      else gruppi.push({ sezione: titolo, voci: [v] });
+    }
+    return gruppi;
+  })();
+
   const ricerca = normalizza(cerca);
   const cercaAttiva = ricerca.length >= 2;
 
@@ -921,6 +959,12 @@ export default function Allergeni() {
         <input
           type="text" placeholder="Voce di menu (es. Cornetto alla crema di nocciole)" required
           value={dish} onChange={(e) => setDish(e.target.value)} className="note-input" style={{ maxWidth: 420 }}
+        />
+        {/* Il capitolo sotto cui la voce va stampata. Facoltativo: chi non
+            lo usa ha il menu di prima, un elenco unico. */}
+        <input
+          type="text" placeholder="Sezione del menu (es. Primi Piatti) — facoltativa"
+          value={sezione} onChange={(e) => setSezione(e.target.value)} className="note-input" style={{ maxWidth: 420 }}
         />
 
         <p className="appt-section-label" style={{ margin: "14px 0 0" }}>2 · Di che cosa è fatta</p>
@@ -1191,10 +1235,13 @@ export default function Allergeni() {
         <div className="empty"><p>Nessuna voce registrata: finché il menu è vuoto, l'azienda non ha l'informazione scritta da mettere a disposizione del cliente.</p></div>
       ) : (
         <ul className="dish-list allergeni-screen-list no-print">
-          {items.map((item) => (
+          {vociInOrdine.map((item) => (
             <li key={item.id} className="dish-row">
               <div className="dish-top">
-                <strong>{item.dish}</strong>
+                <span style={{ minWidth: 0 }}>
+                  <strong>{item.dish}</strong>
+                  {item.menu_section && <span className="lot-tag">{item.menu_section}</span>}
+                </span>
                 <span>
                   <button className="icon-btn" onClick={() => apriModifica(item)} aria-label="Modifica"><Pencil size={14} /></button>
                   <button className="icon-btn" onClick={() => duplica(item)} aria-label="Duplica"><Copy size={14} /></button>
@@ -1237,7 +1284,10 @@ export default function Allergeni() {
           {/* Su due colonne solo quando le voci sono tante: con tre piatti
               una colonna sola, centrata, e' quello che fa un menu vero. */}
           <div className={"print-menu-voci" + (items.length > 8 ? " due-colonne" : "")}>
-            {items.map((item) => (
+            {vociConSezione.map(({ sezione: titolo, voci }) => (
+              <React.Fragment key={titolo || "(senza sezione)"}>
+                {titolo && <h2 className="print-menu-sezione">{titolo}</h2>}
+                {voci.map((item) => (
               <div key={item.id} className="print-menu-voce">
                 <h3>{item.dish}</h3>
                 {item.allergens && item.allergens.length > 0 ? (
@@ -1271,6 +1321,8 @@ export default function Allergeni() {
                 )}
                 {item.note && <p className="print-menu-nota">{item.note}</p>}
               </div>
+                ))}
+              </React.Fragment>
             ))}
           </div>
 
