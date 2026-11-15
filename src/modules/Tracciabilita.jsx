@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Info, ScanLine, PenLine, Check, X, Pencil, Package, BookOpen, Merge, Search, Printer, Camera, PackageX, RotateCcw, Scissors } from "lucide-react";
+import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Info, ScanLine, PenLine, Check, X, Pencil, Package, BookOpen, Merge, Search, Printer, Camera, PackageX, RotateCcw, Scissors, Eye } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { supabase } from "../supabaseClient";
 import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
-import { stampaEtichette, formatoEtichetta } from "../utils/etichetta";
+import { stampaEtichette, anteprimaEtichette, formatoEtichetta } from "../utils/etichetta";
 
 // Ricevimenti merce (tracciabilità in entrata).
 //
@@ -257,7 +257,13 @@ export default function Tracciabilita() {
   // esserci in giro cartellini di un frazionamento che nel registro non
   // risulta. I cartellini escono in un unico documento di N pagine, non in N
   // stampe separate.
-  const fraziona = async (item) => {
+  //
+  // `modo` dice solo che cosa succede DOPO la registrazione: la stampa dei
+  // cartellini, oppure l'anteprima per chi la stampante non ce l'ha e li
+  // scrive a penna. La registrazione e' identica nei due casi — chi scrive a
+  // mano non e' un OSA di serie B, e il suo frazionamento sta nel registro
+  // come quello degli altri.
+  const fraziona = async (item, modo = "stampa") => {
     const pezzi = Math.max(2, Math.min(50, parseInt(frazione?.pezzi, 10) || 0));
     if (pezzi < 2) { setErrore("Indica in quanti pezzi è stato diviso il lotto: almeno due."); return; }
     setFrazionando(true);
@@ -279,24 +285,26 @@ export default function Tracciabilita() {
     setFrazionando(false);
     if (error) { setErrore("Frazionamento non registrato: " + error.message); return; }
 
-    stampaEtichette(
-      Array.from({ length: pezzi }, (_, i) => ({
-        titolo: nomeProdotto(item.product_id),
-        righe: [
-          ["Pezzo", `${i + 1} di ${pezzi}`],
-          ["Lotto", item.lot_number || "non riportato"],
-          ["Fornitore", item.supplier_name || ""],
-          ["Scadenza", item.expiry_date ? fmtData(item.expiry_date) : ""],
-          ["Frazionato il", fmtData(quando)],
-          ["Operatore", operatore],
-          "Lotto e scadenza sono quelli del fornitore. Il frazionamento è stato eseguito in azienda.",
-        ],
-      })),
-      formatoEtichetta(company),
-    );
+    const cartellini = Array.from({ length: pezzi }, (_, i) => ({
+      titolo: nomeProdotto(item.product_id),
+      righe: [
+        ["Pezzo", `${i + 1} di ${pezzi}`],
+        ["Lotto", item.lot_number || "non riportato"],
+        ["Fornitore", item.supplier_name || ""],
+        ["Scadenza", item.expiry_date ? fmtData(item.expiry_date) : ""],
+        ["Frazionato il", fmtData(quando)],
+        ["Operatore", operatore],
+        "Lotto e scadenza sono quelli del fornitore. Il frazionamento è stato eseguito in azienda.",
+      ],
+    }));
+
+    if (modo === "anteprima") anteprimaEtichette(cartellini, formatoEtichetta(company));
+    else stampaEtichette(cartellini, formatoEtichetta(company));
 
     setFrazione(null);
-    setAvviso(`Frazionamento registrato: ${pezzi} pezzi. Controlla che siano usciti tutti i cartellini.`);
+    setAvviso(modo === "anteprima"
+      ? `Frazionamento registrato: ${pezzi} pezzi. Scrivi un cartellino per ogni pezzo, come nell'anteprima.`
+      : `Frazionamento registrato: ${pezzi} pezzi. Controlla che siano usciti tutti i cartellini.`);
   };
 
   const prodottoDiNome = (nome) => prodotti.find((p) => normalizza(p.name) === normalizza(nome));
@@ -684,8 +692,16 @@ export default function Tracciabilita() {
                               className="full-input" placeholder="chi ha diviso"
                             />
                           </label>
-                          <button type="button" className="btn-primary" disabled={frazionando} onClick={() => fraziona(item)}>
+                          <button type="button" className="btn-primary" disabled={frazionando} onClick={() => fraziona(item, "stampa")}>
                             <Printer size={15} /> {frazionando ? "Registro…" : "Registra e stampa"}
+                          </button>
+                          <button
+                            type="button" className="btn-primary" disabled={frazionando}
+                            style={{ background: "#fff", color: "#2F6F4E", border: "1px solid #2F6F4E" }}
+                            title="Registra e mostra cosa scrivere su ogni pezzo, da ricopiare a penna"
+                            onClick={() => fraziona(item, "anteprima")}
+                          >
+                            <Eye size={15} /> Registra e scrivo a mano
                           </button>
                           <button
                             type="button" className="btn-primary"

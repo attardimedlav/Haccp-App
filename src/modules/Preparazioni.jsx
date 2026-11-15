@@ -1,9 +1,9 @@
 import React, { useState } from "react";
-import { Plus, Trash2, Check, Printer, Info, AlertTriangle, Search, ChevronDown, ChevronRight, BookOpen, Pencil, X, Tag } from "lucide-react";
+import { Plus, Trash2, Check, Printer, Info, AlertTriangle, Search, ChevronDown, ChevronRight, BookOpen, Pencil, X, Tag, Eye, ScanEye } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { supabase } from "../supabaseClient";
-import { stampaHtml, stampaEtichetta as stampaCartellino, formatoEtichetta, formatoEtichettaVendita } from "../utils/etichetta";
+import { stampaHtml, anteprimaHtml, stampaEtichetta as stampaCartellino, anteprimaEtichetta as anteprimaCartellino, formatoEtichetta, formatoEtichettaVendita } from "../utils/etichetta";
 
 // Preparazioni e cartellino (tracciabilità interna).
 //
@@ -30,6 +30,20 @@ const CONSERVAZIONE = [
   { id: "ambiente", label: "Temperatura ambiente" },
 ];
 const etichettaConservazione = (id) => CONSERVAZIONE.find((c) => c.id === id)?.label || "";
+
+// Il cartellino interno di una preparazione: scritto una volta sola perche'
+// lo usano il tasto che stampa e quello che ne mostra l'anteprima da
+// ricopiare a penna. Due copie di questo elenco vorrebbero dire, un giorno,
+// un cartellino stampato e uno scritto a mano che dicono cose diverse.
+const cartellinoDi = (p) => ({
+  titolo: p.product_name,
+  righe: [
+    ["Lotto", p.lot_number],
+    ["Prodotto il", `${fmtData(p.production_date)}${p.production_time ? " " + p.production_time.slice(0, 5) : ""}`],
+    ["Consumare entro", fmtData(p.expiry_date)],
+    etichettaConservazione(p.storage_method),
+  ],
+});
 
 const oggi = () => new Date().toISOString().slice(0, 10);
 const oraAdesso = () => new Date().toTimeString().slice(0, 5);
@@ -68,7 +82,7 @@ const cella = { font: "inherit", fontSize: 13.5, padding: "9px 10px", border: "1
 // non ci sta, `stampaHtml` ferma la stampa e l'app lo dice. Un'etichetta
 // illeggibile e' una non conformita', una che non esce e' un rotolo da
 // cambiare.
-function etichettaVendita(p, righeIngredienti, formato, seNonCiSta) {
+function docEtichettaVendita(p, righeIngredienti, formato) {
   const tracce = (p.may_contain_traces || []).length
     ? `<div class="sez"><span class="et">PUÒ CONTENERE TRACCE DI</span><div class="alle">${p.may_contain_traces.join(" · ").toUpperCase()}</div></div>`
     : "";
@@ -145,14 +159,41 @@ function etichettaVendita(p, righeIngredienti, formato, seNonCiSta) {
     ${ingredienti}${formati}${allergeni}${tracce}${lotti}
   </body></html>`;
 
-  // Si stampa da un iframe nascosto e non da una finestra nuova: window.open
-  // lo bloccano i browser quando la stampa non parte da un click diretto, e
-  // su iPhone lasciava aperta una scheda vuota da chiudere a mano. Il
-  // meccanismo sta in utils/etichetta.js, lo stesso usato dalle etichette
-  // dell'abbattimento e del congelamento.
-  stampaHtml(html, formato
+  return html;
+}
+
+// Si stampa da un iframe nascosto e non da una finestra nuova: window.open
+// lo bloccano i browser quando la stampa non parte da un click diretto, e
+// su iPhone lasciava aperta una scheda vuota da chiudere a mano. Il
+// meccanismo sta in utils/etichetta.js, lo stesso usato dalle etichette
+// dell'abbattimento e del congelamento.
+function etichettaVendita(p, righeIngredienti, formato, seNonCiSta) {
+  stampaHtml(docEtichettaVendita(p, righeIngredienti, formato), formato
     ? { altezzaMaxMm: formato.altezzaMm, seNonCiSta }
     : {});
+}
+
+// L'anteprima dell'etichetta di vendita, per chi la stampante non ce l'ha.
+//
+// Si mostra sempre nella versione "foglio", mai in quella del rotolo: il
+// vincolo del rotolo e' l'altezza minima dei caratteri sulla carta, qui
+// invece la carta non c'entra — si sta leggendo per ricopiare. Mostrare a
+// schermo un rettangolo da 50 x 30 mm vorrebbe dire dare da ricopiare una
+// cosa che non si legge.
+//
+// L'obbligo di legge pero' resta anche a penna: le indicazioni dell'art. 19
+// del D.Lgs. 231/2017 devono essere leggibili e indelebili, e se non stanno
+// sull'etichetta si mettono su un cartello vicino al prodotto. Lo dice la
+// nota, perche' e' esattamente il punto in cui l'OSA sbaglia.
+function anteprimaVendita(p, righeIngredienti, formato, seNonCiSta) {
+  anteprimaHtml(docEtichettaVendita(p, righeIngredienti, null), {
+    titolo: `Etichetta di vendita — ${p.product_name}`,
+    nota:
+      "Ricopia questi dati sull'etichetta del prodotto, in modo leggibile e indelebile. " +
+      "Se non ci stanno tutti, ingredienti e allergeni si possono riportare su un cartello " +
+      "accanto al prodotto (art. 19 del D.Lgs. 231/2017): l'importante è che il cliente li veda.",
+    stampa: () => etichettaVendita(p, righeIngredienti, formato, seNonCiSta),
+  });
 }
 
 // Il catalogo delle ricette.
@@ -888,22 +929,41 @@ export default function Preparazioni() {
                     <span className="lot-tag">Lotto {p.lot_number}</span>
                   </div>
                   <span style={{ display: "flex", gap: 2, flexShrink: 0 }}>
+                    {/* Anteprima: la stessa etichetta, a schermo, per chi la
+                        stampante non ce l'ha e la ricopia a penna. */}
+                    <button
+                      className="icon-btn"
+                      title="Anteprima — cosa scrivere sul cartellino e sull'etichetta"
+                      onClick={() => {
+                        setErrore("");
+                        anteprimaCartellino(cartellinoDi(p), formatoEtichetta(company));
+                      }}
+                    ><Eye size={15} /></button>
                     <button
                       className="icon-btn"
                       title="Cartellino interno — per identificare il prodotto in frigo"
                       onClick={() => {
                         setErrore("");
-                        stampaCartellino({
-                          titolo: p.product_name,
-                          righe: [
-                            ["Lotto", p.lot_number],
-                            ["Prodotto il", `${fmtData(p.production_date)}${p.production_time ? " " + p.production_time.slice(0, 5) : ""}`],
-                            ["Consumare entro", fmtData(p.expiry_date)],
-                            etichettaConservazione(p.storage_method),
-                          ],
-                        }, formatoEtichetta(company));
+                        stampaCartellino(cartellinoDi(p), formatoEtichetta(company));
                       }}
                     ><Tag size={15} /></button>
+                    <button
+                      className="icon-btn"
+                      title="Anteprima — cosa scrivere sull'etichetta di vendita"
+                      onClick={() => {
+                        setErrore("");
+                        anteprimaVendita(
+                          p,
+                          lotti.map((a) => `${nomeProdotto(a.product_id)} ${a.lot_number || "senza lotto"}`),
+                          formatoEtichettaVendita(company),
+                          (servono) => setErrore(
+                            `L'etichetta di vendita di «${p.product_name}» non entra nel rotolo impostato: servirebbero circa ${servono} mm di altezza. ` +
+                            "I caratteri non si possono rimpicciolire oltre il minimo di legge: monta un rotolo più alto e cambia la misura in Configurazione, " +
+                            "oppure riporta gli ingredienti sul cartello del banco, come consente l'art. 19 del D.Lgs. 231/2017."
+                          ),
+                        );
+                      }}
+                    ><ScanEye size={15} /></button>
                     <button
                       className="icon-btn icon-btn-ok"
                       title="Etichetta di vendita — con ingredienti e allergeni"

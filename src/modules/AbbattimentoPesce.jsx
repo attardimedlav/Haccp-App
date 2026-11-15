@@ -1,8 +1,8 @@
 import React, { useState } from "react";
-import { Plus, Trash2, AlertTriangle, CheckCircle2, Snowflake, Timer, ThermometerSnowflake, XCircle, Package, Printer } from "lucide-react";
+import { Plus, Trash2, AlertTriangle, CheckCircle2, Snowflake, Timer, ThermometerSnowflake, XCircle, Package, Printer, Eye } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
-import { stampaEtichetta, dataEtichetta, formatoEtichetta } from "../utils/etichetta";
+import { stampaEtichetta, anteprimaEtichetta, dataEtichetta, formatoEtichetta } from "../utils/etichetta";
 
 // I due soli trattamenti previsti dal Reg. (CE) n. 853/2004, Allegato III,
 // sezione VIII, capitolo III, lettera D, per il pesce destinato al consumo
@@ -22,6 +22,49 @@ const TREATMENT_OPTIONS = [
 // dopo la cottura, uno e' conservazione. Un'etichetta generica come
 // "abbattimento" su tutti e tre e' il modo migliore perche' un giorno qualcuno
 // registri un semifreddo credendo di aver bonificato del pesce.
+// Che cosa va scritto sull'etichetta dei tre registri di questa scheda.
+//
+// Scritte qui e non dentro i bottoni perche' ogni etichetta serve a due
+// bottoni: quello che stampa e quello che mostra l'anteprima per chi la
+// stampante non ce l'ha e ricopia a penna. Se il contenuto stesse dentro il
+// bottone andrebbe scritto due volte, e due copie prima o poi dicono cose
+// diverse: quella stampata e quella scritta a mano non sarebbero piu' la
+// stessa etichetta.
+const etichettaRaffreddamento = (c) => ({
+  titolo: c.product_name,
+  righe: [
+    ["Raffreddato il", dataEtichetta(c.end_time || c.start_time)],
+    ["Ciclo", c.cycle_type === "positivo" ? "+3 °C al cuore" : "-18 °C al cuore"],
+    ["T. finale", c.end_core_temp != null ? `${c.end_core_temp} °C` : ""],
+    ["Operatore", c.operator],
+    "Conservare in frigorifero. Consumare entro il termine indicato in manuale.",
+  ],
+});
+
+const etichettaCongelamento = (x) => ({
+  titolo: x.product_name,
+  righe: [
+    ["Lotto", x.lot_number],
+    ["Prodotto il", dataEtichetta(x.production_date)],
+    ["Congelato il", dataEtichetta(x.freezing_date)],
+    ["T. raggiunta", x.blast_temp != null ? `${String(x.blast_temp).replace(".", ",")} °C` : ""],
+    ["Operatore", x.operator],
+    "Prodotto congelato. Scongelare in frigorifero a non più di +4 °C. Non ricongelare.",
+  ],
+});
+
+const etichettaBonifica = (b) => ({
+  titolo: b.product_name,
+  righe: [
+    ["Bonifica", `${b.target_temp} °C per ${b.required_hours} h`],
+    ["Inizio", dataEtichetta(b.start_time)],
+    ["Fine", dataEtichetta(b.completed_at)],
+    ["Quantità", b.kg != null ? `${b.kg} kg` : ""],
+    ["Operatore", b.operator],
+    "Pesce bonificato ai sensi del Reg. CE 853/2004. Mantenere identificato fino al servizio.",
+  ],
+});
+
 const SUB_TABS = [
   { id: "cotti", label: "Raffreddamento rapido (cotti)", icon: ThermometerSnowflake, requires: "has_blast_chiller" },
   { id: "congelamento", label: "Congelamento per conservazione", icon: Package, requires: "has_blast_chiller" },
@@ -179,17 +222,12 @@ function AbbattimentoCotti({ company }) {
                     <span className="lot-tag">{c.cycle_type === "positivo" ? "+3°C al cuore" : "-18°C al cuore"}</span>
                   </div>
                   <div style={{ display: "flex", gap: 2 }}>
+                    <button className="icon-btn" aria-label="Anteprima da scrivere a penna" title="Anteprima — cosa scrivere sul cartellino"
+                      onClick={() => anteprimaEtichetta(etichettaRaffreddamento(c), formatoEtichetta(company))}>
+                      <Eye size={14} />
+                    </button>
                     <button className="icon-btn" aria-label="Stampa etichetta" title="Stampa etichetta"
-                      onClick={() => stampaEtichetta({
-                        titolo: c.product_name,
-                        righe: [
-                          ["Raffreddato il", dataEtichetta(c.end_time || c.start_time)],
-                          ["Ciclo", c.cycle_type === "positivo" ? "+3 °C al cuore" : "-18 °C al cuore"],
-                          ["T. finale", c.end_core_temp != null ? `${c.end_core_temp} °C` : ""],
-                          ["Operatore", c.operator],
-                          "Conservare in frigorifero. Consumare entro il termine indicato in manuale.",
-                        ],
-                      }, formatoEtichetta(company))}>
+                      onClick={() => stampaEtichetta(etichettaRaffreddamento(c), formatoEtichetta(company))}>
                       <Printer size={14} />
                     </button>
                     <button className="icon-btn" onClick={() => { if (window.confirm("Eliminare questo ciclo?")) remove(c.id); }} aria-label="Elimina"><Trash2 size={14} /></button>
@@ -363,18 +401,12 @@ function RegistroCongelamento({ company }) {
             {x.lot_number && <span className="lot-tag">Lotto {x.lot_number}</span>}
           </div>
           <div style={{ display: "flex", gap: 2 }}>
+            <button className="icon-btn" aria-label="Anteprima da scrivere a penna" title="Anteprima — cosa scrivere sul cartellino"
+              onClick={() => anteprimaEtichetta(etichettaCongelamento(x), formatoEtichetta(company))}>
+              <Eye size={14} />
+            </button>
             <button className="icon-btn" aria-label="Stampa etichetta" title="Stampa etichetta"
-              onClick={() => stampaEtichetta({
-                titolo: x.product_name,
-                righe: [
-                  ["Lotto", x.lot_number],
-                  ["Prodotto il", dataEtichetta(x.production_date)],
-                  ["Congelato il", dataEtichetta(x.freezing_date)],
-                  ["T. raggiunta", x.blast_temp != null ? `${String(x.blast_temp).replace(".", ",")} °C` : ""],
-                  ["Operatore", x.operator],
-                  "Prodotto congelato. Scongelare in frigorifero a non più di +4 °C. Non ricongelare.",
-                ],
-              }, formatoEtichetta(company))}>
+              onClick={() => stampaEtichetta(etichettaCongelamento(x), formatoEtichetta(company))}>
               <Printer size={14} />
             </button>
             <button className="icon-btn" onClick={() => remove(x.id)} aria-label="Elimina"><Trash2 size={14} /></button>
@@ -711,18 +743,12 @@ export default function AbbattimentoPesce() {
                         {b.completed && <span className="lot-tag">Residui: {remaining} kg</span>}
                       </div>
                       <div style={{ display: "flex", gap: 2 }}>
+                        <button className="icon-btn" aria-label="Anteprima da scrivere a penna" title="Anteprima — cosa scrivere sul cartellino"
+                          onClick={() => anteprimaEtichetta(etichettaBonifica(b), formatoEtichetta(company))}>
+                          <Eye size={14} />
+                        </button>
                         <button className="icon-btn" aria-label="Stampa etichetta" title="Stampa etichetta"
-                          onClick={() => stampaEtichetta({
-                            titolo: b.product_name,
-                            righe: [
-                              ["Bonifica", `${b.target_temp} °C per ${b.required_hours} h`],
-                              ["Inizio", dataEtichetta(b.start_time)],
-                              ["Fine", dataEtichetta(b.completed_at)],
-                              ["Quantità", b.kg != null ? `${b.kg} kg` : ""],
-                              ["Operatore", b.operator],
-                              "Pesce bonificato ai sensi del Reg. CE 853/2004. Mantenere identificato fino al servizio.",
-                            ],
-                          }, formatoEtichetta(company))}>
+                          onClick={() => stampaEtichetta(etichettaBonifica(b), formatoEtichetta(company))}>
                           <Printer size={14} />
                         </button>
                         <button className="icon-btn" onClick={() => removeBatch(b.id)} aria-label="Elimina"><Trash2 size={14} /></button>
