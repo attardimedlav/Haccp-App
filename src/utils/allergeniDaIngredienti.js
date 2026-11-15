@@ -9,8 +9,8 @@
 // etichetta contano le sfumature ("burro di cacao" non è latte).
 
 const VOCI = [
-  ["Glutine", ["frumento", "grano ", "grano,", "farina di grano", "semola", "orzo", "segale", "avena", "farro", "kamut", "malto", "glutine", "couscous", "bulgur", "seitan"]],
-  ["Latte", ["latte", "burro", "panna", "formagg", "caseina", "caseinat", "siero di latte", "lattosio", "yogurt", "mascarpone", "ricotta", "mozzarella", "parmigiano", "grana", "pecorino", "provolone", "stracchino", "crescenza"]],
+  ["Glutine", ["frumento", "grano ", "grano,", "farina di grano", "semola", "orzo", "segale", "avena", "farro", "kamut", "malto", "glutine", "couscous", "bulgur", "seitan", "pasta fresca", "pizza pane", "pangrattato", "pancarr", "pan carr", "crostini", "crostino", "bruschetta", "tarallo", "impasto", "sfoglia", "brioche"]],
+  ["Latte", ["latte", "burro", "panna", "formagg", "caseina", "caseinat", "siero di latte", "lattosio", "yogurt", "mascarpone", "ricotta", "mozzarella", "parmigiano", "grana", "pecorino", "provolone", "stracchino", "crescenza", "gorgonzola", "burrata", "burratina", "scamorza", "bufala", "fior di latte", "stracciatella", "caciocavallo", "taleggio", "brie", "asiago", "camembert", "gouda", "emmental", "fontina", "robiola", "squacquerone", "feta", "ricotta salata"]],
   ["Uova", ["uovo", "uova", "tuorlo", "albume", "ovoprodott", "lisozima"]],
   ["Soia", ["soia", "tofu", "edamame"]],
   ["Frutta a guscio", ["nocciol", "mandorl", "noci", "noce del brasile", "pistacch", "anacard", "macadamia", "pecan", "noci di"]],

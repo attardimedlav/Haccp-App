@@ -30,6 +30,17 @@ export const ALLERGENI = [
 
 const normalizza = (s) => String(s || "").trim().toLowerCase().replace(/\s+/g, " ");
 
+// I menu veri sono lunghi: quello di una pizzeria con la cucina arriva a
+// centocinquanta voci. Un rilievo che le elenca tutte diventa un muro che
+// nessuno legge, e il rilievo serve proprio a farsi leggere: si nominano i
+// primi e si dice quanti sono gli altri. L'elenco completo, piatto per
+// piatto, sta comunque sotto.
+function primiNomi(elenco, quanti = 8) {
+  const nomi = elenco.slice(0, quanti).map((p) => p.nome).join(", ");
+  const restanti = elenco.length - quanti;
+  return restanti > 0 ? `${nomi} e altri ${restanti}` : nomi;
+}
+
 // I piatti il cui nome non contiene gli ingredienti, ma li ha lo stesso.
 //
 // "Spaghetti alle vongole" lo capisce già il dizionario degli ingredienti,
@@ -51,7 +62,29 @@ const PIATTI = [
   ["cannellon", ["Glutine", "Latte", "Uova"]],
   ["tortellin", ["Glutine", "Uova", "Latte"]],
   ["ravioli", ["Glutine", "Uova", "Latte"]],
-  ["gnocchi", ["Glutine", "Latte"]],
+  ["gnocch", ["Glutine", "Latte"]],
+  // La pasta e il pane non si nominano negli ingredienti, si nominano nel
+  // nome del piatto: "spaghetti allo scoglio" non scrive da nessuna parte
+  // che c'e' il grano.
+  ["spaghett", ["Glutine"]],
+  ["pappardell", ["Glutine"]],
+  ["tagliatell", ["Glutine"]],
+  ["fettuccin", ["Glutine"]],
+  ["linguin", ["Glutine"]],
+  ["bucatin", ["Glutine"]],
+  ["paccher", ["Glutine"]],
+  ["rigatoni", ["Glutine"]],
+  ["penne", ["Glutine"]],
+  ["fusill", ["Glutine"]],
+  ["busiat", ["Glutine"]],
+  ["casarecc", ["Glutine"]],
+  ["maccheron", ["Glutine"]],
+  ["bruschett", ["Glutine"]],
+  ["crostin", ["Glutine"]],
+  ["pangrattat", ["Glutine"]],
+  ["tarallo", ["Glutine"]],
+  ["gnocco fritto", ["Glutine"]],
+  ["pizza pane", ["Glutine"]],
   ["risotto", ["Latte"]],
   ["ragù", ["Sedano"]],
   ["ragu", ["Sedano"]],
@@ -228,7 +261,7 @@ export function revisioneMenu({ piatti = [], testo = "", vociApp = [], vetrina =
       dettaglio:
         "L'art. 44 del Reg. UE 1169/2011 chiede l'informazione sugli allergeni riferita a ciascun " +
         "alimento. Qui accanto trovi una proposta per ciascuno, da confermare sulle etichette dei " +
-        "prodotti che usi davvero: " + senzaNiente.map((p) => p.nome).join(", ") + ".",
+        "prodotti che usi davvero: " + primiNomi(senzaNiente) + ".",
     });
   }
 
@@ -243,7 +276,8 @@ export function revisioneMenu({ piatti = [], testo = "", vociApp = [], vetrina =
         : `${incompleti.length} piatti con allergeni forse incompleti`,
       dettaglio:
         "Gli allergeni ci sono, ma il nome del piatto ne fa pensare altri: " +
-        incompleti.map((p) => `${p.nome} (manca ${p.proposti.join(", ")}?)`).join("; ") +
+        incompleti.slice(0, 8).map((p) => `${p.nome} (manca ${p.proposti.join(", ")}?)`).join("; ") +
+        (incompleti.length > 8 ? ` e altri ${incompleti.length - 8}` : "") +
         ". Sono ipotesi sulla ricetta comune: se la tua è diversa, va bene così com'è.",
     });
   }
