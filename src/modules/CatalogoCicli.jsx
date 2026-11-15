@@ -14,6 +14,11 @@ const SETTORI = [
   { id: "panificio", label: "Panificio" },
   { id: "pescheria", label: "Pescheria" },
   { id: "macelleria", label: "Macelleria" },
+  // Il negozio di frutta e verdura che prepara: spremute, vaschette di
+  // frutta tagliata, verdure mondate, vellutate. Quasi niente di quello
+  // che vende passa da una cottura, quindi i suoi cicli stanno in piedi
+  // sul lavaggio, sul freddo e sulla durabilita'.
+  { id: "ortofrutta", label: "Ortofrutta" },
   { id: "altro", label: "Altro" },
 ];
 
