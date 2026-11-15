@@ -1326,6 +1326,14 @@ export default function Allergeni() {
             <hr className="print-menu-filetto" />
             <h1 className="print-menu-titolo">Menu</h1>
             <p className="print-menu-sottotitolo">con evidenza degli allergeni</p>
+            {/* La norma sta in testa, non in fondo: e' quella che dice che
+                cosa e' questo foglio. Chi lo legge — cliente o ispettore —
+                deve capire al primo sguardo che non e' una pubblicita' ma
+                l'informazione dovuta. In calce resta il resto: da dove
+                arrivano i dati e dove sono conservate le etichette. */}
+            <p className="print-menu-norma">
+              Informazione sugli allergeni resa ai sensi dell'art. 44 del Reg. (UE) n. 1169/2011
+            </p>
             <p className="print-menu-rombo">&#9670;</p>
           </div>
 
@@ -1381,11 +1389,10 @@ export default function Allergeni() {
           <div className="print-menu-piede">
             <hr className="print-menu-filetto" />
             <p className="print-menu-legale">
-              Informazione sugli allergeni resa ai sensi dell'art. 44 del Reg. (UE) n. 1169/2011 e dell'art. 19
-              del D.Lgs. n. 231/2017. Sono indicate le sostanze elencate nell'Allegato II del Regolamento che
-              provocano allergie o intolleranze. Le informazioni derivano dalle etichette e dalle schede tecniche
-              dei prodotti impiegati, conservate in azienda e disponibili su richiesta. Per ulteriori
-              informazioni rivolgersi al personale.
+              Sono indicate le sostanze elencate nell'Allegato II del Reg. (UE) n. 1169/2011 che provocano
+              allergie o intolleranze. Le informazioni derivano dalle etichette e dalle schede tecniche dei
+              prodotti impiegati, conservate in azienda e disponibili su richiesta. Per ulteriori informazioni
+              rivolgersi al personale.
             </p>
           </div>
         </div>
