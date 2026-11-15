@@ -231,6 +231,10 @@ export function revisioneMenu({ piatti = [], testo = "", vociApp = [], vetrina =
       const probabili = allergeniProbabili(p.nome, p.ingredienti);
       return {
         nome: String(p.nome).trim(),
+        // Il capitolo del menu sotto cui stava il piatto: "Primi Piatti",
+        // "Dolci". Si porta dietro perche' il foglio da esporre e' fatto
+        // di capitoli quanto di piatti.
+        sezione: String(p.sezione || "").trim(),
         ingredienti: p.ingredienti || "",
         dichiarati,
         // Si propone solo quello che manca: ripetere all'OSA un allergene che
