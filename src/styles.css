@@ -386,6 +386,18 @@ nav { display: flex; flex-direction: column; gap: 2px; }
      invece di lasciarlo a mezz'aria. */
   .print-menu-voci { margin: 0 auto; max-width: 150mm; text-align: center; min-height: 150mm; }
   .print-menu-voci.due-colonne { max-width: none; columns: 2; column-gap: 16mm; min-height: 0; }
+  /* Il capitolo del menu — STUZZICHERIA, Primi Piatti, Dolci.
+     Deve farsi riconoscere come titolo senza gridare piu' dei piatti:
+     corpo poco piu' grande, maiuscoletto spaziato, un filetto sotto.
+     `break-after: avoid` serve a non lasciarlo da solo in fondo a una
+     colonna, con i suoi piatti nella colonna dopo. */
+  .print-menu-sezione {
+    font-size: 13px; font-weight: 400; text-transform: uppercase;
+    letter-spacing: 3px; color: #8A5A2B; margin: 6mm 0 4mm;
+    padding-bottom: 1.5mm; border-bottom: 0.3pt solid #D8CBB5;
+    break-after: avoid; break-inside: avoid;
+  }
+  .print-menu-voci > .print-menu-sezione:first-child { margin-top: 0; }
   .print-menu-voce { break-inside: avoid; margin: 0 0 10mm; }
   .print-menu-voce h3 {
     font-size: 19px; font-weight: 400; margin: 0 0 2.5mm; color: #1B2A22;
