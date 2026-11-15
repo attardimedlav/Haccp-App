@@ -595,26 +595,75 @@ export default function Allergeni() {
     }
   };
 
-  // Porta dentro l'app un piatto letto dal menu allegato. Gli allergeni
-  // proposti entrano solo se l'OSA li ha spuntati: la dichiarazione resta
-  // sua, e una proposta non confermata non deve finire su un foglio esposto.
+  // Che cosa e' spuntato, per un piatto del menu allegato.
+  //
+  // Le proposte partono SPUNTATE. Non e' una scorciatoia: nascono dalla riga
+  // di ingredienti che il menu stesso scrive sotto il piatto — "Cozza,
+  // vongole, calamari e gamberi" — quindi non sono un'invenzione dell'app, e
+  // su un menu da centocinquanta voci chiedere centocinquanta spunte prima di
+  // vedere un risultato significa non farlo fare a nessuno.
+  // Quello che resta fermo e' che si vedono una per una e si tolgono con un
+  // clic: l'OSA toglie quelle che nella sua ricetta non ci sono, e la riga in
+  // fondo alla voce ricorda da dove arrivano. La verifica sulle etichette dei
+  // prodotti in uso resta sua, come dice l'avviso in cima alla pagina.
+  const propostiDi = (p) => propostiScelti[p.nome] ?? p.proposti;
+
+  // Porta dentro l'app un piatto letto dal menu allegato.
   const importaPiatto = async (p) => {
-    const scelti = propostiScelti[p.nome] || [];
+    const scelti = propostiDi(p);
     await add({
       dish: p.nome,
       allergens: [...p.dichiarati, ...scelti.filter((a) => !p.dichiarati.includes(a))],
       traces: [],
       product_ids: [],
       ingredients_text: p.ingredienti || null,
-      note: "Ripreso dal menu che l'azienda aveva già, letto il " + new Date().toLocaleDateString("it-IT"),
+      // Niente nota. Il campo "note" e' la nota PER IL CLIENTE: finisce
+      // stampata sotto la voce, sul foglio che si appende in sala. Scriverci
+      // da dove arriva il piatto voleva dire stampare "Ripreso dal menu che
+      // l'azienda aveva gia'" su un menu ufficiale. La provenienza resta dove
+      // deve stare: nella revisione del menu allegato, che e' archiviata con
+      // la sua data.
+      note: null,
       updated_at: new Date().toISOString(),
     });
-    setAvviso(`«${p.nome}» è ora una voce del menu dell'app: apri la matita per collegarci i prodotti.`);
   };
 
-  const spuntaProposto = (piatto, allergene) => {
+  // Tutti insieme, quando il controllo e' andato bene.
+  //
+  // Su un menu da centocinquanta voci aggiungerle una per una e' una
+  // mattinata. Chi ha letto il referto e si fida delle proposte le prende in
+  // blocco; chi vuole guardarle a una a una continua a farlo col tasto di
+  // ogni riga. Si chiede conferma una volta, dicendo quante sono: e' l'unico
+  // punto in cui una scelta sola vale per tanti piatti, e deve essere una
+  // scelta consapevole, non un clic di troppo.
+  const importaTutti = async (elenco) => {
+    const mancanti = elenco.filter((p) => !items.some((v) => normalizza(v.dish) === normalizza(p.nome)));
+    if (!mancanti.length) return;
+    const conAllergeni = mancanti.filter((p) => p.dichiarati.length || propostiDi(p).length).length;
+    const ok = window.confirm(
+      `Aggiungo ${mancanti.length} piatti al menu dell'app.\n\n` +
+      `${conAllergeni} con gli allergeni spuntati, ${mancanti.length - conAllergeni} senza.\n\n` +
+      "Gli allergeni proposti vanno verificati sulle etichette dei prodotti in uso prima di esporre il menu."
+    );
+    if (!ok) return;
+    setBusy(true);
+    try {
+      for (let i = 0; i < mancanti.length; i++) {
+        setAvanzamento(`Aggiungo ${i + 1} di ${mancanti.length}…`);
+        await importaPiatto(mancanti[i]);
+      }
+      setAvviso(`${mancanti.length} piatti aggiunti al menu dell'app. Controllali uno per uno prima di stamparlo.`);
+    } catch (err) {
+      setErrore("Non sono riusciti tutti: " + err.message);
+    } finally {
+      setBusy(false);
+      setAvanzamento("");
+    }
+  };
+
+  const spuntaProposto = (piatto, allergene, partenza = []) => {
     setPropostiScelti((prec) => {
-      const ora = prec[piatto] || [];
+      const ora = prec[piatto] ?? partenza;
       return { ...prec, [piatto]: ora.includes(allergene) ? ora.filter((a) => a !== allergene) : [...ora, allergene] };
     });
   };
@@ -781,9 +830,30 @@ export default function Allergeni() {
                   <p className="appt-section-label" style={{ margin: "14px 0 6px" }}>
                     I piatti letti dal menu ({piatti.length})
                   </p>
+                  {(() => {
+                    const mancanti = piatti.filter((p) => !items.some((v) => normalizza(v.dish) === normalizza(p.nome)));
+                    if (!mancanti.length) {
+                      return <p className="sub" style={{ margin: "0 0 8px" }}>Sono già tutti nel menu dell'app.</p>;
+                    }
+                    return (
+                      <div className="row-form" style={{ margin: "0 0 10px", alignItems: "center" }}>
+                        <button type="button" className="btn-primary" disabled={busy} onClick={() => importaTutti(piatti)}>
+                          <Plus size={15} /> {busy ? (avanzamento || "Aggiungo…") : `Aggiungi tutti e ${mancanti.length} i piatti che mancano`}
+                        </button>
+                        <span className="sub" style={{ margin: 0 }}>
+                          Oppure uno alla volta, col tasto di ogni riga, se vuoi controllarli mentre entrano.
+                        </span>
+                      </div>
+                    );
+                  })()}
                   <ul className="log-list">
                     {piatti.map((p) => {
-                      const scelti = propostiScelti[p.nome] || [];
+                      const scelti = propostiDi(p);
+                      // Se e' gia' in menu lo si guarda adesso, non com'era
+                      // quando il referto e' stato scritto: altrimenti si
+                      // clicca due volte e il piatto entra due volte.
+                      const giaDentro = items.some((v) => normalizza(v.dish) === normalizza(p.nome));
+                      const totale = [...p.dichiarati, ...scelti.filter((a) => !p.dichiarati.includes(a))];
                       return (
                         <li key={p.nome} className="log-row" style={{ alignItems: "flex-start", flexWrap: "wrap" }}>
                           <span className="log-main" style={{ display: "block", minWidth: 0 }}>
@@ -796,25 +866,31 @@ export default function Allergeni() {
                             {p.proposti.length > 0 && (
                               <span style={{ display: "block", margin: "6px 0 0" }}>
                                 <span className="sub" style={{ display: "block" }}>
-                                  Da valutare — spunta quelli che ci sono davvero nella tua ricetta:
+                                  Proposti dagli ingredienti scritti nel menu — togli quelli che nella tua ricetta non ci sono:
                                 </span>
                                 <span className="chip-grid" style={{ marginTop: 4 }}>
                                   {p.proposti.map((a) => (
                                     <button
                                       key={a} type="button"
                                       className={"chip" + (scelti.includes(a) ? " chip-on" : "")}
-                                      onClick={() => spuntaProposto(p.nome, a)}
+                                      onClick={() => spuntaProposto(p.nome, a, p.proposti)}
                                     >{a}</button>
                                   ))}
                                 </span>
                               </span>
                             )}
                           </span>
-                          {p.giaInApp ? (
+                          {giaDentro ? (
                             <span className="doc-type-tag">già in menu</span>
                           ) : (
-                            <button type="button" className="link-btn" onClick={() => importaPiatto(p)}>
-                              <Plus size={14} /> Aggiungi al menu dell'app
+                            <button type="button" className="link-btn" onClick={async () => {
+                              await importaPiatto(p);
+                              setAvviso(`«${p.nome}» è ora una voce del menu dell'app.`);
+                            }}>
+                              <Plus size={14} />
+                              {totale.length
+                                ? ` Aggiungi con ${totale.join(", ")}`
+                                : " Aggiungi senza allergeni"}
                             </button>
                           )}
                         </li>
