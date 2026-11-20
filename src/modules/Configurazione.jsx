@@ -119,6 +119,12 @@ export default function Configurazione({ onVai, subTabIniziale }) {
   const [hasIceMachine, setHasIceMachine] = useState(false);
   const [hasFryer, setHasFryer] = useState(false);
   const [sellsToBusinesses, setSellsToBusinesses] = useState(false);
+  // Il pasto che viaggia ha due lati, e sono due mestieri diversi: chi lo
+  // produce e lo porta, e chi lo riceve e lo serve. Un cliente puo' fare
+  // tutte e due le cose — una cucina che serve la propria struttura e in
+  // piu' consegna fuori — quindi sono due caselle, non una scelta.
+  const [cateringEsterno, setCateringEsterno] = useState(false);
+  const [pastiProntiEsterni, setPastiProntiEsterni] = useState(false);
   const [rteProduction, setRteProduction] = useState(false);
   const [closingWeekdays, setClosingWeekdays] = useState([]);
   const [reminderHour, setReminderHour] = useState(8);
@@ -232,6 +238,8 @@ export default function Configurazione({ onVai, subTabIniziale }) {
       setHasIceMachine(!!company.has_ice_machine);
       setHasFryer(!!company.has_fryer);
       setSellsToBusinesses(!!company.sells_to_businesses);
+      setCateringEsterno(!!company.catering_esterno);
+      setPastiProntiEsterni(!!company.pasti_pronti_esterni);
       setRteProduction(!!company.rte_production);
       setClosingWeekdays(Array.isArray(company.closing_weekdays) ? company.closing_weekdays.map(Number) : []);
       setReminderHour(Number(company.reminder_hour) || 8);
@@ -294,6 +302,8 @@ export default function Configurazione({ onVai, subTabIniziale }) {
     has_ice_machine: hasIceMachine,
     has_fryer: hasFryer,
     sells_to_businesses: sellsToBusinesses,
+    catering_esterno: cateringEsterno,
+    pasti_pronti_esterni: pastiProntiEsterni,
     rte_production: rteProduction,
     closing_weekdays: closingWeekdays,
     reminder_hour: Number(reminderHour) || 8,
@@ -756,6 +766,21 @@ export default function Configurazione({ onVai, subTabIniziale }) {
                     <label className="checkbox-row" style={{ marginTop: 8 }}>
                       <input type="checkbox" checked={sellsToBusinesses} disabled={!isConsultant} onChange={(e) => setSellsToBusinesses(e.target.checked)} />
                       L'attività cede prodotti ad altre imprese — bar, ristoranti, negozi, grossisti (registro delle cessioni)
+                    </label>
+                    {/* Catering: i due lati del pasto che viaggia. Chi
+                        consegna risponde della temperatura fino alla porta
+                        del cliente; chi riceve risponde di quello che
+                        accetta. Accese, aggiungono al manuale i cicli del
+                        trasporto o dell'accettazione — che sono gli unici
+                        punti in cui una rottura della catena del freddo o
+                        del caldo non si vede guardando il piatto. */}
+                    <label className="checkbox-row" style={{ marginTop: 8 }}>
+                      <input type="checkbox" checked={cateringEsterno} disabled={!isConsultant} onChange={(e) => setCateringEsterno(e.target.checked)} />
+                      L'attività produce pasti e li consegna a terzi — catering, pasti per comunità (ciclo del trasporto e temperature alla consegna)
+                    </label>
+                    <label className="checkbox-row" style={{ marginTop: 8 }}>
+                      <input type="checkbox" checked={pastiProntiEsterni} disabled={!isConsultant} onChange={(e) => setPastiProntiEsterni(e.target.checked)} />
+                      L'attività riceve pasti pronti da una ditta esterna e li somministra — casa di riposo, mensa (ciclo dell'accettazione)
                     </label>
                     {/* Questa casella decide la frequenza del tampone di
                         laboratorio. Dove si producono alimenti pronti che

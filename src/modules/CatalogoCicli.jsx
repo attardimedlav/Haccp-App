@@ -33,6 +33,8 @@ const FLAG = [
   { id: "has_ice_machine", label: "Solo con macchina del ghiaccio" },
   { id: "serves_raw_fish", label: "Solo se somministra pesce crudo" },
   { id: "has_water_tank", label: "Solo con vasca di accumulo" },
+  { id: "catering_esterno", label: "Solo se consegna pasti a terzi" },
+  { id: "pasti_pronti_esterni", label: "Solo se riceve pasti pronti da terzi" },
 ];
 
 const etichettaFlag = (id) => (FLAG.find((f) => f.id === (id || ""))?.label) || id;

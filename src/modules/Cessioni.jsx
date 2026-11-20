@@ -23,6 +23,19 @@ import { useAuth } from "../AuthContext";
 // serve a navigare, il testo serve a restare leggibile fra due anni, quando
 // chi legge non ha piu' sotto mano niente del resto.
 
+// I limiti dell'art. 31 del D.P.R. 327/1980 per gli alimenti deperibili
+// cotti: caldi non sotto i 60 °C, freddi non sopra i 10 °C. Sono gli stessi
+// che il ciclo del trasporto dichiara nel manuale, e stanno scritti in un
+// posto solo perche' il giorno che cambiano non devono cambiare in due.
+export function temperaturaInRegola(valore, tipo) {
+  // Campo vuoto non vuol dire fuori limite: vuol dire che non e' stato
+  // misurato, e su quello non si esprime un giudizio.
+  if (valore === "" || valore === null || valore === undefined) return true;
+  const t = Number(String(valore).replace(",", "."));
+  if (!Number.isFinite(t)) return true;
+  return tipo === "freddo" ? t <= 10 : t >= 60;
+}
+
 const oggi = () => new Date().toISOString().slice(0, 10);
 
 function fmtData(iso) {
@@ -50,6 +63,12 @@ export default function Cessioni() {
   const [documento, setDocumento] = useState("");
   const [operatore, setOperatore] = useState("");
   const [note, setNote] = useState("");
+  // La temperatura alla consegna: serve solo a chi consegna pasti, e per
+  // quello compare solo dove la casella del catering e' accesa. Per una
+  // cessione di farina non vuol dire niente, e un campo che non vuol dire
+  // niente e' un campo che prima o poi qualcuno riempie a caso.
+  const [tempC, setTempC] = useState("");
+  const [tempTipo, setTempTipo] = useState("caldo");
   const [busy, setBusy] = useState(false);
   const [errore, setErrore] = useState("");
   const [cerca, setCerca] = useState("");
@@ -97,7 +116,7 @@ export default function Cessioni() {
 
   const azzera = () => {
     setCliente(""); setIndirizzo(""); setOrigine(""); setProdotto(""); setLotto("");
-    setQuantita(""); setDocumento(""); setNote(""); setData(oggi());
+    setQuantita(""); setDocumento(""); setNote(""); setData(oggi()); setTempC("");
   };
 
   const submit = async (e) => {
@@ -118,6 +137,8 @@ export default function Cessioni() {
       document_ref: documento.trim() || null,
       operator: (operatore || responsabile).trim() || null,
       notes: note.trim() || null,
+      delivery_temp_c: tempC === "" ? null : Number(String(tempC).replace(",", ".")),
+      delivery_temp_kind: tempC === "" ? null : tempTipo,
       preparation_id: origine.startsWith("prep:") ? origine.slice(5) : null,
       traceability_record_id: origine.startsWith("arr:") ? origine.slice(4) : null,
     };
@@ -195,6 +216,25 @@ export default function Cessioni() {
           )}
         </div>
 
+        {company?.catering_esterno && (
+          <div className="row-form" style={{ margin: "0 0 8px", alignItems: "center" }}>
+            <label className="field-label">Temperatura alla consegna
+              <input type="number" step="0.1" inputMode="decimal" placeholder="°C"
+                value={tempC} onChange={(e) => setTempC(e.target.value)} />
+            </label>
+            <select value={tempTipo} onChange={(e) => setTempTipo(e.target.value)}>
+              <option value="caldo">Piatti caldi — non sotto +60 °C</option>
+              <option value="freddo">Piatti freddi — non sopra +10 °C</option>
+            </select>
+            {tempC !== "" && !temperaturaInRegola(tempC, tempTipo) && (
+              <span className="file-error">
+                <AlertTriangle size={13} /> Fuori limite: i pasti non vanno lasciati al destinatario.
+                Registra la non conformità e riportali indietro.
+              </span>
+            )}
+          </div>
+        )}
+
         <div className="row-form" style={{ margin: "0 0 8px" }}>
           <input type="text" placeholder="Note (facoltative)"
             value={note} onChange={(e) => setNote(e.target.value)} className="note-input" />
@@ -234,6 +274,11 @@ export default function Cessioni() {
                   {x.document_ref && <span className="doc-type-tag">{x.document_ref}</span>}
                   <span className="log-time">{fmtData(x.shipment_date)}</span>
                   {x.operator && <span className="doc-type-tag">{x.operator}</span>}
+                  {x.delivery_temp_c != null && (
+                    <span className={"lot-tag " + (temperaturaInRegola(x.delivery_temp_c, x.delivery_temp_kind) ? "pill-ok" : "pill-alert")}>
+                      {String(x.delivery_temp_c).replace(".", ",")} °C alla consegna
+                    </span>
+                  )}
                 </div>
                 {x.notes && <p className="pest-note">{x.notes}</p>}
               </div>
