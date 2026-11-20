@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Thermometer, SprayCan, Bug, ChevronRight, ChevronDown, LogOut, ShieldCheck, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen, Snowflake, HardHat, FileText, Paperclip, Award, Wrench, Stethoscope, Network, UtensilsCrossed, GlassWater, Menu, X, Filter, FlaskConical, ChefHat, Flame, Truck, Send, BookOpen, LayoutDashboard, Layers , PenLine, ClipboardCheck } from "lucide-react";
+import { Thermometer, SprayCan, Bug, ChevronRight, ChevronDown, LogOut, ShieldCheck, ShieldAlert, GraduationCap, Package, Building2, Settings, Printer, ClipboardX, Droplet, Users, ArrowLeftCircle, FolderOpen, Snowflake, HardHat, FileText, Paperclip, Award, Wrench, Stethoscope, Network, UtensilsCrossed, GlassWater, Menu, X, Filter, FlaskConical, ChefHat, Flame, Truck, Send, BookOpen, LayoutDashboard, Layers , PenLine, ClipboardCheck , HeartPulse, Info} from "lucide-react";
 import { AuthProvider, useAuth } from "./AuthContext";
 import { useTable, EVENTO_SCRITTURA } from "./hooks/useTable";
 import Login from "./Login";
@@ -92,15 +92,40 @@ const QUOTIDIANI = new Set(["temperature", "sanificazione", "tracciabilita"]);
 const PERIODICI = new Set(["infestanti", "acquepotabili", "acquafiltrata", "verificapulizia", "controllianalitici", "manutenzione", "preparazioni", "oliofrittura", "abbattimento", "ghiaccio"]);
 const EVENTI = new Set(["cessioni", "nonconformita"]);
 
+// Le voci della tendina "Sicurezza sul lavoro".
+//
+// Dal 19/11/2026 la sezione si governa tutta da qui: una voce, una pagina,
+// una cosa sola da fare. Prima ogni pagina aveva dentro di sé una seconda
+// riga di schede, che sul telefono usciva tagliata e costringeva a
+// trascinarla di lato per trovare quello che serviva — e chi non conosce
+// la materia non sapeva nemmeno che cosa cercare.
+//
+// L'ordine è quello in cui il fascicolo si compone e in cui un'ispezione
+// lo sfoglia: chi comanda, il documento di valutazione, le figure una per
+// una con la loro nomina, quello che si è fatto verso i lavoratori, la
+// sorveglianza sanitaria, le attrezzature, il quadro finale.
 const WORK_SAFETY_SUB_ITEMS = [
   { id: "fascicolo", label: "Fascicolo", icon: FolderOpen },
   { id: "organigramma", label: "Organigramma", icon: Network },
   { id: "dvr", label: "DVR", icon: FileText },
-  { id: "allegati", label: "Allegati al DVR", icon: Paperclip },
-  { id: "nomine", label: "Attestati", icon: Award },
-  { id: "attrezzature", label: "Attrezzature", icon: Wrench, requires: "active_equipment_checks" },
-  { id: "visitemediche", label: "Visite Mediche", icon: Stethoscope, requires: "active_medical_surveillance" },
-  { id: "conformita", label: "Conformità", icon: ShieldAlert },
+  { id: "rspp", label: "RSPP e nomina", icon: ShieldCheck },
+  { id: "rls", label: "RLS e nomina", icon: Users },
+  { id: "primosoccorso", label: "Primo soccorso e nomine", icon: HeartPulse },
+  { id: "antincendio", label: "Antincendio e nomine", icon: Flame },
+  { id: "preposti", label: "Preposti e nomina", icon: HardHat },
+  { id: "informazione", label: "Informazione dei lavoratori", icon: Info },
+  { id: "formazionelav", label: "Formazione dei lavoratori", icon: GraduationCap },
+  { id: "addestramento", label: "Addestramento", icon: Wrench },
+  { id: "dpi", label: "Consegna dei DPI", icon: ShieldAlert },
+  { id: "visitemediche", label: "Sorveglianza sanitaria", icon: Stethoscope, requires: "active_medical_surveillance" },
+  { id: "attrezzature", label: "Attrezzature e verifiche periodiche", icon: Wrench, requires: "active_equipment_checks" },
+  { id: "allegati", label: "Altri allegati e verbali", icon: Paperclip },
+  { id: "nomine", label: "Quadro degli attestati", icon: Award },
+  // I corsi li organizza il consulente: li progetta, mette il docente e
+  // firma gli attestati. Prima la voce viveva solo dentro la riga di
+  // sotto-schede; tolta quella, senza questa riga non si raggiungeva piu'.
+  { id: "corsi", label: "Corsi", icon: GraduationCap, soloConsulente: true },
+  { id: "conformita", label: "Conformità", icon: ShieldCheck },
 ];
 
 const TABS = [
@@ -231,7 +256,9 @@ function Shell() {
     { titolo: "Controlli periodici", voci: visibleMainTabs.filter((t) => PERIODICI.has(t.id)) },
     { titolo: "Quando serve", voci: visibleMainTabs.filter((t) => EVENTI.has(t.id)) },
   ];
-  const visibleWorkSafetyItems = WORK_SAFETY_SUB_ITEMS.filter((t) => !t.requires || company?.[t.requires]);
+  const visibleWorkSafetyItems = WORK_SAFETY_SUB_ITEMS
+    .filter((t) => !t.requires || company?.[t.requires])
+    .filter((t) => !t.soloConsulente || hasMultipleClients);
   const haccpTabAttivo = HACCP_TAB_IDS.has(tab);
 
   React.useEffect(() => {
