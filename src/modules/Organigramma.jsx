@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Trash2, UserPlus, Award, Users, Network, Stethoscope, HeartPulse, Flame, HardHat, ShieldCheck } from "lucide-react";
+import { Plus, Trash2, UserPlus, Award, Users, Network, Stethoscope, HeartPulse, Flame, HardHat, ShieldCheck, AlertTriangle } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { ROLE_OPTIONS, MEDICO_ROLE, expiryInfo } from "./SicurezzaLavoro";
@@ -23,7 +23,7 @@ export default function Organigramma({ onVaiAiDipendenti }) {
   // L'organigramma fotografa l'azienda di oggi: chi non c'e' piu' non va
   // esposto in un documento affisso ai sensi del D.Lgs. 81/08.
   const employees = inForza(employeesTutti);
-  const { items: appointments, add: addAppointment } = useTable("work_safety_appointments", company?.id);
+  const { items: appointments, add: addAppointment, ultimoErrore: erroreIncarichi } = useTable("work_safety_appointments", company?.id);
   const { items: trainings } = useTable("work_safety_trainings", company?.id);
 
   // La validità di un ruolo dipende dall'ultimo corso fatto, non dalla nomina:
@@ -41,37 +41,58 @@ export default function Organigramma({ onVaiAiDipendenti }) {
   const [assignRole, setAssignRole] = useState(ROLE_OPTIONS[0]);
   const [assignIssueDate, setAssignIssueDate] = useState("");
   const [assignBusy, setAssignBusy] = useState(false);
+  const [assignError, setAssignError] = useState("");
 
   const startAssign = (empId) => {
     setAssigningFor(empId);
+    setAssignError("");
     setAssignRole(ROLE_OPTIONS[0]);
     setAssignIssueDate(new Date().toISOString().slice(0, 10));
   };
 
+  // Assegnare un ruolo e' una scrittura come tutte le altre, e come tutte
+  // le altre puo' essere rifiutata. Prima il rifiuto non si vedeva: il
+  // riquadro si chiudeva e l'incarico non c'era — e chi lo aveva appena
+  // assegnato restava convinto di averlo fatto. Ora o compare l'incarico,
+  // o compare il motivo per cui non c'e'.
   const submitAssign = async (emp) => {
     if (!assignIssueDate) return;
     setAssignBusy(true);
-    const nomina_attachment_path = await generateNominaAttachment({
-      role: assignRole,
-      company,
-      personName: `${emp.first_name} ${emp.last_name}`,
-      nominaDate: assignIssueDate,
-      rlsName: findRlsName(appointments),
-      datoreName: findDatoreName(appointments, employees),
-    });
-    await addAppointment({
-      role: assignRole,
-      person_name: `${emp.first_name} ${emp.last_name}`,
-      nomina_issue_date: assignIssueDate,
-      issue_date: null,
-      validity_years: null,
-      expiry_date: null,
-      nomina_attachment_path,
-      attestato_attachment_path: null,
-      note: "",
-    });
-    setAssignBusy(false);
-    setAssigningFor(null);
+    setAssignError("");
+    try {
+      const nomina_attachment_path = await generateNominaAttachment({
+        role: assignRole,
+        company,
+        personName: `${emp.first_name} ${emp.last_name}`,
+        nominaDate: assignIssueDate,
+        rlsName: findRlsName(appointments),
+        datoreName: findDatoreName(appointments, employees),
+      });
+      const creato = await addAppointment({
+        role: assignRole,
+        person_name: `${emp.first_name} ${emp.last_name}`,
+        nomina_issue_date: assignIssueDate,
+        issue_date: null,
+        validity_years: null,
+        expiry_date: null,
+        nomina_attachment_path,
+        attestato_attachment_path: null,
+        note: "",
+      });
+      if (!creato) {
+        setAssignError(
+          "Il ruolo non e' stato assegnato" +
+          (erroreIncarichi.current ? ": " + erroreIncarichi.current : ".") +
+          " Riprova; se l'errore torna, mandalo al consulente."
+        );
+        return;
+      }
+      setAssigningFor(null);
+    } catch (err) {
+      setAssignError("Il ruolo non e' stato assegnato: " + err.message);
+    } finally {
+      setAssignBusy(false);
+    }
   };
 
   const rolesFor = (emp) => appointments.filter((a) => a.person_name === `${emp.first_name} ${emp.last_name}`);
@@ -309,6 +330,9 @@ export default function Organigramma({ onVaiAiDipendenti }) {
                       </button>
                       <button type="button" className="link-btn" onClick={() => setAssigningFor(null)}>Annulla</button>
                     </div>
+                    {assignError && (
+                      <span className="file-error"><AlertTriangle size={13} /> {assignError}</span>
+                    )}
                   </div>
                 ) : (
                   <button type="button" className="link-btn" onClick={() => startAssign(emp.id)}>

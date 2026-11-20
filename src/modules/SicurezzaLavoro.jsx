@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Award, HardHat, Wrench, Stethoscope, Network, Pencil, X, Check, ShieldAlert, GraduationCap, FileSignature, Wand2, PenLine, Lock, ShieldCheck, Users, Eye, HeartPulse, Flame, FolderOpen } from "lucide-react";
+import { Plus, Trash2, Paperclip, FileText, Download, AlertTriangle, Award, HardHat, Wrench, Stethoscope, Network, Pencil, X, Check, ShieldAlert, GraduationCap, FileSignature, Wand2, PenLine, Lock, ShieldCheck, Users, Eye, HeartPulse, Flame, FolderOpen , Info} from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
@@ -98,7 +98,9 @@ export const ROLE_OPTIONS = [
 // riunione periodica e' obbligatoria solo sopra i 15 lavoratori, per questo
 // nell'elenco e' indicata come "se prevista".
 export const ALLEGATO_TYPE_OPTIONS = [
-  "Verbale di informazione e formazione dei lavoratori (art. 36)",
+  "Verbale di informazione dei lavoratori (art. 36)",
+  "Verbale di formazione dei lavoratori (art. 37)",
+  "Verbale di addestramento (art. 37, comma 5)",
   "Verbale di consegna dei DPI (art. 77)",
   "Verbale della riunione periodica, se prevista (art. 35)",
   "Verbale di sopralluogo annuale del medico competente (art. 25)",
@@ -173,6 +175,75 @@ export function eDatoreDi(employees, appointments) {
 // La prima scheda: gli adempimenti nell'ordine del fascicolo, come li chiede
 // un'ispezione. Sta davanti a tutte perche' e' quella da cui si capisce dove
 // si e' messi, e da li' si entra nelle altre, che sono il banco di lavoro.
+// LE PAGINE DELLA SICUREZZA, UNA PER VOCE DI MENU
+//
+// Dal 19/11/2026 ogni figura e ogni adempimento ha la sua pagina, aperta
+// dalla tendina a sinistra. Non e' una riscrittura: sotto ci sono le stesse
+// due schermate di prima — l'elenco degli incarichi e l'elenco degli
+// allegati al DVR — filtrate su una cosa sola. Il dato resta dov'era; a
+// cambiare e' che chi apre "Antincendio" vede gli addetti antincendio e
+// nient'altro, e il modulo nasce gia' col ruolo giusto.
+//
+// "ruoli" dice quali incarichi mostrare; "chiave" quale verbale. Una pagina
+// puo' avere tutti e due: la formazione dei lavoratori e' insieme un
+// attestato intestato alla persona e un verbale della giornata.
+const PAGINE_SICUREZZA = [
+  {
+    id: "rspp", label: "RSPP e nomina", icon: ShieldCheck,
+    ruoli: ["RSPP Datore di Lavoro", "RSPP Esterno"],
+    nota: "Responsabile del servizio di prevenzione e protezione. La designazione è un obbligo non delegabile del datore di lavoro (art. 17, comma 1, lett. b).",
+  },
+  {
+    id: "rls", label: "RLS e nomina", icon: Users,
+    ruoli: ["RLS"],
+    nota: "Rappresentante dei lavoratori per la sicurezza (artt. 47 e 48). Se i lavoratori non lo hanno eletto serve il verbale di mancata elezione, e ci si rivolge all'RLS territoriale.",
+  },
+  {
+    id: "primosoccorso", label: "Primo soccorso e nomine", icon: HeartPulse,
+    ruoli: ["Addetto al Primo Soccorso"],
+    nota: "Addetti al primo soccorso: almeno un lavoratore designato e formato (artt. 18 e 45, D.M. 388/2003).",
+  },
+  {
+    id: "antincendio", label: "Antincendio e nomine", icon: Flame,
+    ruoli: ["Addetto Antincendio"],
+    nota: "Addetti alla prevenzione incendi e gestione delle emergenze (artt. 18 e 46, D.M. 2 settembre 2021).",
+  },
+  {
+    id: "preposti", label: "Preposti e nomina", icon: HardHat,
+    ruoli: ["Preposto"],
+    nota: "Preposti: si individuano dove c'è chi sovrintende al lavoro altrui (art. 2, lett. e), con la formazione dell'art. 37, comma 7.",
+  },
+  {
+    id: "informazione", label: "Informazione dei lavoratori", icon: Info,
+    chiave: ["Verbale di informazione"],
+    tipo: "Verbale di informazione dei lavoratori (art. 36)",
+    nota: "Informazione su rischi, misure di prevenzione, procedure di emergenza e figure della sicurezza (art. 36). Qui si conserva il verbale firmato dai lavoratori.",
+  },
+  {
+    id: "formazionelav", label: "Formazione dei lavoratori", icon: GraduationCap,
+    ruoli: [FORMAZIONE_ROLE],
+    // Il secondo prefisso e' la voce vecchia, "informazione E formazione",
+    // con cui sono stati caricati i verbali fino a oggi: quelle righe
+    // riguardano tutte e due le cose e vanno viste in tutte e due le pagine.
+    // Non si rinominano: un documento firmato si chiama come si chiama.
+    chiave: ["Verbale di formazione", "Verbale di informazione e formazione"],
+    tipo: "Verbale di formazione dei lavoratori (art. 37)",
+    nota: "Formazione generale e specifica dei lavoratori (art. 37, Accordo Stato-Regioni). Sopra gli attestati di ciascuno con la loro scadenza, sotto i verbali delle giornate di formazione.",
+  },
+  {
+    id: "addestramento", label: "Addestramento", icon: Wrench,
+    chiave: ["Verbale di addestramento"],
+    tipo: "Verbale di addestramento (art. 37, comma 5)",
+    nota: "L'addestramento è cosa diversa dalla formazione: si fa sul campo, sull'attrezzatura o sul DPI, e va tracciato da chi lo ha erogato (art. 37, comma 5).",
+  },
+  {
+    id: "dpi", label: "Consegna dei DPI", icon: ShieldAlert,
+    chiave: ["Verbale di consegna dei DPI"],
+    tipo: "Verbale di consegna dei DPI (art. 77)",
+    nota: "Consegna dei dispositivi di protezione individuale con l'addestramento al loro uso, firmata dal lavoratore (art. 77).",
+  },
+];
+
 const FASCICOLO_SUB_TAB = { id: "fascicolo", label: "Fascicolo", icon: FolderOpen };
 const ORGANIGRAMMA_SUB_TAB = { id: "organigramma", label: "Organigramma", icon: Network };
 const CONFORMITA_SUB_TAB = { id: "conformita", label: "Conformità", icon: ShieldAlert };
@@ -359,7 +430,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
   // persona, e l'immagine apposta dal consulente non la sostituisce.
   const FIRMA_SUL_POSTO = false;
   const [firmaDvrId, setFirmaDvrId] = useState(null);
-  const { items: appointments, add: addAppointment, remove: removeAppointment, update: updateAppointment, loading: appointmentsLoading } = useTable("work_safety_appointments", company?.id);
+  const { items: appointments, add: addAppointment, remove: removeAppointment, update: updateAppointment, loading: appointmentsLoading, ultimoErrore: erroreIncarichi } = useTable("work_safety_appointments", company?.id);
   const { items: equipmentChecks, add: addEquipmentCheck, remove: removeEquipmentCheck, loading: equipmentLoading } = useTable("equipment_checks", company?.id);
   const { items: medicalVisits, add: addMedicalVisit, remove: removeMedicalVisit, loading: medicalLoading } = useTable("medical_visits", company?.id);
   const { items: employeesTutti, add: addEmployee } = useTable("employees", company?.id);
@@ -393,6 +464,23 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
 
   const dvrItems = dvrDocs.filter((d) => d.kind === "dvr");
   const allegatiItems = dvrDocs.filter((d) => d.kind === "allegato");
+
+  // La pagina aperta dalla tendina, quando e' una delle pagine per figura o
+  // per verbale. Da qui in giu' due elenchi — incarichi e allegati — si
+  // restringono a quello che quella pagina deve mostrare.
+  const pagina = PAGINE_SICUREZZA.find((x) => x.id === subTab) || null;
+
+  // Il verbale si riconosce dall'inizio del titolo, perche' il tipo scelto
+  // nella tendina ci finisce davanti e il dettaglio si aggiunge in coda.
+  // Il confronto e' sul prefisso corto ("Verbale di informazione") e non sul
+  // testo intero: cosi' le righe scritte quando la voce si chiamava
+  // "informazione e formazione" restano dove le cerca chi le ha caricate.
+  const allegatiDellaPagina = pagina?.chiave
+    ? allegatiItems.filter((d) => {
+        const t = String(d.title || "").toLowerCase();
+        return pagina.chiave.some((k) => t.startsWith(k.toLowerCase()));
+      })
+    : allegatiItems;
 
   // --- Form DVR / Allegati (condiviso) ---
   const [docTitle, setDocTitle] = useState("");
@@ -476,10 +564,21 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
   // "elenco" = le schede per persona; "quadro" = lo schema riassuntivo.
   const [nomineView, setNomineView] = useState("elenco");
 
+  // Aprendo una pagina di verbale il titolo nasce gia' col tipo giusto:
+  // quello che resta da scrivere e' il dettaglio — la data, il reparto —
+  // che si aggiunge in coda.
+  React.useEffect(() => {
+    if (pagina?.tipo) setDocTitle(pagina.tipo);
+    else if (pagina) setDocTitle("");
+  }, [subTab]);   // eslint-disable-line react-hooks/exhaustive-deps
+
   const openAddFor = (name) => {
     setAddingFor(name);
     setPersonName(name || "");
-    setRole(ROLE_OPTIONS[0]);
+    // Sulla pagina di una figura l'incarico e' gia' deciso: chi apre
+    // "Antincendio" sta aggiungendo un addetto antincendio, e sceglierlo di
+    // nuovo in una tendina di dieci voci e' solo un modo per sbagliarlo.
+    setRole(pagina?.ruoli ? pagina.ruoli[0] : ROLE_OPTIONS[0]);
     setNominaIssueDate(""); setIssueDate(""); setValidityYears(""); setExpiryDate("");
     setApptNominaFile(null); setApptAttestatoFile(null); setApptNote(""); setApptError("");
     setLettiDaAttestato([]); setAvvisoLettura("");
@@ -682,6 +781,20 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
         note: apptNote,
       });
 
+      // Se il database rifiuta la riga, add() torna false. Prima si
+      // proseguiva lo stesso: il modulo si svuotava e l'incarico non
+      // compariva da nessuna parte — "lo carico e poi scompare". Adesso
+      // il motivo si legge e il modulo resta compilato, cosi' si riprova
+      // senza riscrivere tutto.
+      if (!created) {
+        setApptError(
+          "L'incarico non e' stato registrato" +
+          (erroreIncarichi.current ? ": " + erroreIncarichi.current : ".") +
+          " I dati che hai scritto sono rimasti qui: riprova, e se l'errore torna mandalo al consulente."
+        );
+        return;
+      }
+
       if (created?.id && (issueDate || expiryDate || attestato_attachment_path)) {
         await addTraining({
           appointment_id: created.id,
@@ -844,6 +957,17 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
         rank: Math.min(...items.map((a) => (a.role in ROLE_RANK ? ROLE_RANK[a.role] : 6))),
       }))
       .sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name, "it"));
+  })();
+
+  // Gli incarichi di questa pagina: su "RSPP" si vede chi e' RSPP, non tutti.
+  // La persona resta la riga — un preposto che e' anche addetto antincendio
+  // compare in tutte e due le pagine, con l'incarico che quella pagina
+  // riguarda e non con gli altri, che hanno la loro.
+  const gruppiDellaPagina = (() => {
+    if (!pagina?.ruoli) return appointmentGroups;
+    return appointmentGroups
+      .map((g) => ({ ...g, items: g.items.filter((a) => pagina.ruoli.includes(a.role)) }))
+      .filter((g) => g.items.length > 0);
   })();
 
   // --- Allegati al DVR → Nomine (dal 05/10/2026) ---
@@ -1061,7 +1185,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
 
       <label className="field-label">Incarico
         <select value={role} onChange={(e) => setRole(e.target.value)}>
-          {ROLE_OPTIONS.filter((r) => r !== MEDICO_ROLE).map((r) => <option key={r} value={r}>{r}</option>)}
+          {(pagina?.ruoli || ROLE_OPTIONS.filter((r) => r !== MEDICO_ROLE)).map((r) => <option key={r} value={r}>{r}</option>)}
         </select>
       </label>
 
@@ -1530,18 +1654,12 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
         )}
       </div>
 
-      <div className="config-subtabs">
-        {visibleSubTabs.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            className={"config-subtab" + (subTab === t.id || (t.id === "allegati" && subTab === "nominedoc") ? " active" : "")}
-            onClick={() => setSubTab(t.id)}
-          >
-            <t.icon size={15} /> {t.label}
-          </button>
-        ))}
-      </div>
+      {/* La riga delle sotto-schede non c'e' piu'. Ogni voce ha la sua
+          pagina nella tendina a sinistra: sul telefono quella riga usciva
+          tagliata e si doveva trascinare di lato per trovare quello che
+          serviva, e chi non conosce la materia non sapeva nemmeno che cosa
+          cercare. La tendina si legge dall'alto in basso nell'ordine in cui
+          il fascicolo si compone. */}
 
       {/* Le nomine, gli attestati e le visite di chi non e' piu' in forza
           restano consultabili nelle loro schede, ma nel fascicolo non entrano:
@@ -1563,9 +1681,20 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
         );
       })()}
 
+      {/* Il titolo di quello che si sta guardando. Senza la riga delle
+          schede, e' questo a dire dove si e' — e la riga sotto dice, in una
+          frase, che obbligo si sta assolvendo: e' la domanda che fa chi non
+          e' del mestiere, e la risposta non deve stare in un manuale. */}
+      {pagina && (
+        <div className="tr-head" style={{ marginTop: 4, marginBottom: 10, display: "block" }}>
+          <span className="appt-section-label"><pagina.icon size={15} /> {pagina.label}</span>
+          {pagina.nota && <p className="sub" style={{ margin: "4px 0 0" }}>{pagina.nota}</p>}
+        </div>
+      )}
+
       {subTab === "organigramma" && <Organigramma onVaiAiDipendenti={onVaiAiDipendenti} />}
 
-      {(subTab === "dvr" || subTab === "allegati" || subTab === "nominedoc") && (
+      {(subTab === "dvr" || subTab === "allegati" || subTab === "nominedoc" || (pagina && pagina.chiave)) && (
         <>
           {/* Dal 23/10/2026 "Allegati al DVR" ha una sola sottosezione, Nomine:
               prima erano due linguette e il fascicolo da esibire stava diviso
@@ -1628,6 +1757,8 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
 
           <>
           <form onSubmit={submitDoc(subTab === "dvr" ? "dvr" : "allegato")} className="traccia-form">
+            {/* Sulla pagina di un verbale il tipo e' gia' quello: si sceglie
+                solo quando si sta caricando negli "Altri allegati". */}
             {(subTab === "allegati" || subTab === "nominedoc") && (
               <select
                 value={ALLEGATO_TYPE_OPTIONS.includes(docTitle) ? docTitle : "Altro"}
@@ -1662,11 +1793,15 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
 
           {(subTab === "dvr" ? dvrLoading : dvrLoading) ? (
             <p className="sub">Caricamento…</p>
-          ) : (subTab === "dvr" ? dvrItems : allegatiItems).length === 0 ? (
-            <div className="empty"><p>{subTab === "dvr" ? "Nessuna versione del DVR registrata." : "Nessun altro verbale o allegato registrato."}</p></div>
+          ) : (subTab === "dvr" ? dvrItems : allegatiDellaPagina).length === 0 ? (
+            <div className="empty"><p>{subTab === "dvr"
+              ? "Nessuna versione del DVR registrata."
+              : pagina
+                ? "Nessun verbale ancora caricato per questo adempimento."
+                : "Nessun altro verbale o allegato registrato."}</p></div>
           ) : (
             <ul className="dish-list">
-              {subTab !== "dvr" && allegatiItems.map((item) => (
+              {subTab !== "dvr" && allegatiDellaPagina.map((item) => (
                 <AllegatoDvr
                   key={item.id}
                   item={item}
@@ -1714,28 +1849,33 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
         </>
       )}
 
-      {subTab === "nomine" && (
+      {(subTab === "nomine" || (pagina && pagina.ruoli)) && (
         <>
-          <div className="config-subtabs">
-            <button
-              type="button"
-              className={"config-subtab" + (nomineView === "elenco" ? " active" : "")}
-              onClick={() => setNomineView("elenco")}
-            >
-              <Award size={15} /> Elenco per persona
-            </button>
-            <button
-              type="button"
-              className={"config-subtab" + (nomineView === "quadro" ? " active" : "")}
-              onClick={() => setNomineView("quadro")}
-            >
-              <Network size={15} /> Quadro della formazione
-            </button>
-          </div>
+          {/* Il quadro d'insieme vale per il quadro generale degli
+              attestati. Dentro la pagina di una singola figura non serve: li'
+              si guarda chi ricopre quel ruolo, non tutta l'azienda. */}
+          {!pagina && (
+            <div className="config-subtabs">
+              <button
+                type="button"
+                className={"config-subtab" + (nomineView === "elenco" ? " active" : "")}
+                onClick={() => setNomineView("elenco")}
+              >
+                <Award size={15} /> Elenco per persona
+              </button>
+              <button
+                type="button"
+                className={"config-subtab" + (nomineView === "quadro" ? " active" : "")}
+                onClick={() => setNomineView("quadro")}
+              >
+                <Network size={15} /> Quadro della formazione
+              </button>
+            </div>
+          )}
 
-          {nomineView === "quadro" && quadroFormazione}
+          {!pagina && nomineView === "quadro" && quadroFormazione}
 
-          {nomineView === "elenco" && (
+          {(pagina || nomineView === "elenco") && (
           <>
           <button
             type="button"
@@ -1743,7 +1883,7 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
             onClick={() => (addingFor === "" ? setAddingFor(null) : openAddFor(""))}
             style={{ marginBottom: 16 }}
           >
-            <Plus size={16} /> Nuovo incarico o attestato
+            <Plus size={16} /> {pagina ? "Designa una persona per questo ruolo" : "Nuovo incarico o attestato"}
           </button>
 
           {addingFor === "" && appointmentForm(null)}
@@ -1764,11 +1904,13 @@ export default function SicurezzaLavoro({ subTab, setSubTab, onVaiAiDipendenti }
 
           {appointmentsLoading ? (
             <p className="sub">Caricamento…</p>
-          ) : appointmentGroups.length === 0 ? (
-            <div className="empty"><p>Nessun incarico o attestato registrato.</p></div>
+          ) : gruppiDellaPagina.length === 0 ? (
+            <div className="empty"><p>
+              {pagina ? "Nessuno è stato ancora designato per questo ruolo." : "Nessun incarico o attestato registrato."}
+            </p></div>
           ) : (
             <ul className="dish-list">
-              {appointmentGroups.map((group) => (
+              {gruppiDellaPagina.map((group) => (
                 <li key={group.name} className="dish-row">
                   <div className="dish-top">
                     <div>

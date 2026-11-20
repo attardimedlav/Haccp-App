@@ -87,7 +87,7 @@ export default function FascicoloSicurezza({
   // Un riquadro per figura: chi la ricopre, se la nomina e' firmata e
   // allegata, come sta messa la formazione. Sono le tre domande che vengono
   // fatte in ispezione, in quest'ordine.
-  const Figura = ({ icona, titolo, ruoli, obbligatoria = true, nota }) => {
+  const Figura = ({ icona, titolo, ruoli, obbligatoria = true, nota, vaiId = "nomine" }) => {
     const persone = appointments.filter((a) => ruoli.includes(a.role) && String(a.person_name || "").trim());
 
     let stato;
@@ -111,7 +111,7 @@ export default function FascicoloSicurezza({
         icona={icona}
         titolo={titolo}
         stato={stato}
-        onVai={vai("nomine")}
+        onVai={vai(vaiId)}
         sottotitolo={persone.length === 0 ? nota : null}
       >
         {persone.length > 0 && (
@@ -202,6 +202,7 @@ export default function FascicoloSicurezza({
         icona={ShieldCheck}
         titolo="RSPP — Servizio di prevenzione e protezione"
         ruoli={["RSPP Datore di Lavoro", "RSPP Esterno"]}
+        vaiId="rspp"
         nota="Obbligo non delegabile del datore di lavoro (art. 17, comma 1, lett. b)."
       />
 
@@ -209,6 +210,7 @@ export default function FascicoloSicurezza({
         icona={Users}
         titolo="RLS — Rappresentante dei lavoratori per la sicurezza"
         ruoli={["RLS"]}
+        vaiId="rls"
         nota="Se i lavoratori non lo hanno eletto serve il verbale di mancata elezione, e ci si rivolge all'RLS territoriale (artt. 47 e 48)."
       />
 
@@ -216,6 +218,7 @@ export default function FascicoloSicurezza({
         icona={HeartPulse}
         titolo="Addetti al primo soccorso"
         ruoli={["Addetto al Primo Soccorso"]}
+        vaiId="primosoccorso"
         nota="Almeno un lavoratore designato e formato (artt. 18 e 45, D.M. 388/2003)."
       />
 
@@ -223,6 +226,7 @@ export default function FascicoloSicurezza({
         icona={Flame}
         titolo="Addetti antincendio"
         ruoli={["Addetto Antincendio"]}
+        vaiId="antincendio"
         nota="Almeno un lavoratore designato e formato (artt. 18 e 46, D.M. 2 settembre 2021)."
       />
 
@@ -230,6 +234,7 @@ export default function FascicoloSicurezza({
         icona={HardHat}
         titolo="Preposti"
         ruoli={["Preposto"]}
+        vaiId="preposti"
         obbligatoria={false}
         nota="Da individuare dove c'è chi sovrintende al lavoro altrui (art. 2, lett. e; formazione art. 37, comma 7)."
       />
@@ -278,7 +283,7 @@ export default function FascicoloSicurezza({
       <Blocco
         icona={Paperclip}
         titolo="Verbali e allegati al DVR"
-        onVai={vai("allegati")}
+        onVai={vai("informazione")}
         stato={mancanti.length === 0
           ? <Stato cls="pill-ok" testo="completi" />
           : <Stato cls="pill-warn" testo={mancanti.length === 1 ? "1 da caricare" : `${mancanti.length} da caricare`} />}
