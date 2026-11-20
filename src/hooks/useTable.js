@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "../supabaseClient";
 
 // Hook generico: legge le righe di una tabella per l'azienda attualmente
@@ -57,9 +57,26 @@ export function useTable(tableName, companyId) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // "loading" vale solo per la PRIMA lettura.
+  //
+  // Prima si accendeva a ogni rilettura, comprese quelle che seguono una
+  // spunta. L'effetto, segnalato da un'azienda che usa l'app: in
+  // Temperature e in Sanificazione, a ogni casella spuntata l'elenco
+  // spariva per un istante lasciando la scritta "Caricamento…", la pagina
+  // si accorciava e il browser riportava la vista in cima — con venti
+  // righe da spuntare bisognava riscendere venti volte.
+  //
+  // La riga appena registrata c'e' gia' a schermo, perche' la riscrittura
+  // arriva subito dopo: far sparire tutto il resto per mezzo secondo non
+  // informava nessuno, scomponeva solo la pagina sotto le dita.
+  const primaLettura = useRef(true);
+  useEffect(() => { primaLettura.current = true; }, [tableName, companyId]);
+
+  const ultimoErrore = useRef("");
+
   const reload = useCallback(async () => {
     if (!companyId) return;
-    setLoading(true);
+    if (primaLettura.current) setLoading(true);
     const { data, error: fetchError } = await supabase
       .from(tableName)
       .select("*")
@@ -67,6 +84,7 @@ export function useTable(tableName, companyId) {
       .order("created_at", { ascending: false });
     if (fetchError) setError(fetchError.message);
     else setItems(data || []);
+    primaLettura.current = false;
     setLoading(false);
   }, [tableName, companyId]);
 
@@ -113,12 +131,19 @@ export function useTable(tableName, companyId) {
   // agganciare subito qualcos'altro al record, per esempio un corso di
   // formazione alla nomina appena registrata. In caso di errore torna false.
   const add = useCallback(async (row) => {
+    ultimoErrore.current = "";
     const { data, error: insertError } = await supabase
       .from(tableName)
       .insert([{ ...trimStrings(row), company_id: companyId }])
       .select()
       .single();
-    if (insertError) { setError(insertError.message); return false; }
+    // Il motivo del rifiuto si tiene anche in un riferimento, non solo
+    // nello stato: chi ha appena chiamato add() puo' leggerlo subito,
+    // mentre lo stato arriva al render successivo. Senza, una scrittura
+    // respinta si traduceva in un modulo che si svuota come se avesse
+    // salvato — ed e' il "lo carico e poi scompare" segnalato
+    // dall'azienda sul primo soccorso.
+    if (insertError) { ultimoErrore.current = insertError.message; setError(insertError.message); return false; }
     await reload();
     annunciaScrittura(tableName);
     return data;
@@ -133,7 +158,7 @@ export function useTable(tableName, companyId) {
       .delete()
       .eq("id", id)
       .eq("company_id", companyId);
-    if (deleteError) { setError(deleteError.message); return false; }
+    if (deleteError) { ultimoErrore.current = deleteError.message; setError(deleteError.message); return false; }
     await reload();
     annunciaScrittura(tableName);
     return true;
@@ -145,11 +170,11 @@ export function useTable(tableName, companyId) {
       .update(trimStrings(fields))
       .eq("id", id)
       .eq("company_id", companyId);
-    if (updateError) { setError(updateError.message); return false; }
+    if (updateError) { ultimoErrore.current = updateError.message; setError(updateError.message); return false; }
     await reload();
     annunciaScrittura(tableName);
     return true;
   }, [tableName, companyId, reload]);
 
-  return { items, add, remove, update, loading, error, reload };
+  return { items, add, remove, update, loading, error, reload, ultimoErrore };
 }
