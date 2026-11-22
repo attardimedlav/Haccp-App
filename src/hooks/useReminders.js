@@ -266,9 +266,21 @@ export async function downloadReminderICS(dati) {
   // quella strada non esiste — computer, browser piu' vecchi — resta il
   // download di sempre, fatto pero' con un Blob, che il nome del file lo
   // mantiene.
+  // Il foglio di condivisione solo dove serve: sul telefono.
+  //
+  // Su Windows anche Chrome sa condividere, e la prima versione di questa
+  // correzione apriva il pannello di condivisione del sistema pure sul
+  // computer: chi si aspettava un file scaricato si ritrovava una finestra
+  // da chiudere, e chiudendola non restava niente. Il telefono si riconosce
+  // dal dito: puntatore grosso e schermo touch.
+  const telefono = typeof window !== "undefined"
+    && typeof window.matchMedia === "function"
+    && window.matchMedia("(pointer: coarse)").matches
+    && (navigator.maxTouchPoints || 0) > 0;
+
   try {
     const file = new File([ics], nome, { type: "text/calendar" });
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    if (telefono && navigator.canShare && navigator.canShare({ files: [file] })) {
       await navigator.share({ files: [file], title: "Promemoria HACCP" });
       return;
     }
