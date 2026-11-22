@@ -252,45 +252,19 @@ export async function downloadReminderICS(dati) {
   const ics = buildReminderICS(payload);
   const nome = "promemoria-haccp.ics";
 
-  // Sull'iPhone il file non bastava.
+  // Un solo comportamento su tutti i dispositivi: il file si scarica.
   //
-  // Prima il calendario si scaricava come indirizzo "data:". Su Android e
-  // sul computer funziona; su iPhone no: Safari ignora il nome del file,
-  // lo salva senza estensione e il sistema non lo riconosce piu' come
-  // calendario — l'OSA si ritrova un documento che non si apre con
-  // niente, e nel foglio di condivisione la voce Calendario non compare.
+  // Per un periodo, sul telefono, il pulsante apriva invece il foglio di
+  // condivisione del sistema, sperando che da li' il calendario andasse
+  // direttamente all'app Calendario. In pratica non funziona: su iPhone la
+  // voce Calendario nel foglio non compare, su Android si apre un pannello
+  // che non scarica niente, e su Windows si apriva una finestra da chiudere
+  // senza che restasse alcun file. Chi preme un pulsante che dice "scarica"
+  // deve ritrovarsi un file scaricato, sempre, e decidere poi cosa farne.
   //
-  // La strada che funziona davvero sul telefono e' il foglio di
-  // condivisione del sistema, a cui si passa un vero file con il suo tipo:
-  // li' Calendario c'e', e tocca all'utente scegliere dove metterlo. Dove
-  // quella strada non esiste — computer, browser piu' vecchi — resta il
-  // download di sempre, fatto pero' con un Blob, che il nome del file lo
-  // mantiene.
-  // Il foglio di condivisione solo dove serve: sul telefono.
-  //
-  // Su Windows anche Chrome sa condividere, e la prima versione di questa
-  // correzione apriva il pannello di condivisione del sistema pure sul
-  // computer: chi si aspettava un file scaricato si ritrovava una finestra
-  // da chiudere, e chiudendola non restava niente. Il telefono si riconosce
-  // dal dito: puntatore grosso e schermo touch.
-  const telefono = typeof window !== "undefined"
-    && typeof window.matchMedia === "function"
-    && window.matchMedia("(pointer: coarse)").matches
-    && (navigator.maxTouchPoints || 0) > 0;
-
-  try {
-    const file = new File([ics], nome, { type: "text/calendar" });
-    if (telefono && navigator.canShare && navigator.canShare({ files: [file] })) {
-      await navigator.share({ files: [file], title: "Promemoria HACCP" });
-      return;
-    }
-  } catch (e) {
-    // L'utente ha chiuso il foglio di condivisione: non e' un errore e non
-    // si ripiega sul download, altrimenti si ritroverebbe il file scaricato
-    // proprio dopo aver detto di no.
-    if (e && (e.name === "AbortError" || e.name === "NotAllowedError")) return;
-  }
-
+  // Il file nasce da un Blob e non da un indirizzo "data:": cosi' il nome
+  // con l'estensione .ics viene mantenuto e il sistema lo riconosce come
+  // calendario.
   const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
