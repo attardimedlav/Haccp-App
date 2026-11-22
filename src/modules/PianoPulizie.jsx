@@ -104,6 +104,50 @@ export default function PianoPulizie() {
     }
   };
 
+  // IL PRODOTTO DI OGNI RIGA
+  //
+  // Quale prodotto si usa non e' una scelta dell'azienda ma della singola
+  // operazione: sul pavimento la candeggina, sulle vetrine un detergente, sul
+  // tagliere un sanificante per superfici a contatto con gli alimenti. Il
+  // posto dove questa scelta vive e' il piano, riga per riga — ed e' la stessa
+  // riga che il manuale stampa, quindi quello che l'OSA si vede proposto nella
+  // spunta e quello che il manuale dichiara sono per forza la stessa cosa.
+  //
+  // Il problema non era la mancanza di un meccanismo: era che il campo resta
+  // vuoto, e allora l'app proponeva il primo sanificante della lista, scelto
+  // da nessuno. Qui si riempie, una riga per volta o un'area intera in un
+  // colpo.
+  const [prodottoArea, setProdottoArea] = useState({});
+
+  const assegnaProdotto = async function (riga, nome) {
+    if (!nome) return;
+    setErrore("");
+    try {
+      await update(riga.id, { product: nome });
+    } catch (err) {
+      setErrore("Prodotto non assegnato: " + err.message);
+    }
+  };
+
+  // L'assegnazione in blocco tocca solo le righe che il prodotto non ce
+  // l'hanno: una scelta gia' fatta non si sovrascrive mai, e meno che mai in
+  // massa.
+  const assegnaAllArea = async function (gruppo) {
+    const nome = (prodottoArea[gruppo.area] || "").trim();
+    if (!nome) return;
+    const senza = gruppo.righe.filter(function (s) { return !s.riga.product; });
+    if (!senza.length) return;
+    setBusy(true); setErrore("");
+    try {
+      for (const s of senza) await update(s.riga.id, { product: nome });
+      setProdottoArea(function (p) { return { ...p, [gruppo.area]: "" }; });
+    } catch (err) {
+      setErrore("Assegnazione non riuscita: " + err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const salvaModifica = async function () {
     if (!mod.operation.trim()) { setErrore("L'operazione non può restare vuota."); return; }
     setBusy(true); setErrore("");
@@ -226,6 +270,31 @@ export default function PianoPulizie() {
               <div className="sub" style={{ margin: "10px 0 6px", display: "flex", alignItems: "center", gap: 6 }}>
                 <SprayCan size={14} color="#2F6F4E" /> {gruppo.area}
               </div>
+              {sanificanti.length > 0 && gruppo.righe.some(function (s) { return !s.riga.product; }) && (
+                <div className="row-form" style={{ margin: "0 0 8px", alignItems: "center" }}>
+                  <span className="sub" style={{ margin: 0 }}>
+                    {gruppo.righe.filter(function (s) { return !s.riga.product; }).length} righe senza prodotto:
+                  </span>
+                  <select
+                    value={prodottoArea[gruppo.area] || ""}
+                    onChange={function (e) {
+                      const v = e.target.value;
+                      setProdottoArea(function (p) { return { ...p, [gruppo.area]: v }; });
+                    }}
+                  >
+                    <option value="">— scegli il prodotto —</option>
+                    {sanificanti.map(function (s) { return <option key={s.id} value={s.name}>{s.name}</option>; })}
+                  </select>
+                  <button
+                    type="button" className="btn-primary"
+                    style={{ background: "#fff", color: "#2F6F4E", border: "1px solid #2F6F4E" }}
+                    disabled={busy || !prodottoArea[gruppo.area]}
+                    onClick={function () { assegnaAllArea(gruppo); }}
+                  >
+                    Assegna a tutte
+                  </button>
+                </div>
+              )}
               <ul className="dish-list">
                 {gruppo.righe.map(function (s) {
                   const r = s.riga;
@@ -312,7 +381,27 @@ export default function PianoPulizie() {
                       <div className="traccia-meta">
                         <span className={"pill " + s.cls}>{s.label}</span>
                         {s.ultima && <span className="doc-type-tag">ultima il {fmtData(s.ultima.created_at)}</span>}
-                        {r.product && <span className="doc-type-tag">{r.product}</span>}
+                        {r.product ? (
+                          <span className="doc-type-tag">{r.product}</span>
+                        ) : sanificanti.length > 0 ? (
+                          // La riga senza prodotto non si limita a segnalarsi:
+                          // si lascia riempire qui, senza aprire la modifica.
+                          // Riempirla e' il lavoro che fa risparmiare tempo
+                          // all'OSA ogni giorno per sempre.
+                          <select
+                            value=""
+                            title="Prodotto non indicato: scegline uno"
+                            style={{ fontSize: 12, padding: "2px 4px" }}
+                            onChange={function (e) { assegnaProdotto(r, e.target.value); }}
+                          >
+                            <option value="">prodotto non indicato</option>
+                            {sanificanti.map(function (x) { return <option key={x.id} value={x.name}>{x.name}</option>; })}
+                          </select>
+                        ) : (
+                          <span className="lot-tag" style={{ marginLeft: 0, color: "#8A5A00", background: "#FFF1D6" }}>
+                            prodotto non indicato
+                          </span>
+                        )}
                         {r.responsible && <span className="doc-type-tag">{r.responsible}</span>}
                       </div>
                       {r.method && <p className="pest-note">{r.method}</p>}

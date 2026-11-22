@@ -84,10 +84,23 @@ export default function Sanificazione() {
   // dell'azienda, l'app ci metteva al suo posto il primo della lista senza
   // dire niente: la scelta scritta nel manuale spariva in silenzio, e il
   // registro documentava un prodotto che nessuno aveva approvato.
+  //
+  // Restava pero' il caso della riga senza prodotto nel piano: li' l'app
+  // metteva il PRIMO della lista. Un prodotto scelto da nessuno, che cambia da
+  // solo il giorno che se ne cancella un altro, e che finisce nel registro
+  // come se qualcuno l'avesse deciso. In un'azienda che ha candeggina, lava
+  // pavimenti e sanificante per superfici, la probabilita' che il primo della
+  // lista sia quello giusto e' una su tre.
+  //
+  // Ora quel ripiego vale solo quando il prodotto in elenco e' uno solo —
+  // allora non c'e' niente da scegliere. Negli altri casi la tendina resta
+  // vuota e sceglie l'operatore. Quale prodotto va su quale superficie si
+  // decide nel piano, in Configurazione, dove quella scelta e' anche la riga
+  // che il manuale stampa.
   const prodottoDi = (riga) => {
     if (prodotti[riga.id] !== undefined) return prodotti[riga.id];
     if (riga.product) return riga.product;
-    return sanitizers.length ? sanitizers[0].name : "";
+    return sanitizers.length === 1 ? sanitizers[0].name : "";
   };
 
   // Le voci della tendina: i sanificanti dell'azienda piu', se manca, quello
@@ -258,6 +271,7 @@ export default function Sanificazione() {
                                 value={prodottoDi(riga)}
                                 onChange={(e) => setProdotti({ ...prodotti, [riga.id]: e.target.value })}
                               >
+                                {!prodottoDi(riga) && <option value="">— scegli il prodotto —</option>}
                                 {prodottiPer(riga).map((nome) => (
                                   <option key={nome} value={nome}>
                                     {nome}{nome === riga.product ? "  (previsto dal piano)" : ""}
