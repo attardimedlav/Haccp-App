@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Plus, Trash2, AlertTriangle, CheckCircle2, Snowflake, Timer, ThermometerSnowflake, XCircle, Package, Printer, Eye } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
@@ -150,7 +150,29 @@ function minutiTrascorsi(da, a = Date.now()) {
   return Math.round((new Date(a).getTime() - new Date(da).getTime()) / 60000);
 }
 
-function AbbattimentoCotti({ company }) {
+// I cotti abbattuti sono due cose diverse e vanno guardati separati.
+//
+// Il positivo torna in frigorifero e si consuma nei giorni successivi; il
+// negativo va nel congelatore e ci resta dei mesi. Mescolati in una lista
+// sola, la differenza si vedeva solo dalla targhetta piccola accanto al nome,
+// e chi cercava «cosa ho abbattuto per congelarlo» li doveva distinguere a
+// occhio, uno per uno.
+const GRUPPI_CICLO = [
+  {
+    id: "negativo",
+    titolo: "Abbattuti in negativo, da congelare",
+    nota: "Portati a −18 °C al cuore: il loro posto è il congelatore. Da qui si passano al registro del congelatore senza riscrivere niente.",
+    suo: (c) => c.cycle_type !== "positivo",
+  },
+  {
+    id: "positivo",
+    titolo: "Abbattuti in positivo, da frigorifero",
+    nota: "Portati a +3 °C al cuore: restano refrigerati e si consumano entro la durata dichiarata nel manuale.",
+    suo: (c) => c.cycle_type === "positivo",
+  },
+];
+
+function AbbattimentoCotti({ company, giaInCongelatore = new Set(), onCongela }) {
   const { items, add, update, remove, loading } = useTable("blast_chill_cycles", company?.id);
   const [prodotto, setProdotto] = useState("");
   const [tipo, setTipo] = useState("positivo");
@@ -225,49 +247,7 @@ function AbbattimentoCotti({ company }) {
     setChiusura((c) => { const n = { ...c }; delete n[ciclo.id]; return n; });
   };
 
-  return (
-    <>
-      <p className="range-hint">
-        Il prodotto appena cotto va portato velocemente a bassa temperatura al cuore, letta sul display dell'abbattitore che riporta la sonda a spillone, per attraversare in fretta la fascia in cui i germi si moltiplicano: +3°C (ciclo positivo) o -18°C (negativo). <strong>Il giudizio si fonda sulla temperatura raggiunta</strong>; la durata viene registrata e, se è lunga, segnalata come cosa da verificare — carico dell'abbattitore e pezzatura — ma non fa da sola una non conformità. Se la temperatura non è stata raggiunta il ciclo è non conforme: valuta il prodotto e registra l'azione in Non conformità. Questo non è né la bonifica del pesce crudo né il congelamento per conservazione: sono schede diverse.
-      </p>
-      <form onSubmit={registra} className="traccia-form">
-        <div className="row-form">
-          <input type="text" placeholder="Prodotto (es. Ragù, Crema pasticcera)" required value={prodotto} onChange={(e) => setProdotto(e.target.value)} className="note-input" />
-          <select value={tipo} onChange={(e) => setTipo(e.target.value)}>
-            {Object.entries(CICLI).map(([id, c]) => <option key={id} value={id}>{c.label}</option>)}
-          </select>
-        </div>
-        <div className="row-form">
-          <label className="field-label">Inizio
-            <input type="datetime-local" value={inizio} onChange={(e) => setInizio(e.target.value)} required />
-          </label>
-          <input type="text" inputMode="decimal" placeholder="°C al cuore a inizio" value={tempInizio} onChange={(e) => setTempInizio(e.target.value)} style={{ width: 160 }} />
-        </div>
-        <div className="row-form">
-          <label className="field-label">Fine
-            <input type="datetime-local" value={fine} onChange={(e) => setFine(e.target.value)} required />
-          </label>
-          <input type="text" inputMode="decimal" placeholder="°C al cuore a fine" value={tempFine} onChange={(e) => setTempFine(e.target.value)} style={{ width: 160 }} required />
-        </div>
-        <div className="row-form">
-          <input type="text" placeholder="Operatore" required value={operatore} onChange={(e) => setOperatore(e.target.value)} className="note-input" />
-          {company?.haccp_manager && (
-            <button type="button" className="link-btn" onClick={() => setOperatore(company.haccp_manager)}>Usa responsabile HACCP</button>
-          )}
-        </div>
-        {errore && <span className="file-error"><AlertTriangle size={13} /> {errore}</span>}
-        <button type="submit" className="btn-primary" disabled={busy} style={{ alignSelf: "flex-start" }}>
-          <Plus size={16} /> {busy ? "Registrazione…" : "Registra l'abbattimento"}
-        </button>
-      </form>
-
-      {loading ? (
-        <p className="sub">Caricamento…</p>
-      ) : items.length === 0 ? (
-        <div className="empty"><p>Nessun abbattimento registrato.</p></div>
-      ) : (
-        <ul className="dish-list">
-          {items.map((c) => {
+  const rigaCiclo = (c) => {
             const chiuso = !!c.outcome;
             const trascorsi = minutiTrascorsi(c.start_time);
             const scaduto = !chiuso && trascorsi > c.max_minutes;
@@ -328,10 +308,80 @@ function AbbattimentoCotti({ company }) {
                     </div>
                   </>
                 )}
+                {chiuso && !nc && c.cycle_type !== "positivo" && (
+                  giaInCongelatore.has(c.id) ? (
+                    <p className="sub" style={{ margin: "6px 0 0" }}>
+                      <Package size={13} /> Già nel registro del congelatore.
+                    </p>
+                  ) : (
+                    <button
+                      type="button" className="btn-primary"
+                      style={{ background: "#fff", color: "#2F6F4E", border: "1px solid #2F6F4E", marginTop: 6 }}
+                      title="Apre il registro del congelatore con questa partita già compilata"
+                      onClick={() => onCongela && onCongela(c)}
+                    >
+                      <Package size={15} /> Metti nel registro del congelatore
+                    </button>
+                  )
+                )}
               </li>
             );
+  };
+
+  return (
+    <>
+      <p className="range-hint">
+        Il prodotto appena cotto va portato velocemente a bassa temperatura al cuore, letta sul display dell'abbattitore che riporta la sonda a spillone, per attraversare in fretta la fascia in cui i germi si moltiplicano: +3°C (ciclo positivo) o -18°C (negativo). <strong>Il giudizio si fonda sulla temperatura raggiunta</strong>; la durata viene registrata e, se è lunga, segnalata come cosa da verificare — carico dell'abbattitore e pezzatura — ma non fa da sola una non conformità. Se la temperatura non è stata raggiunta il ciclo è non conforme: valuta il prodotto e registra l'azione in Non conformità. Questo non è né la bonifica del pesce crudo né il congelamento per conservazione: sono schede diverse.
+      </p>
+      <form onSubmit={registra} className="traccia-form">
+        <div className="row-form">
+          <input type="text" placeholder="Prodotto (es. Ragù, Crema pasticcera)" required value={prodotto} onChange={(e) => setProdotto(e.target.value)} className="note-input" />
+          <select value={tipo} onChange={(e) => setTipo(e.target.value)}>
+            {Object.entries(CICLI).map(([id, c]) => <option key={id} value={id}>{c.label}</option>)}
+          </select>
+        </div>
+        <div className="row-form">
+          <label className="field-label">Inizio
+            <input type="datetime-local" value={inizio} onChange={(e) => setInizio(e.target.value)} required />
+          </label>
+          <input type="text" inputMode="decimal" placeholder="°C al cuore a inizio" value={tempInizio} onChange={(e) => setTempInizio(e.target.value)} style={{ width: 160 }} />
+        </div>
+        <div className="row-form">
+          <label className="field-label">Fine
+            <input type="datetime-local" value={fine} onChange={(e) => setFine(e.target.value)} required />
+          </label>
+          <input type="text" inputMode="decimal" placeholder="°C al cuore a fine" value={tempFine} onChange={(e) => setTempFine(e.target.value)} style={{ width: 160 }} required />
+        </div>
+        <div className="row-form">
+          <input type="text" placeholder="Operatore" required value={operatore} onChange={(e) => setOperatore(e.target.value)} className="note-input" />
+          {company?.haccp_manager && (
+            <button type="button" className="link-btn" onClick={() => setOperatore(company.haccp_manager)}>Usa responsabile HACCP</button>
+          )}
+        </div>
+        {errore && <span className="file-error"><AlertTriangle size={13} /> {errore}</span>}
+        <button type="submit" className="btn-primary" disabled={busy} style={{ alignSelf: "flex-start" }}>
+          <Plus size={16} /> {busy ? "Registrazione…" : "Registra l'abbattimento"}
+        </button>
+      </form>
+
+      {loading ? (
+        <p className="sub">Caricamento…</p>
+      ) : items.length === 0 ? (
+        <div className="empty"><p>Nessun abbattimento registrato.</p></div>
+      ) : (
+        <>
+          {GRUPPI_CICLO.map((g) => {
+            const lista = items.filter((c) => g.suo(c));
+            if (!lista.length) return null;
+            return (
+              <div key={g.id}>
+                <h4 style={{ margin: "14px 0 6px" }}>{g.titolo}</h4>
+                <p className="sub" style={{ margin: "0 0 6px" }}>{g.nota}</p>
+                <ul className="dish-list">{lista.map(rigaCiclo)}</ul>
+              </div>
+            );
           })}
-        </ul>
+        </>
       )}
     </>
   );
@@ -367,6 +417,29 @@ function giorniDa(iso) {
   return Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
 }
 
+// IL LOTTO DELLA PARTITA CONGELATA, PROPOSTO DALL'APP
+//
+// Il lotto di un prodotto fatto in casa non viene da nessuno: se lo inventa
+// l'azienda. Lasciarlo scrivere a mano, in cucina, vuol dire o un campo vuoto
+// o due partite diverse con lo stesso numero — e un lotto duplicato, in un
+// richiamo, e' esattamente il problema che il lotto doveva risolvere.
+//
+// Qui lo propone l'app: L + data + progressivo del giorno. Si legge («L261122
+// -02» e' la seconda partita congelata il 22/11/2026), si ordina da solo, e
+// resta modificabile per chi ha gia' una numerazione sua.
+function lottoInterno(partite, dataISO) {
+  const d = String(dataISO || oggiISO()).slice(0, 10).split("-");
+  if (d.length !== 3) return "";
+  const base = `L${d[0].slice(2)}${d[1]}${d[2]}`;
+  const usati = (partite || [])
+    .map((x) => String(x.lot_number || ""))
+    .filter((l) => l.startsWith(`${base}-`))
+    .map((l) => parseInt(l.slice(base.length + 1), 10))
+    .filter((n) => !Number.isNaN(n));
+  const n = (usati.length ? Math.max(...usati) : 0) + 1;
+  return `${base}-${String(n).padStart(2, "0")}`;
+}
+
 // Registro di congelamento e scongelamento.
 //
 // Non e' l'abbattimento: quello e' un ciclo di novanta minuti con un esito,
@@ -378,10 +451,11 @@ function giorniDa(iso) {
 // produzione: sulla carta il sacchetto porta un numero che rimanda a un foglio
 // in archivio, qui il rimando e' il collegamento stesso, e da una partita
 // congelata si risale ai lotti delle materie prime.
-function RegistroCongelamento({ company }) {
+function RegistroCongelamento({ company, daCongelare = null, onPreso }) {
   const { items, add, update, remove, loading } = useTable("freezing_records", company?.id);
   const { items: preparazioni } = useTable("preparations", company?.id);
 
+  const [cicloId, setCicloId] = useState(null);
   const [preparazioneId, setPreparazioneId] = useState("");
   const [prodotto, setProdotto] = useState("");
   const [lotto, setLotto] = useState("");
@@ -407,15 +481,51 @@ function RegistroCongelamento({ company }) {
     const p = preparazioni.find((x) => x.id === id);
     if (!p) return;
     setProdotto(p.product_name || "");
-    setLotto(p.lot_number || "");
+    // Il lotto della preparazione ha la precedenza: esiste gia' e sta scritto
+    // sulla scheda di produzione. Solo se non c'e' si propone il nostro.
+    setLotto(p.lot_number || lottoInterno(items, dataCongelamento));
     setDataProduzione(p.production_date || "");
     if (p.operator_name) setOperatore(p.operator_name);
   };
 
   const azzera = () => {
-    setPreparazioneId(""); setProdotto(""); setLotto(""); setDataProduzione("");
+    setCicloId(null);
+    setPreparazioneId(""); setProdotto(""); setDataProduzione("");
     setDataCongelamento(oggiISO()); setTemperatura(""); setOperatore(""); setNote(""); setErrore("");
+    setLotto(lottoInterno(items, oggiISO()));
   };
+
+  // Il modulo arriva gia' pieno quando si viene da un ciclo negativo: prodotto,
+  // date, temperatura raggiunta e operatore sono gia' stati scritti una volta
+  // nell'altra scheda, e riscriverli e' il modo per farli diventare diversi.
+  // All'operatore resta da confermare, e il lotto ce l'ha gia' davanti.
+  useEffect(() => {
+    if (!daCongelare) return;
+    const quando = String(daCongelare.end_time || daCongelare.start_time || "").slice(0, 10);
+    setCicloId(daCongelare.id);
+    setPreparazioneId("");
+    setProdotto(daCongelare.product_name || "");
+    setDataProduzione(String(daCongelare.start_time || "").slice(0, 10));
+    setDataCongelamento(quando || oggiISO());
+    setTemperatura(daCongelare.end_core_temp != null ? String(daCongelare.end_core_temp) : "");
+    setOperatore(daCongelare.operator || "");
+    setLotto(lottoInterno(items, quando));
+    setErrore("");
+    if (onPreso) onPreso();
+    // Si guarda solo l'arrivo di un ciclo nuovo: rifare il giro a ogni
+    // ricarica della lista cancellerebbe quello che l'operatore sta scrivendo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [daCongelare?.id]);
+
+  // Chi aggiunge una partita a mano trova comunque il lotto gia' proposto: il
+  // campo si riempie da solo finche' nessuno l'ha toccato.
+  useEffect(() => {
+    // In forma funzionale e non leggendo `lotto`: cosi', se nello stesso giro
+    // il modulo e' appena stato riempito da un ciclo, quel lotto resta e non
+    // viene sovrascritto da questo.
+    if (!loading) setLotto((v) => v || lottoInterno(items, dataCongelamento));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, items.length]);
 
   const salva = async (e) => {
     e.preventDefault();
@@ -425,6 +535,7 @@ function RegistroCongelamento({ company }) {
     try {
       await add({
         preparation_id: preparazioneId || null,
+        blast_chill_cycle_id: cicloId || null,
         product_name: prodotto.trim(),
         lot_number: lotto.trim() || null,
         production_date: dataProduzione || null,
@@ -518,6 +629,13 @@ function RegistroCongelamento({ company }) {
       </p>
 
       <form className="traccia-form" onSubmit={salva}>
+        {cicloId && (
+          <p className="range-hint" style={{ margin: "0 0 6px" }}>
+            <Package size={13} /> Partita che arriva da un ciclo di abbattimento negativo: prodotto,
+            date, temperatura e operatore sono già quelli registrati là, e il lotto l'ha proposto
+            l'app. Controlla e salva — le due registrazioni restano collegate.
+          </p>
+        )}
         {candidate.length > 0 && (
           <label className="field-label">Parti da una preparazione (facoltativo)
             <select value={preparazioneId} onChange={(e) => scegliPreparazione(e.target.value)}>
@@ -606,6 +724,22 @@ export default function AbbattimentoPesce() {
   // traceability_records.
   const { items: lots } = useTable("traceability_records", company?.id);
   const { items: prodottiCatalogo } = useTable("products", company?.id);
+
+  // IL PONTE FRA LE DUE SCHEDE
+  //
+  // Un ciclo negativo porta il prodotto a -18 al cuore: da li' va nel
+  // congelatore, e finora l'operatore doveva riscrivere la stessa partita
+  // nell'altra scheda. Due registri che raccontano lo stesso fatto, scritti a
+  // mano due volte, prima o poi raccontano due fatti diversi.
+  //
+  // Il passaggio pero' non si fa di nascosto: si porta la scheda del
+  // congelatore gia' compilata davanti all'operatore, che la conferma. Una
+  // riga comparsa da sola in un registro e' una riga che nessuno si assume.
+  const { items: congelati } = useTable("freezing_records", company?.id);
+  const [daCongelare, setDaCongelare] = useState(null);
+  const giaInCongelatore = new Set(
+    congelati.map((x) => x.blast_chill_cycle_id).filter(Boolean)
+  );
 
   // --- Form: nuovo ciclo di abbattimento ---
   const [productName, setProductName] = useState("");
@@ -724,8 +858,20 @@ export default function AbbattimentoPesce() {
         ))}
       </div>
 
-      {subTab === "cotti" && <AbbattimentoCotti company={company} />}
-      {subTab === "congelamento" && <RegistroCongelamento company={company} />}
+      {subTab === "cotti" && (
+        <AbbattimentoCotti
+          company={company}
+          giaInCongelatore={giaInCongelatore}
+          onCongela={(c) => { setDaCongelare(c); setSubTab("congelamento"); }}
+        />
+      )}
+      {subTab === "congelamento" && (
+        <RegistroCongelamento
+          company={company}
+          daCongelare={daCongelare}
+          onPreso={() => setDaCongelare(null)}
+        />
+      )}
 
       {subTab === "abbattimento" && (
         <>
