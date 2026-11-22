@@ -4,7 +4,10 @@ import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
 import { supabase } from "../supabaseClient";
 import { uploadAttachment, getAttachmentUrl } from "../hooks/useAttachment";
-import { stampaEtichette, anteprimaEtichette, formatoEtichetta } from "../utils/etichetta";
+import {
+  stampaEtichette, anteprimaEtichette, formatoEtichetta,
+  oppure, conservazione, CONSERVAZIONE_SCELTE, riferimento,
+} from "../utils/etichetta";
 
 // Ricevimenti merce (tracciabilità in entrata).
 //
@@ -108,7 +111,7 @@ export default function Tracciabilita() {
   // fatto nuovo, cioe' che e' stata l'azienda a dividere, quel giorno, in
   // quanti pezzi. Il progressivo «1 di 3» serve a vedere a colpo d'occhio se
   // in cella ne manca uno.
-  const [frazione, setFrazione] = useState(null);   // { id, pezzi, operatore }
+  const [frazione, setFrazione] = useState(null);   // { id, pezzi, operatore, conservazione }
   const [frazionando, setFrazionando] = useState(false);
 
   // fase: "carica" | "verifica"
@@ -270,6 +273,15 @@ export default function Tracciabilita() {
     setErrore("");
     const quando = oggi();
     const operatore = (frazione?.operatore || "").trim();
+    // Dove va tenuto il pezzo si sceglie qui e si registra: finisce stampato
+    // sul cartellino, e un pezzo diviso senza la sua temperatura di
+    // conservazione e' un pezzo che chiunque puo' mettere nel posto sbagliato.
+    const dove = frazione?.conservazione || "";
+    if (!dove) {
+      setFrazionando(false);
+      setErrore("Indica dove va conservato il pezzo: la temperatura va scritta sul cartellino.");
+      return;
+    }
     const { error } = await supabase.from("lot_splits").insert({
       company_id: company.id,
       traceability_record_id: item.id,
@@ -280,20 +292,46 @@ export default function Tracciabilita() {
       pieces: pezzi,
       split_date: quando,
       operator: operatore || null,
+      storage_condition: dove,
       created_by: session?.user?.id || null,
     });
     setFrazionando(false);
     if (error) { setErrore("Frazionamento non registrato: " + error.message); return; }
 
+    // Il riferimento e' quello dell'ARRIVO, non del frazionamento: e' la riga
+    // che un controllo chiede di vedere — il documento di consegna con quel
+    // lotto — e si conosce senza dover rileggere dal database quello che si e'
+    // appena scritto.
+    const rif = riferimento(item.id);
+    const quantita = item.quantity != null
+      ? `${String(item.quantity).replace(".", ",")} ${item.unit || ""}`.trim()
+      : "";
+
+    // Che cosa deve esserci sul cartellino, e perche':
+    //
+    //  - prodotto, fornitore e lotto sono la rintracciabilita' dell'art. 18
+    //    del Reg. CE 178/2002: da quel pezzo si deve risalire alla partita;
+    //  - la scadenza e' quella del fornitore e non cambia perche' il pezzo e'
+    //    stato diviso. Se il fornitore non l'ha indicata si scrive che manca,
+    //    non si lascia il buco;
+    //  - la temperatura di conservazione risponde all'All. II cap. IX del
+    //    Reg. CE 852/2004: il pezzo deve restare nelle condizioni che lo
+    //    tengono sicuro, e chi lo prende in mano deve saperle;
+    //  - la quantita' della partita fa tornare i conti fra quello che e'
+    //    arrivato e quello che c'e' in cella;
+    //  - il riferimento lega il cartellino alla registrazione.
     const cartellini = Array.from({ length: pezzi }, (_, i) => ({
       titolo: nomeProdotto(item.product_id),
       righe: [
         ["Pezzo", `${i + 1} di ${pezzi}`],
-        ["Lotto", item.lot_number || "non riportato"],
+        ["Lotto", oppure(item.lot_number, "non riportato dal fornitore")],
+        ["Scadenza", oppure(item.expiry_date && fmtData(item.expiry_date), "non riportata dal fornitore")],
+        ["Conservare a", conservazione(dove)],
         ["Fornitore", item.supplier_name || ""],
-        ["Scadenza", item.expiry_date ? fmtData(item.expiry_date) : ""],
+        ["Partita", quantita],
         ["Frazionato il", fmtData(quando)],
         ["Operatore", operatore],
+        ["Rif. arrivo", rif],
         "Lotto e scadenza sono quelli del fornitore. Il frazionamento è stato eseguito in azienda.",
       ],
     }));
@@ -662,7 +700,7 @@ export default function Tracciabilita() {
                         className="icon-btn"
                         title="Fraziona il lotto e stampa i cartellini dei pezzi"
                         aria-label="Fraziona il lotto"
-                        onClick={() => { setErrore(""); setAvviso(""); setFrazione(frazione?.id === item.id ? null : { id: item.id, pezzi: "", operatore: "" }); }}
+                        onClick={() => { setErrore(""); setAvviso(""); setFrazione(frazione?.id === item.id ? null : { id: item.id, pezzi: "", operatore: "", conservazione: "" }); }}
                       ><Scissors size={13} /></button>
                       <button className="icon-btn icon-btn-ok" onClick={() => setModRiga({ id: item.id, prodotto: nomeProdotto(item.product_id), quantita: item.quantity == null ? "" : String(item.quantity).replace(".", ","), unita: item.unit || "", lotto: item.lot_number || "", scadenza: item.expiry_date || "" })} aria-label="Modifica prodotto" title="Modifica"><Pencil size={13} /></button>
                       <button className="icon-btn" onClick={() => { if (window.confirm("Eliminare solo questo prodotto dal documento?")) remove(item.id); }} aria-label="Elimina prodotto"><Trash2 size={13} /></button>
@@ -671,9 +709,10 @@ export default function Tracciabilita() {
                     {frazione?.id === item.id && (
                       <div style={{ flex: "1 1 100%", marginTop: 8, padding: "10px 12px", background: "#F3F6F2", border: "1px solid #D8DED6", borderRadius: 8 }}>
                         <p className="sub" style={{ margin: "0 0 8px" }}>
-                          In quanti pezzi è stato diviso. Escono altrettanti cartellini numerati, con
-                          lotto e scadenza del fornitore e la data del frazionamento: l'etichetta
-                          originale resta su uno dei pezzi o allegata al documento di consegna.
+                          In quanti pezzi è stato diviso e dove vanno tenuti. Escono altrettanti
+                          cartellini numerati, con lotto e scadenza del fornitore, la temperatura di
+                          conservazione e la data del frazionamento: l'etichetta originale resta su
+                          uno dei pezzi o allegata al documento di consegna.
                         </p>
                         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                           <label className="field-label" style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -683,6 +722,19 @@ export default function Tracciabilita() {
                               onChange={(e) => setFrazione({ ...frazione, pezzi: e.target.value })}
                               className="full-input" style={{ width: 80 }} autoFocus
                             />
+                          </label>
+                          <label className="field-label" style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: "1 1 220px" }}>
+                            Conservare a
+                            <select
+                              value={frazione.conservazione}
+                              onChange={(e) => setFrazione({ ...frazione, conservazione: e.target.value })}
+                              className="full-input"
+                            >
+                              <option value="">scegli…</option>
+                              {CONSERVAZIONE_SCELTE.map((s) => (
+                                <option key={s.id} value={s.id}>{s.label}</option>
+                              ))}
+                            </select>
                           </label>
                           <label className="field-label" style={{ flexDirection: "row", alignItems: "center", gap: 6, flex: "1 1 180px" }}>
                             Operatore

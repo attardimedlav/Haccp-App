@@ -2,7 +2,10 @@ import React, { useState } from "react";
 import { Plus, Trash2, AlertTriangle, CheckCircle2, Snowflake, Timer, ThermometerSnowflake, XCircle, Package, Printer, Eye } from "lucide-react";
 import { useTable } from "../hooks/useTable";
 import { useAuth } from "../AuthContext";
-import { stampaEtichetta, anteprimaEtichetta, dataEtichetta, formatoEtichetta } from "../utils/etichetta";
+import {
+  stampaEtichetta, anteprimaEtichetta, dataEtichetta, formatoEtichetta,
+  oppure, dataPiuGiorni, dataPiuMesi, riferimento,
+} from "../utils/etichetta";
 
 // I due soli trattamenti previsti dal Reg. (CE) n. 853/2004, Allegato III,
 // sezione VIII, capitolo III, lettera D, per il pesce destinato al consumo
@@ -30,40 +33,87 @@ const TREATMENT_OPTIONS = [
 // bottone andrebbe scritto due volte, e due copie prima o poi dicono cose
 // diverse: quella stampata e quella scritta a mano non sarebbero piu' la
 // stessa etichetta.
-const etichettaRaffreddamento = (c) => ({
-  titolo: c.product_name,
-  righe: [
-    ["Raffreddato il", dataEtichetta(c.end_time || c.start_time)],
-    ["Ciclo", c.cycle_type === "positivo" ? "+3 °C al cuore" : "-18 °C al cuore"],
-    ["T. finale", c.end_core_temp != null ? `${c.end_core_temp} °C` : ""],
-    ["Operatore", c.operator],
-    "Conservare in frigorifero. Consumare entro il termine indicato in manuale.",
-  ],
-});
+// «Consumare entro il termine indicato in manuale» non e' una data, e chi
+// legge il cartellino in cella il manuale non ce l'ha in mano. La durata la
+// dichiara l'OSA una volta per azienda, in Configurazione, e qui si fa il
+// conto. Se non l'ha dichiarata si continua a rimandare al manuale: una
+// scadenza inventata da noi sarebbe peggio di nessuna scadenza.
+const etichettaRaffreddamento = (c, azienda = {}) => {
+  const quando = c.end_time || c.start_time;
+  const entro = dataPiuGiorni(quando, azienda?.cooked_shelf_life_days);
+  const negativo = c.cycle_type !== "positivo";
+  return {
+    titolo: c.product_name,
+    righe: [
+      ["Raffreddato il", dataEtichetta(quando)],
+      ["Ciclo", negativo ? "−18 °C al cuore" : "+3 °C al cuore"],
+      ["T. finale", c.end_core_temp != null ? `${c.end_core_temp} °C` : ""],
+      // Il mantenimento segue il ciclo: un prodotto portato a -18 al cuore non
+      // va messo in frigorifero, e viceversa.
+      ["Conservare a", negativo ? "≤ −18 °C" : "≤ +4 °C"],
+      ["Consumare entro", entro],
+      ["Operatore", c.operator],
+      ["Rif.", riferimento(c.id)],
+      // Un ciclo che non ha raggiunto la temperatura non puo' uscire con un
+      // cartellino uguale a quello di un ciclo riuscito: sarebbe un'etichetta
+      // che dichiara buono un prodotto che non lo e'.
+      c.outcome === "non_conforme"
+        ? "CICLO NON CONFORME: temperatura al cuore non raggiunta. Non destinare al consumo senza la valutazione registrata in Non conformità."
+        : entro
+          ? "Prodotto raffreddato rapidamente dopo la cottura."
+          : "Prodotto raffreddato rapidamente dopo la cottura. Consumare entro il termine indicato nel manuale di autocontrollo.",
+    ],
+  };
+};
 
-const etichettaCongelamento = (x) => ({
-  titolo: x.product_name,
-  righe: [
-    ["Lotto", x.lot_number],
-    ["Prodotto il", dataEtichetta(x.production_date)],
-    ["Congelato il", dataEtichetta(x.freezing_date)],
-    ["T. raggiunta", x.blast_temp != null ? `${String(x.blast_temp).replace(".", ",")} °C` : ""],
-    ["Operatore", x.operator],
-    "Prodotto congelato. Scongelare in frigorifero a non più di +4 °C. Non ricongelare.",
-  ],
-});
+const etichettaCongelamento = (x, azienda = {}) => {
+  const entro = dataPiuMesi(x.freezing_date, azienda?.frozen_shelf_life_months);
+  return {
+    titolo: x.product_name,
+    righe: [
+      ["Lotto", oppure(x.lot_number, "non indicato")],
+      ["Prodotto il", dataEtichetta(x.production_date)],
+      ["Congelato il", dataEtichetta(x.freezing_date)],
+      ["T. raggiunta", x.blast_temp != null ? `${String(x.blast_temp).replace(".", ",")} °C` : ""],
+      ["Conservare a", "≤ −18 °C"],
+      ["Consumare entro", entro],
+      ["Operatore", x.operator],
+      ["Rif.", riferimento(x.id)],
+      "Congelato in azienda. Scongelare in frigorifero a non più di +4 °C. Non ricongelare. "
+      + "Se dopo lo scongelamento viene venduto o somministrato va indicato «decongelato»."
+      + (entro ? "" : " Consumare entro il termine indicato nel manuale di autocontrollo."),
+    ],
+  };
+};
 
-const etichettaBonifica = (b) => ({
-  titolo: b.product_name,
-  righe: [
-    ["Bonifica", `${b.target_temp} °C per ${b.required_hours} h`],
-    ["Inizio", dataEtichetta(b.start_time)],
-    ["Fine", dataEtichetta(b.completed_at)],
-    ["Quantità", b.kg != null ? `${b.kg} kg` : ""],
-    ["Operatore", b.operator],
-    "Pesce bonificato ai sensi del Reg. CE 853/2004. Mantenere identificato fino al servizio.",
-  ],
-});
+// Nella bonifica il dato che l'autorita' chiede e' il trattamento applicato:
+// -20 °C per almeno 24 ore, oppure -35 °C per almeno 15 ore, IN TUTTE LE PARTI
+// del prodotto (Reg. CE 853/2004, All. III, sez. VIII, cap. III, lett. D). La
+// formula abbreviata di prima poteva leggersi come la temperatura della cella:
+// qui si scrive per esteso, perche' e' la differenza fra un trattamento fatto
+// e un trattamento solo dichiarato. Il lotto arriva dall'arrivo merci: e' il
+// filo che lega il trancio alla partita e alla documentazione da esibire.
+const etichettaBonifica = (b, lotto = "") => {
+  const ore = b.start_time && b.completed_at
+    ? (new Date(b.completed_at) - new Date(b.start_time)) / 3600000
+    : null;
+  const conforme = ore != null && ore >= Number(b.required_hours);
+  return {
+    titolo: b.product_name,
+    righe: [
+      ["Lotto", oppure(lotto, "non indicato")],
+      ["Trattamento", `${b.target_temp} °C per ${b.required_hours} h nella massa`],
+      ["Inizio", dataEtichetta(b.start_time)],
+      ["Fine", dataEtichetta(b.completed_at)],
+      ["Quantità", b.kg != null ? `${b.kg} kg` : ""],
+      ["Operatore", b.operator],
+      ["Rif.", riferimento(b.id)],
+      conforme
+        ? "Pesce sottoposto a trattamento di bonifica preventiva ai sensi del Reg. CE 853/2004, All. III, sez. VIII, cap. III, lett. D. Mantenere identificato fino al servizio."
+        : "TRATTAMENTO NON CONFORME: durata inferiore a quella richiesta. Questa partita non può essere destinata al consumo crudo.",
+    ],
+  };
+};
 
 const SUB_TABS = [
   { id: "cotti", label: "Raffreddamento rapido (cotti)", icon: ThermometerSnowflake, requires: "has_blast_chiller" },
@@ -223,11 +273,11 @@ function AbbattimentoCotti({ company }) {
                   </div>
                   <div style={{ display: "flex", gap: 2 }}>
                     <button className="icon-btn" aria-label="Anteprima da scrivere a penna" title="Anteprima — cosa scrivere sul cartellino"
-                      onClick={() => anteprimaEtichetta(etichettaRaffreddamento(c), formatoEtichetta(company))}>
+                      onClick={() => anteprimaEtichetta(etichettaRaffreddamento(c, company), formatoEtichetta(company))}>
                       <Eye size={14} />
                     </button>
                     <button className="icon-btn" aria-label="Stampa etichetta" title="Stampa etichetta"
-                      onClick={() => stampaEtichetta(etichettaRaffreddamento(c), formatoEtichetta(company))}>
+                      onClick={() => stampaEtichetta(etichettaRaffreddamento(c, company), formatoEtichetta(company))}>
                       <Printer size={14} />
                     </button>
                     <button className="icon-btn" onClick={() => { if (window.confirm("Eliminare questo ciclo?")) remove(c.id); }} aria-label="Elimina"><Trash2 size={14} /></button>
@@ -402,11 +452,11 @@ function RegistroCongelamento({ company }) {
           </div>
           <div style={{ display: "flex", gap: 2 }}>
             <button className="icon-btn" aria-label="Anteprima da scrivere a penna" title="Anteprima — cosa scrivere sul cartellino"
-              onClick={() => anteprimaEtichetta(etichettaCongelamento(x), formatoEtichetta(company))}>
+              onClick={() => anteprimaEtichetta(etichettaCongelamento(x, company), formatoEtichetta(company))}>
               <Eye size={14} />
             </button>
             <button className="icon-btn" aria-label="Stampa etichetta" title="Stampa etichetta"
-              onClick={() => stampaEtichetta(etichettaCongelamento(x), formatoEtichetta(company))}>
+              onClick={() => stampaEtichetta(etichettaCongelamento(x, company), formatoEtichetta(company))}>
               <Printer size={14} />
             </button>
             <button className="icon-btn" onClick={() => remove(x.id)} aria-label="Elimina"><Trash2 size={14} /></button>
@@ -744,11 +794,11 @@ export default function AbbattimentoPesce() {
                       </div>
                       <div style={{ display: "flex", gap: 2 }}>
                         <button className="icon-btn" aria-label="Anteprima da scrivere a penna" title="Anteprima — cosa scrivere sul cartellino"
-                          onClick={() => anteprimaEtichetta(etichettaBonifica(b), formatoEtichetta(company))}>
+                          onClick={() => anteprimaEtichetta(etichettaBonifica(b, lots.find((l) => l.id === b.traceability_record_id)?.lot_number), formatoEtichetta(company))}>
                           <Eye size={14} />
                         </button>
                         <button className="icon-btn" aria-label="Stampa etichetta" title="Stampa etichetta"
-                          onClick={() => stampaEtichetta(etichettaBonifica(b), formatoEtichetta(company))}>
+                          onClick={() => stampaEtichetta(etichettaBonifica(b, lots.find((l) => l.id === b.traceability_record_id)?.lot_number), formatoEtichetta(company))}>
                           <Printer size={14} />
                         </button>
                         <button className="icon-btn" onClick={() => removeBatch(b.id)} aria-label="Elimina"><Trash2 size={14} /></button>

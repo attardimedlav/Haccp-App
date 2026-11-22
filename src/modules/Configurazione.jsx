@@ -144,6 +144,17 @@ export default function Configurazione({ onVai, subTabIniziale }) {
   const [labelSaleWidth, setLabelSaleWidth] = useState("");
   const [labelSaleHeight, setLabelSaleHeight] = useState("");
 
+  // Per quanto tempo si tiene un prodotto lavorato in azienda.
+  //
+  // Finora il cartellino del raffreddamento rimandava al manuale, e chi lo
+  // legge in cella il manuale non ce l'ha in mano. La durata non la puo'
+  // sapere l'app: la stabilisce l'OSA nel proprio manuale, e qui si scrive
+  // una volta sola perche' l'etichetta ne faccia la data. Lasciati vuoti, i
+  // cartellini continuano a rimandare al manuale come prima: meglio un rinvio
+  // che una scadenza inventata da noi.
+  const [cookedShelfLife, setCookedShelfLife] = useState("");
+  const [frozenShelfLife, setFrozenShelfLife] = useState("");
+
   // I dati che servono a costruire i promemoria del calendario: il piano
   // di pulizia, le vasche, il piano analitico con i referti e le
   // manutenzioni gia' programmate. Si leggono qui perche' e' qui che si
@@ -248,6 +259,8 @@ export default function Configurazione({ onVai, subTabIniziale }) {
       setLabelHeight(Number(company.label_height_mm) || 29);
       setLabelSaleWidth(company.label_sale_width_mm ? String(company.label_sale_width_mm) : "");
       setLabelSaleHeight(company.label_sale_height_mm ? String(company.label_sale_height_mm) : "");
+      setCookedShelfLife(company.cooked_shelf_life_days ? String(company.cooked_shelf_life_days) : "");
+      setFrozenShelfLife(company.frozen_shelf_life_months ? String(company.frozen_shelf_life_months) : "");
       setHasHood(company.has_hood !== false);
       setIceMachineDays(String(company.ice_machine_cleaning_days || 30));
       setManualSource(company.haccp_manual_source === "esterno" ? "esterno" : "app");
@@ -312,6 +325,8 @@ export default function Configurazione({ onVai, subTabIniziale }) {
     label_height_mm: Math.max(10, Math.min(200, Number(labelHeight) || 29)),
     label_sale_width_mm: Number(labelSaleWidth) ? Math.max(10, Math.min(120, Number(labelSaleWidth))) : null,
     label_sale_height_mm: Number(labelSaleHeight) ? Math.max(10, Math.min(200, Number(labelSaleHeight))) : null,
+    cooked_shelf_life_days: Number(cookedShelfLife) ? Math.max(1, Math.min(90, Number(cookedShelfLife))) : null,
+    frozen_shelf_life_months: Number(frozenShelfLife) ? Math.max(1, Math.min(36, Number(frozenShelfLife))) : null,
     has_hood: hasHood,
     ice_machine_cleaning_days: Math.max(1, parseInt(iceMachineDays, 10) || 30),
     haccp_manual_source: manualSource,
@@ -1312,6 +1327,35 @@ export default function Configurazione({ onVai, subTabIniziale }) {
               sta, l'app lo dice invece di stampare un'etichetta fuori norma. Un 50 x 80 in
               verticale regge una lista ingredienti normale. Lasciando i campi vuoti l'etichetta di
               vendita resta su foglio, come prima.
+            </p>
+
+            <h4 style={{ margin: "14px 0 2px" }}>Durate di conservazione</h4>
+            <div className="config-grid-2" style={{ marginBottom: 8 }}>
+              <label className="field-label" style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                Cotti raffreddati (giorni)
+                <input
+                  type="number" min="1" max="90" value={cookedShelfLife} disabled={!isConsultant}
+                  onChange={(e) => setCookedShelfLife(e.target.value)}
+                  placeholder="non dichiarata"
+                  className="full-input" style={{ width: 130 }}
+                />
+              </label>
+              <label className="field-label" style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                Congelati in azienda (mesi)
+                <input
+                  type="number" min="1" max="36" value={frozenShelfLife} disabled={!isConsultant}
+                  onChange={(e) => setFrozenShelfLife(e.target.value)}
+                  placeholder="non dichiarata"
+                  className="full-input" style={{ width: 130 }}
+                />
+              </label>
+            </div>
+            <p className="sub" style={{ marginTop: 0 }}>
+              Quanto si tiene un prodotto lavorato in azienda, come l'operatore l'ha stabilito nel
+              manuale di autocontrollo. Serve ai cartellini: scritta la durata, l'etichetta stampa
+              la data vera («Consumare entro il 25/11/2026») invece di rimandare al manuale, che in
+              cella nessuno ha in mano. Lasciando i campi vuoti il cartellino rimanda al manuale
+              come prima: una scadenza non dichiarata non si inventa.
             </p>
           </div>
         </>
