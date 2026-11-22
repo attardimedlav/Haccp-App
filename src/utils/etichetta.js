@@ -66,17 +66,25 @@ export function stampaEtichette(elenco = [], opzioni = {}) {
   const larghezza = Number(opzioni.larghezzaMm) || 62;
   const altezza = Number(opzioni.altezzaMm) || 29;
 
+  // La riga e' una riga, non una tabella.
+  //
+  // Con due colonne il valore lungo — il nome del fornitore, «non riportata
+  // dal fornitore» — andava a capo e mangiava due righe di rotolo. In linea,
+  // l'etichetta e il suo valore stanno quasi sempre su una riga sola, e nello
+  // stesso spazio ci sta il doppio delle informazioni.
   const una = (et = {}) => {
     const righe = righeBuone(et)
       .map((r) => Array.isArray(r)
-        ? `<tr><th>${esc(r[0])}</th><td>${esc(r[1])}</td></tr>`
-        : `<tr><td colspan="2">${esc(r)}</td></tr>`)
+        ? `<div class="r"><span class="k">${esc(r[0])}</span> <span class="v">${esc(r[1])}</span></div>`
+        : `<div class="n">${esc(r)}</div>`)
       .join("");
 
     return `
     <div class="et">
-      <div class="tit">${esc(et.titolo || "")}</div>
-      ${righe ? `<table>${righe}</table>` : ""}
+      <div class="dentro">
+        <div class="tit">${esc(et.titolo || "")}</div>
+        ${righe}
+      </div>
     </div>`;
   };
 
@@ -90,28 +98,57 @@ export function stampaEtichette(elenco = [], opzioni = {}) {
     width: ${MM(larghezza)}; height: ${MM(altezza)};
     padding: 1.2mm 1.8mm; overflow: hidden;
     page-break-after: always; break-after: page;
+    --k: 1;
   }
   .et:last-child { page-break-after: auto; break-after: auto; }
   .tit {
-    font-size: 8.5pt; font-weight: bold; line-height: 1.05;
+    font-size: calc(8.5pt * var(--k)); font-weight: bold; line-height: 1.05;
     text-transform: uppercase;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     border-bottom: 0.3mm solid #000; padding-bottom: 0.5mm; margin-bottom: 0.6mm;
   }
-  table { width: 100%; border-collapse: collapse; }
   /* Niente grigi e niente sfumature: la stampa termica non ha mezzi toni,
      tutto quello che non e' nero pieno esce sporco o non esce. */
-  th {
-    text-align: left; font-size: 5.2pt; font-weight: normal;
-    text-transform: uppercase; letter-spacing: 0.02em;
-    width: 19mm; padding: 0.05mm 0; line-height: 1.15; vertical-align: baseline;
+  /* La misura sta sulla riga e non solo sui due pezzi dentro: altrimenti
+     l'altezza della riga la decide il carattere del documento, che e' grande
+     il triplo, e l'etichetta cresce senza che il testo cresca. */
+  .r { font-size: calc(6.8pt * var(--k)); line-height: 1.18; }
+  .k {
+    font-size: calc(5.2pt * var(--k)); text-transform: uppercase;
+    letter-spacing: 0.02em; white-space: nowrap;
   }
-  td { font-size: 6.8pt; font-weight: bold; padding: 0.05mm 0; line-height: 1.15; vertical-align: baseline; }
-  td[colspan] { font-size: 5.6pt; font-weight: normal; line-height: 1.1; padding-top: 0.4mm; }
+  .v { font-size: calc(6.8pt * var(--k)); font-weight: bold; }
+  .n {
+    font-size: calc(5.6pt * var(--k)); line-height: 1.1;
+    margin-top: 0.5mm; padding-top: 0.4mm; border-top: 0.2mm solid #000;
+  }
   /* Niente nome dell'azienda in fondo: su un 50 x 30 quella riga mangia
      spazio e non dice niente a nessuno — chi guarda il cartellino e' gia'
      dentro quell'azienda. Lo spazio serve al prodotto e al lotto. */
-</style></head><body>${(elenco.length ? elenco : [{}]).map(una).join("")}</body></html>`;
+</style></head><body>${(elenco.length ? elenco : [{}]).map(una).join("")}
+<script>
+/* L'ETICHETTA CHE NON CI STA
+   Il riquadro ha overflow:hidden, quindi fino a ieri quello che avanzava
+   veniva tagliato via in silenzio: l'etichetta usciva dalla stampante senza
+   le ultime righe e nessuno se ne accorgeva. Su un cartellino dove le ultime
+   righe sono la conservazione e la scadenza, e' il difetto peggiore.
+   Qui, prima di stampare, ogni etichetta si misura e si rimpicciolisce
+   quanto basta per entrare nel rotolo. Non si taglia niente: il cartellino
+   interno non e' destinato al consumatore, quindi non ha l'altezza minima dei
+   caratteri del Reg. UE 1169/2011 e puo' essere scritto piu' piccolo. Sotto
+   una certa misura pero' non si leggerebbe piu': li' ci si ferma, e meglio un
+   rotolo piu' grande che un'etichetta illeggibile. */
+(function () {
+  var ets = document.querySelectorAll(".et");
+  for (var i = 0; i < ets.length; i++) {
+    var et = ets[i], dentro = et.firstElementChild, k = 1;
+    while (dentro.scrollHeight > et.clientHeight - 2 && k > 0.6) {
+      k -= 0.02;
+      et.style.setProperty("--k", k.toFixed(2));
+    }
+  }
+})();
+</script></body></html>`;
 
   stampaHtml(doc);
 }
@@ -316,6 +353,100 @@ export function anteprimaEtichetta(et = {}, opzioni = {}) {
 // Le date si scrivono uguali su tutte le etichette: scriverle a mano in ogni
 // scheda e' il modo per ritrovarsele in tre formati diversi.
 export const dataEtichetta = fmtData;
+
+// ---------------------------------------------------------------------------
+// I DATI CHE NON POSSONO MANCARE
+//
+// Le righe vuote si saltano (righeBuone), ed e' giusto per le righe davvero
+// facoltative. Non lo e' per la scadenza: se l'arrivo merci non la riporta, la
+// riga sparisce e il cartellino in cella risulta senza scadenza — sembra
+// completo e non lo e'. Chi lo guarda, in un controllo, non puo' sapere se la
+// data manca perche' il fornitore non l'ha messa o perche' l'app se l'e' persa.
+//
+// Un dato che manca si scrive che manca. E' un'informazione vera, e sposta la
+// domanda dove deve stare: sul documento del fornitore.
+export function oppure(valore, seManca) {
+  const v = String(valore ?? "").trim();
+  return v !== "" ? v : seManca;
+}
+
+// La temperatura di conservazione, scritta come va scritta su un'etichetta.
+//
+// Una tabella sola perche' il codice sta nel database (lot_splits) e il testo
+// finisce stampato: se le due cose vivessero in posti diversi, prima o poi lo
+// stesso codice uscirebbe stampato «+4» in un punto e «+2» in un altro.
+export const CONSERVAZIONE = {
+  refrigerato_4: "≤ +4 °C",
+  refrigerato_2: "≤ +2 °C",
+  congelato: "≤ −18 °C",
+  ambiente: "temperatura ambiente",
+};
+
+export const CONSERVAZIONE_SCELTE = [
+  { id: "refrigerato_4", label: "Refrigerato, ≤ +4 °C" },
+  { id: "refrigerato_2", label: "Refrigerato, ≤ +2 °C (carni fresche)" },
+  { id: "congelato", label: "Congelato, ≤ −18 °C" },
+  { id: "ambiente", label: "Temperatura ambiente" },
+];
+
+export function conservazione(codice) {
+  return CONSERVAZIONE[codice] || "";
+}
+
+// Il conto della data entro cui consumare.
+//
+// Si fa qui e non nelle schede perche' i punti sono due — i cotti raffreddati
+// e i congelati — e una data calcolata in due posti prima o poi viene diversa
+// nei due posti. Se la durata non e' stata dichiarata non si restituisce
+// niente: l'etichetta allora rimanda al manuale, che e' la verita'. Inventare
+// una scadenza per conto dell'azienda vorrebbe dire stampare una data falsa, e
+// sul cartellino di un alimento non e' un dettaglio.
+function aData(iso) {
+  if (!iso) return null;
+  const s = String(iso);
+  const d = new Date(s.length <= 10 ? `${s}T00:00:00` : s);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function scriviData(d) {
+  const gg = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  return `${gg}/${mm}/${d.getFullYear()}`;
+}
+
+export function dataPiuGiorni(iso, giorni) {
+  const d = aData(iso);
+  const n = Number(giorni);
+  if (!d || !n || n <= 0) return "";
+  d.setDate(d.getDate() + n);
+  return scriviData(d);
+}
+
+export function dataPiuMesi(iso, mesi) {
+  const d = aData(iso);
+  const n = Number(mesi);
+  if (!d || !n || n <= 0) return "";
+  const giorno = d.getDate();
+  d.setDate(1);
+  d.setMonth(d.getMonth() + n);
+  // Il 31 gennaio piu' un mese, in JavaScript, diventa il 3 marzo: una
+  // scadenza piu' lunga di quella dichiarata. Si taglia all'ultimo giorno del
+  // mese giusto.
+  const ultimo = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(giorno, ultimo));
+  return scriviData(d);
+}
+
+// Il filo fra il cartellino e la registrazione.
+//
+// La domanda, in un controllo ufficiale, e' sempre la stessa: «fammi vedere la
+// registrazione di questo cartellino». Finora bisognava cercarla a occhio
+// nella lista. Le ultime sei cifre dell'identificativo bastano a trovarla e
+// occupano una riga sola.
+export function riferimento(id) {
+  const s = String(id ?? "").replace(/[^0-9a-zA-Z]/g, "");
+  return s ? s.slice(-6).toUpperCase() : "";
+}
 
 // La misura del rotolo di quell'azienda, da passare a stampaEtichetta.
 //
