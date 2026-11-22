@@ -322,6 +322,7 @@ export default function Tracciabilita() {
     //  - il riferimento lega il cartellino alla registrazione.
     const cartellini = Array.from({ length: pezzi }, (_, i) => ({
       titolo: nomeProdotto(item.product_id),
+      trattamento: "Porzione di una partita frazionata in azienda",
       righe: [
         ["Pezzo", `${i + 1} di ${pezzi}`],
         ["Lotto", oppure(item.lot_number, "non riportato dal fornitore")],

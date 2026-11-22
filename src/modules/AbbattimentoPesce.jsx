@@ -44,6 +44,12 @@ const etichettaRaffreddamento = (c, azienda = {}) => {
   const negativo = c.cycle_type !== "positivo";
   return {
     titolo: c.product_name,
+    // «CREMA» da solo non dice che cosa le e' stato fatto: chi apre la cella
+    // vede un prodotto come un altro. Il trattamento si scrive sotto il nome,
+    // ed e' la prima cosa che si legge.
+    trattamento: c.outcome === "non_conforme"
+      ? "Abbattimento rapido NON CONFORME"
+      : "Abbattuto rapidamente dopo la cottura",
     righe: [
       ["Raffreddato il", dataEtichetta(quando)],
       ["Ciclo", negativo ? "−18 °C al cuore" : "+3 °C al cuore"],
@@ -70,6 +76,7 @@ const etichettaCongelamento = (x, azienda = {}) => {
   const entro = dataPiuMesi(x.freezing_date, azienda?.frozen_shelf_life_months);
   return {
     titolo: x.product_name,
+    trattamento: "Congelato in azienda per conservazione",
     righe: [
       ["Lotto", oppure(x.lot_number, "non indicato")],
       ["Prodotto il", dataEtichetta(x.production_date)],
@@ -100,6 +107,9 @@ const etichettaBonifica = (b, lotto = "") => {
   const conforme = ore != null && ore >= Number(b.required_hours);
   return {
     titolo: b.product_name,
+    trattamento: conforme
+      ? "Bonificato per il consumo crudo"
+      : "Bonifica NON CONFORME — non per consumo crudo",
     righe: [
       ["Lotto", oppure(lotto, "non indicato")],
       ["Trattamento", `${b.target_temp} °C per ${b.required_hours} h nella massa`],
