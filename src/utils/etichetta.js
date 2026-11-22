@@ -79,10 +79,18 @@ export function stampaEtichette(elenco = [], opzioni = {}) {
         : `<div class="n">${esc(r)}</div>`)
       .join("");
 
+    // Il nome del prodotto non dice che cosa gli e' stato fatto: «CREMA» su un
+    // cartellino puo' essere una crema qualunque. Il trattamento si scrive
+    // sotto il nome, grande quanto basta a leggerlo per primo — e' la cosa che
+    // chi apre la cella, e chi controlla, deve capire a colpo d'occhio.
+    const sotto = String(et.trattamento ?? "").trim();
     return `
     <div class="et">
       <div class="dentro">
-        <div class="tit">${esc(et.titolo || "")}</div>
+        <div class="testa">
+          <div class="tit">${esc(et.titolo || "")}</div>
+          ${sotto ? `<div class="sot">${esc(sotto)}</div>` : ""}
+        </div>
         ${righe}
       </div>
     </div>`;
@@ -101,11 +109,15 @@ export function stampaEtichette(elenco = [], opzioni = {}) {
     --k: 1;
   }
   .et:last-child { page-break-after: auto; break-after: auto; }
+  .testa { border-bottom: 0.3mm solid #000; padding-bottom: 0.5mm; margin-bottom: 0.6mm; }
   .tit {
     font-size: calc(8.5pt * var(--k)); font-weight: bold; line-height: 1.05;
     text-transform: uppercase;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    border-bottom: 0.3mm solid #000; padding-bottom: 0.5mm; margin-bottom: 0.6mm;
+  }
+  .sot {
+    font-size: calc(6.2pt * var(--k)); font-weight: bold; line-height: 1.1;
+    text-transform: uppercase; letter-spacing: 0.02em; margin-top: 0.3mm;
   }
   /* Niente grigi e niente sfumature: la stampa termica non ha mezzi toni,
      tutto quello che non e' nero pieno esce sporco o non esce. */
@@ -313,7 +325,9 @@ export function anteprimaEtichette(elenco = [], opzioni = {}) {
       ? `<tr><th>${esc(r[0])}</th><td>${esc(r[1])}</td></tr>`
       : `<tr><td colspan="2" class="dicitura">${esc(r)}</td></tr>`).join("");
     const numero = tot > 1 ? `<div class="num">Etichetta ${i + 1} di ${tot}</div>` : "";
-    return `<div class="et">${numero}<div class="tit">${esc(et.titolo || "")}</div>
+    const sotto = String(et.trattamento ?? "").trim();
+    return `<div class="et">${numero}<div class="testa"><div class="tit">${esc(et.titolo || "")}</div>
+      ${sotto ? `<div class="sot">${esc(sotto)}</div>` : ""}</div>
       ${righe ? `<table>${righe}</table>` : ""}</div>`;
   };
 
@@ -324,8 +338,10 @@ export function anteprimaEtichette(elenco = [], opzioni = {}) {
   body { font-family: Arial, Helvetica, sans-serif; color: #1B2A22; margin: 0; padding: 14px 16px; }
   .et { border: 1px solid #D8DED6; border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; }
   .num { font-size: 12px; color: #6E7C73; margin-bottom: 4px; }
-  .tit { font-size: 19px; font-weight: bold; text-transform: uppercase; line-height: 1.2;
-         border-bottom: 2px solid #1B2A22; padding-bottom: 6px; margin-bottom: 8px; }
+  .testa { border-bottom: 2px solid #1B2A22; padding-bottom: 6px; margin-bottom: 8px; }
+  .tit { font-size: 19px; font-weight: bold; text-transform: uppercase; line-height: 1.2; }
+  .sot { font-size: 14px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.02em;
+         line-height: 1.25; margin-top: 3px; }
   table { width: 100%; border-collapse: collapse; }
   th { text-align: left; font-size: 12px; font-weight: normal; color: #4C5A52;
        text-transform: uppercase; letter-spacing: 0.02em; width: 38%;
