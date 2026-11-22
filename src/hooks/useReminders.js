@@ -245,16 +245,47 @@ export function buildReminderICS(dati = {}) {
   return lines.join("\r\n");
 }
 
-export function downloadReminderICS(dati) {
+export async function downloadReminderICS(dati) {
   // Compatibilità con la vecchia chiamata, che passava il solo nome:
   // meglio due promemoria generici che un errore in faccia all'utente.
   const payload = typeof dati === "string" ? { azienda: { name: dati } } : (dati || {});
   const ics = buildReminderICS(payload);
-  const dataUri = "data:text/calendar;charset=utf-8," + encodeURIComponent(ics);
+  const nome = "promemoria-haccp.ics";
+
+  // Sull'iPhone il file non bastava.
+  //
+  // Prima il calendario si scaricava come indirizzo "data:". Su Android e
+  // sul computer funziona; su iPhone no: Safari ignora il nome del file,
+  // lo salva senza estensione e il sistema non lo riconosce piu' come
+  // calendario — l'OSA si ritrova un documento che non si apre con
+  // niente, e nel foglio di condivisione la voce Calendario non compare.
+  //
+  // La strada che funziona davvero sul telefono e' il foglio di
+  // condivisione del sistema, a cui si passa un vero file con il suo tipo:
+  // li' Calendario c'e', e tocca all'utente scegliere dove metterlo. Dove
+  // quella strada non esiste — computer, browser piu' vecchi — resta il
+  // download di sempre, fatto pero' con un Blob, che il nome del file lo
+  // mantiene.
+  try {
+    const file = new File([ics], nome, { type: "text/calendar" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: "Promemoria HACCP" });
+      return;
+    }
+  } catch (e) {
+    // L'utente ha chiuso il foglio di condivisione: non e' un errore e non
+    // si ripiega sul download, altrimenti si ritroverebbe il file scaricato
+    // proprio dopo aver detto di no.
+    if (e && (e.name === "AbortError" || e.name === "NotAllowedError")) return;
+  }
+
+  const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
-  link.href = dataUri;
-  link.download = "promemoria-haccp.ics";
+  link.href = url;
+  link.download = nome;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
