@@ -404,15 +404,32 @@ export function controlli(dossier) {
   }
   // Coerenza fra cicli scelti e dotazione: un ciclo che parla di una
   // macchina che l'azienda non ha e' la prima cosa che un ispettore nota
-  // (manuale Caffe' Battaglia, novembre 2026: abbattimento e granite senza
-  // abbattitore e granitore fra gli impianti).
+  // (manuale Caffe' Battaglia, novembre 2026). La prima versione di questo
+  // controllo cercava pero' ogni macchina nell'elenco degli impianti, ed era
+  // sbagliato: vedi sotto.
   const attivi = cicliDelManuale(cicli, azienda);
   const nomiImpianti = impianti.map((u) => String(u.label || "")).join(" | ");
   const haImpianto = (re) => re.test(nomiImpianti);
+  // Attenzione a che cosa si cerca, e dove.
+  //
+  // L'elenco degli impianti contiene SOLO gli apparecchi di conservazione,
+  // quelli di cui si legge la temperatura ogni giorno. L'abbattitore non e'
+  // uno di questi e fu tolto di proposito (vedi il commento in testa ad
+  // Attrezzature.jsx): non conserva niente, lavora a cicli preimpostati e la
+  // sua temperatura si registra alla fine di ogni ciclo nella sua scheda.
+  // Cercarlo fra gli impianti faceva ricomparire, sotto forma di avviso, il
+  // problema che era stato risolto togliendolo. Si dichiara con
+  // l'interruttore in Configurazione, ed e' li' che va cercato.
+  //
+  // Stessa cosa per il granitore: e' una macchina con un suo ciclo, la cui
+  // tenuta si governa con il piano di pulizia, non un impianto da leggere
+  // ogni sera. Nessun avviso.
+  //
+  // Restano le vetrine: quelle conservano ed espongono prodotto pronto, e
+  // quindi un ciclo che ne parla senza averle censite dichiara davvero un
+  // controllo senza lo strumento su cui farlo.
   const REGOLE = [
-    { ciclo: /abbattiment/i, impianto: /abbatt/i, cosa: "l'abbattitore" },
     { ciclo: /gelat/i, impianto: /gelat|pozzett/i, cosa: "la vetrina o il pozzetto del gelato" },
-    { ciclo: /granit/i, impianto: /granit/i, cosa: "il granitore" },
     { ciclo: /pasticceria fresca|farcitur/i, impianto: /vetrin|banco|frigo/i, cosa: "una vetrina refrigerata per la pasticceria" },
   ];
   attivi.forEach((c) => {
@@ -421,6 +438,9 @@ export function controlli(dossier) {
         avvisi.push(`Il ciclo «${c.name}» è nel manuale ma fra gli impianti non c'è ${r.cosa}: censiscilo in Temperature o spegni il ciclo per questa azienda.`);
       }
     });
+    if (/abbattiment/i.test(c.name || "") && !azienda?.has_blast_chiller) {
+      avvisi.push(`Il ciclo «${c.name}» è nel manuale ma in Configurazione l'abbattitore non è dichiarato: accendi l'interruttore o spegni il ciclo per questa azienda.`);
+    }
     if (/tavola calda|rosticceria|mantenimento/i.test(c.name || "") && !impianti.some((u) => Number(u.min_temp) >= 50)) {
       avvisi.push(`Il ciclo «${c.name}» prevede l'esposizione a caldo, ma nessun impianto ha un intervallo da 60 °C in su: censisci la vetrina calda.`);
     }
