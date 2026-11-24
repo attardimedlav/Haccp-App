@@ -275,7 +275,14 @@ export default function MieiClienti({ goTo }) {
           aggiornamento.chamber_doc_path = await uploadAttachment(data, visuraFile);
         }
         if (visuraData) aggiornamento.chamber_doc_date = visuraData;
-        if (visuraRappresentante) aggiornamento.haccp_manager = visuraRappresentante;
+        // Dalla visura esce il legale rappresentante: e' il TITOLARE.
+        // Lo si mette anche come responsabile dell'autocontrollo perche'
+        // nella quasi totalita' delle piccole imprese e' la stessa persona;
+        // dove non lo e', si cambia in Configurazione.
+        if (visuraRappresentante) {
+          aggiornamento.owner_name = visuraRappresentante;
+          aggiornamento.haccp_manager = visuraRappresentante;
+        }
         const res = await supabase.from("companies").update(aggiornamento).eq("id", data);
         if (res.error) throw new Error(res.error.message);
       } catch (e2) {

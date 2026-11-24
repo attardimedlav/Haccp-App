@@ -177,6 +177,16 @@ export default function Configurazione({ onVai, subTabIniziale }) {
   const [activeWorkSafety, setActiveWorkSafety] = useState(false);
   const [activeEquipmentChecks, setActiveEquipmentChecks] = useState(false);
   const [activeMedicalSurveillance, setActiveMedicalSurveillance] = useState(false);
+  // DUE RUOLI, DUE NOMI.
+  //
+  // Il titolare e' l'Operatore del Settore Alimentare del Reg. CE 852/2004:
+  // adotta il manuale, risponde, firma la dichiarazione di adozione. Il
+  // responsabile del piano applica e fa applicare, verifica le registrazioni,
+  // tiene i rapporti con l'Autorita' competente. Nelle piccole imprese sono la
+  // stessa persona, e va benissimo — ma non sempre, e finora il manuale
+  // stampava lo stesso nome nelle due righe della tabella dei ruoli anche
+  // quando il responsabile era un dipendente.
+  const [ownerName, setOwnerName] = useState("");
   const [haccpManager, setHaccpManager] = useState("");
   // Firma del responsabile: si allega come qualunque altro allegato, nello
   // storage dell'azienda; qui resta il percorso, e l'anteprima e' il PNG
@@ -274,6 +284,7 @@ export default function Configurazione({ onVai, subTabIniziale }) {
       setActiveWorkSafety(!!company.active_work_safety);
       setActiveEquipmentChecks(!!company.active_equipment_checks);
       setActiveMedicalSurveillance(!!company.active_medical_surveillance);
+      setOwnerName(company.owner_name || company.haccp_manager || "");
       setHaccpManager(company.haccp_manager || "");
       setFirmaPath(company.haccp_signature_path || "");
       setFirmaConsensoAl(company.haccp_signature_consent_at || "");
@@ -337,6 +348,7 @@ export default function Configurazione({ onVai, subTabIniziale }) {
     active_work_safety: activeWorkSafety,
     active_equipment_checks: activeEquipmentChecks,
     active_medical_surveillance: activeMedicalSurveillance,
+    owner_name: ownerName.trim() || null,
     haccp_manager: haccpManager,
     haccp_signature_path: firmaPath || null,
     haccp_signature_consent_at: firmaConsensoAl || null,
@@ -489,7 +501,10 @@ export default function Configurazione({ onVai, subTabIniziale }) {
         metti(data?.pec, setPec, "PEC");
         metti(data?.codice_ateco, setCodiceAteco, "codice ATECO");
         metti(data?.attivita, setTipologiaAttivita, "tipologia di attività");
-        metti(data?.legale_rappresentante, setHaccpManager, "legale rappresentante");
+        // Dalla visura esce il legale rappresentante, che e' il TITOLARE.
+        // Finora finiva nel campo del responsabile dell'autocontrollo, ed e'
+        // il motivo per cui i due nomi erano diventati uno solo.
+        metti(data?.legale_rappresentante, setOwnerName, "legale rappresentante");
         if (data?.data_visura) { dataVisura = String(data.data_visura); setVisuraData(dataVisura); }
         setVisuraLetti(letti);
         if (letti.length === 0) {
@@ -970,7 +985,27 @@ export default function Configurazione({ onVai, subTabIniziale }) {
             </fieldset>
 
             <fieldset className="config-group">
-              <legend>Responsabile del sistema HACCP</legend>
+              <legend>Titolare e responsabile del sistema HACCP</legend>
+
+              <label className="field-label" style={{ display: "block", marginBottom: 2 }}>
+                Titolare / legale rappresentante
+              </label>
+              <input
+                type="text"
+                placeholder="Nome e cognome del titolare"
+                value={ownerName}
+                onChange={(e) => setOwnerName(e.target.value)}
+                className="full-input"
+              />
+              <p className="sub" style={{ margin: "6px 0 14px" }}>
+                È l'Operatore del Settore Alimentare ai sensi del Reg. CE 852/2004: adotta il manuale
+                e firma la dichiarazione di adozione. Dalla visura camerale questo campo si compila da
+                solo con il legale rappresentante.
+              </p>
+
+              <label className="field-label" style={{ display: "block", marginBottom: 2 }}>
+                Responsabile del piano di autocontrollo
+              </label>
               <input
                 type="text"
                 placeholder="Nome e cognome del responsabile HACCP"
@@ -978,8 +1013,19 @@ export default function Configurazione({ onVai, subTabIniziale }) {
                 onChange={(e) => setHaccpManager(e.target.value)}
                 className="full-input"
               />
+              {ownerName.trim() && haccpManager.trim() !== ownerName.trim() && (
+                <button
+                  type="button" className="link-btn" style={{ marginTop: 6 }}
+                  onClick={() => setHaccpManager(ownerName.trim())}
+                >
+                  È il titolare stesso
+                </button>
+              )}
               <p className="sub" style={{ marginTop: 6 }}>
-                Questo nome comparirà come scelta rapida nei campi operatore/responsabile delle schede.
+                Applica e fa applicare il manuale, verifica le registrazioni e tiene i rapporti con
+                l'Autorità competente. Nelle piccole imprese è il titolare stesso; può però essere un
+                dipendente, e allora i due nomi sono diversi e il manuale li stampa distinti. Questo
+                nome comparirà come scelta rapida nei campi operatore/responsabile delle schede.
               </p>
 
               {/* Tutto il pezzo della firma è del consulente, non del
