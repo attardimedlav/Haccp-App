@@ -425,6 +425,7 @@ export function controlli(dossier) {
       avvisi.push(`Il ciclo «${c.name}» prevede l'esposizione a caldo, ma nessun impianto ha un intervallo da 60 °C in su: censisci la vetrina calda.`);
     }
   });
+  if (!azienda?.premises_description) avvisi.push("Manca la descrizione dei locali: il 5.2 stamperebbe i soli requisiti generali, senza dire com'è fatto questo locale. Si scrive in Configurazione, anche leggendola dalla relazione tecnica o dalla planimetria.");
   if (!azienda?.codice_ateco) avvisi.push("Manca il codice ATECO: si legge dalla visura e si inserisce in Configurazione.");
   if (!azienda?.pec) avvisi.push("Manca la PEC dell'azienda: si inserisce in Configurazione.");
   if ((dossier.dipendenti || []).length === 0) avvisi.push("Nessun addetto censito: nel gruppo di lavoro resterebbe una riga vuota. Si inseriscono in Dipendenti.");
@@ -723,7 +724,22 @@ export function corpoManuale(dossier) {
      "Collabora con il datore di lavoro alla stesura e all'aggiornamento del manuale, eroga la formazione, effettua le verifiche periodiche del sistema"],
   ], [2400, 2400, 4560]));
 
-  b.push(h2("5.2 Requisiti dei locali e delle attrezzature"));
+  b.push(h2("5.2 Descrizione dei locali e requisiti"));
+  // Prima si descrive questo locale, poi si dichiara a quali requisiti
+  // risponde. Finora c'era solo la seconda meta': il manuale citava
+  // l'Allegato II e rimandava alla planimetria, ma non diceva mai quanti
+  // vani ci fossero, a che cosa servissero, di che materiale fossero le
+  // superfici. E' fra le prime cose che un controllo ufficiale legge.
+  // Il testo si scrive in Configurazione, una volta per azienda.
+  if (azienda.premises_description) {
+    b.push(h3("Descrizione dei locali"));
+    String(azienda.premises_description)
+      .split(/\n{1,}/)
+      .map((r) => r.trim())
+      .filter(Boolean)
+      .forEach((r) => b.push(p(r)));
+    b.push(h3("Requisiti"));
+  }
   b.push(p("I locali e le attrezzature rispondono ai requisiti generali e specifici stabiliti dall'Allegato II del Reg. (CE) n. 852/2004. La planimetria dei locali è allegata al manuale e ne costituisce parte integrante: su di essa sono riportate la destinazione degli ambienti, l'ubicazione delle attrezzature e la collocazione dei dispositivi di monitoraggio degli infestanti."));
   b.push(h3("Requisiti generali (Allegato II, Capitolo I)"));
   [
