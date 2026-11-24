@@ -593,10 +593,17 @@ export function corpoManuale(dossier) {
   // ---------------- sommario ----------------
   // Indice automatico: Word lo costruisce dai titoli e ci mette i numeri di
   // pagina, che l'app non può conoscere perché non impagina il documento.
+  //
+  // Solo i capitoli, non i paragrafi: «1-1» invece di «1-2». Con due livelli
+  // l'indice arrivava a quattro pagine e dentro ci finivano voci come
+  // «10.4 Un esempio: dalla materia prima al prodotto servito», che in un
+  // sommario non servono: chi cerca la rintracciabilita' cerca il capitolo 10.
+  // I titoli dei paragrafi restano nel documento e nel riquadro di
+  // spostamento di Word; cambia solo quello che si stampa qui.
   b.push(h1("Sommario"));
   b.push(
     `<w:p><w:pPr><w:spacing w:after="120"/></w:pPr>` +
-    `<w:fldSimple w:instr=" TOC \\o &quot;1-2&quot; \\h \\z \\u ">` +
+    `<w:fldSimple w:instr=" TOC \\o &quot;1-1&quot; \\h \\z \\u ">` +
     // Il testo di ripiego e' quello che resta stampato se il campo non viene
     // aggiornato: deve essere una frase presentabile, non un messaggio di
     // servizio. "Indice in aggiornamento..." su un manuale consegnato faceva
