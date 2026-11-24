@@ -306,7 +306,10 @@ function diagramma(ciclo, numeroCcp) {
 // qui si scrive soltanto il riferimento, e se la firma non c'e' resta la
 // riga vuota da firmare a penna, che e' il comportamento di sempre.
 function firmaOSA(azienda) {
-  const nome = azienda.haccp_manager || "";
+  // L'adozione del manuale la firma l'OSA, cioe' il titolare. Il ripiego
+  // sul responsabile serve alle aziende censite prima che i due campi
+  // fossero separati, dove il nome stava li'.
+  const nome = azienda.owner_name || azienda.haccp_manager || "";
   if (!azienda.haccp_signature_path || !azienda.haccp_signature_consent_at) {
     return nome + "\n\n\n____________________________________________";
   }
@@ -386,6 +389,7 @@ export function cicliDelManuale(cicli, azienda) {
 export function controlli(dossier) {
   const { azienda, impianti = [], registrazione = null, cicli = [], procedure = [] } = dossier;
   const avvisi = [];
+  if (!azienda?.owner_name && !azienda?.haccp_manager) avvisi.push("Manca il titolare: si indica in Configurazione, ed e' chi adotta e firma il manuale.");
   if (!azienda?.haccp_manager) avvisi.push("Manca il responsabile del piano di autocontrollo: si indica in Configurazione.");
   if (!registrazione) avvisi.push("Manca la registrazione sanitaria: il manuale cita numero, data e autorità competente.");
   if (impianti.length === 0) avvisi.push("Nessun impianto a temperatura controllata censito: il CCP 1 dichiarerebbe un monitoraggio senza apparecchi su cui farlo.");
@@ -439,6 +443,10 @@ export function corpoManuale(dossier) {
     ...azienda,
     name: String(azienda.name || "").trim(),
     haccp_manager: String(azienda.haccp_manager || "").trim(),
+    // Il titolare ripiega sul responsabile per le aziende censite prima che
+    // i due campi fossero separati: li' quel nome era il legale
+    // rappresentante letto dalla visura.
+    owner_name: String(azienda.owner_name || azienda.haccp_manager || "").trim(),
     consultant_name: String(azienda.consultant_name || "").trim(),
     sede_legale: String(azienda.sede_legale || "").trim(),
     sede_operativa: String(azienda.sede_operativa || "").trim(),
@@ -487,8 +495,19 @@ export function corpoManuale(dossier) {
   } else {
     b.push(par("", { after: 600 }));
   }
-  b.push(par("Il Titolare e Responsabile del Piano di Autocontrollo", { size: 24, align: "center", after: 40 }));
-  b.push(par(azienda.haccp_manager || "____________________________", { bold: true, size: 30, align: "center", after: 500 }));
+  // In copertina: un nome solo quando il titolare e' anche responsabile
+  // (il caso di quasi tutte le piccole imprese), due righe quando sono
+  // persone diverse. Scriverne uno solo, in quel caso, era una copertina
+  // che smentiva la tabella dei ruoli tre pagine dopo.
+  if (azienda.haccp_manager && azienda.haccp_manager !== azienda.owner_name) {
+    b.push(par("Il Titolare e Operatore del Settore Alimentare", { size: 24, align: "center", after: 40 }));
+    b.push(par(azienda.owner_name || "____________________________", { bold: true, size: 30, align: "center", after: 220 }));
+    b.push(par("Il Responsabile del Piano di Autocontrollo", { size: 24, align: "center", after: 40 }));
+    b.push(par(azienda.haccp_manager, { bold: true, size: 30, align: "center", after: 500 }));
+  } else {
+    b.push(par("Il Titolare e Responsabile del Piano di Autocontrollo", { size: 24, align: "center", after: 40 }));
+    b.push(par(azienda.owner_name || "____________________________", { bold: true, size: 30, align: "center", after: 500 }));
+  }
   b.push(par(`Revisione ${revisione.numero || "00"}  —  emessa il ${data(revisione.data) || "____ / ____ / ________"}`,
     { size: 24, align: "center", after: 60 }));
   b.push(par("Redatto ai sensi del Regolamento (CE) n. 852 del 29 aprile 2004 sull'igiene dei prodotti alimentari",
@@ -522,7 +541,7 @@ export function corpoManuale(dossier) {
     ["Registrazione sanitaria", registrazione
       ? `N. ${registrazione.notification_number || "—"} del ${data(registrazione.notification_date)} — ${registrazione.asl || ""}`
       : "da completare"],
-    ["Titolare / Legale rappresentante", azienda.haccp_manager || ""],
+    ["Titolare / Legale rappresentante", azienda.owner_name || ""],
     ["Responsabile del Piano di Autocontrollo", azienda.haccp_manager || ""],
   ]));
   b.push(par("", { after: 160 }));
@@ -648,7 +667,7 @@ export function corpoManuale(dossier) {
       .replace(/(^|[\s'’\-])([a-zàèéìòóùç])/g, (_, p, c) => p + c.toUpperCase());
 
   const chiaveNome = (t) => String(t || "").trim().toLowerCase().split(/\s+/).sort().join(" ");
-  const chiaveDatore = chiaveNome(azienda.haccp_manager);
+  const chiaveDatore = chiaveNome(azienda.owner_name);
   const addetti = (dipendenti || [])
     .map((d) => `${String(d.first_name || "").trim()} ${String(d.last_name || "").trim()}`.trim())
     .filter(Boolean)
@@ -658,10 +677,17 @@ export function corpoManuale(dossier) {
 
   b.push(h1("5. Sviluppo del piano di autocontrollo"));
   b.push(h2("5.1 Gruppo di lavoro HACCP"));
-  b.push(p("Il gruppo di lavoro è costituito dal titolare, che assume la funzione di responsabile delle procedure di autocontrollo, dagli addetti alla manipolazione degli alimenti e dal consulente tecnico incaricato. Tutti gli operatori che manipolano alimenti sono formati alla manipolazione dei prodotti alimentari e ai rischi della fase di cui sono responsabili."));
-  b.push(p(`Il presente manuale è stato redatto dal datore di lavoro, nella sua qualità di Operatore del Settore Alimentare e responsabile del piano di autocontrollo, con la collaborazione ${azienda.consultant_name ? "del consulente tecnico incaricato, " + azienda.consultant_name : "del consulente tecnico incaricato"}: l'analisi dei pericoli, l'individuazione dei punti critici e la stesura delle procedure sono state condotte insieme, sulla base del ciclo produttivo e dei locali dell'impresa. Le decisioni sul sistema di autocontrollo e sulla sua applicazione restano in capo al datore di lavoro.`));
+  // Il testo cambia quando il responsabile del piano non e' il titolare:
+  // scrivere «il titolare, che assume la funzione di responsabile» in
+  // un'azienda che ha incaricato un dipendente vuol dire dichiarare un
+  // assetto diverso da quello della tabella sotto.
+  const respDiverso = !!azienda.haccp_manager && azienda.haccp_manager !== azienda.owner_name;
+  b.push(p(respDiverso
+    ? "Il gruppo di lavoro è costituito dal titolare, Operatore del Settore Alimentare, dal responsabile del piano di autocontrollo da lui incaricato, dagli addetti alla manipolazione degli alimenti e dal consulente tecnico incaricato. Tutti gli operatori che manipolano alimenti sono formati alla manipolazione dei prodotti alimentari e ai rischi della fase di cui sono responsabili."
+    : "Il gruppo di lavoro è costituito dal titolare, che assume la funzione di responsabile delle procedure di autocontrollo, dagli addetti alla manipolazione degli alimenti e dal consulente tecnico incaricato. Tutti gli operatori che manipolano alimenti sono formati alla manipolazione dei prodotti alimentari e ai rischi della fase di cui sono responsabili."));
+  b.push(p(`Il presente manuale è stato redatto dal datore di lavoro, nella sua qualità di Operatore del Settore Alimentare${respDiverso ? "" : " e responsabile del piano di autocontrollo"}, con la collaborazione ${azienda.consultant_name ? "del consulente tecnico incaricato, " + azienda.consultant_name : "del consulente tecnico incaricato"}: l'analisi dei pericoli, l'individuazione dei punti critici e la stesura delle procedure sono state condotte insieme, sulla base del ciclo produttivo e dei locali dell'impresa. Le decisioni sul sistema di autocontrollo e sulla sua applicazione restano in capo al datore di lavoro.`));
   b.push(griglia(["Ruolo", "Nominativo", "Compiti"], [
-    ["Titolare e Operatore del Settore Alimentare", azienda.haccp_manager || "____________________",
+    ["Titolare e Operatore del Settore Alimentare", azienda.owner_name || "____________________",
      "Responsabile ultimo della sicurezza degli alimenti: garantisce risorse, attrezzature e formazione, approva il manuale, decide sul destino dei prodotti non conformi"],
     ["Responsabile del piano di autocontrollo", azienda.haccp_manager || "____________________",
      "Applica e fa applicare il manuale, verifica le registrazioni, gestisce le non conformità e i rapporti con l'Autorità competente"],
@@ -1218,7 +1244,7 @@ export function corpoManuale(dossier) {
   // senza portarsi dietro mezza procedura.
   b.push(saltoPagina());
   b.push(h1("Adozione del manuale"));
-  b.push(p(`Il sottoscritto ${azienda.haccp_manager || "____________________________________"}, in qualità di Operatore del Settore Alimentare dell'impresa ${azienda.name || "____________________"}, con sede operativa in ${azienda.sede_operativa || "____________________"},`));
+  b.push(p(`Il sottoscritto ${azienda.owner_name || "____________________________________"}, in qualità di Operatore del Settore Alimentare dell'impresa ${azienda.name || "____________________"}, con sede operativa in ${azienda.sede_operativa || "____________________"},`));
   b.push(h3("dichiara"));
   [
     "di adottare il presente Manuale di Autocontrollo quale piano di autocontrollo dell'impresa, ai sensi dell'art. 5 del Reg. (CE) n. 852/2004;",
