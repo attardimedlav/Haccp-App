@@ -161,6 +161,9 @@ export default function Configurazione({ onVai, subTabIniziale }) {
   // scarica il file, e perche' un promemoria inventato dal codice invece
   // che letto dall'azienda e' esattamente l'errore che aveva prima.
   const piano = useTable("cleaning_plan", company?.id);
+  // La planimetria del monitoraggio infestanti serve anche qui: e' lo stesso
+  // disegno, e chiederla due volte sarebbe chiederla due volte.
+  const { items: planimetrie } = useTable("pest_plans", company?.id);
   const vasche = useTable("water_tanks", company?.id);
   const controlliVasche = useTable("water_controls", company?.id);
   const analisi = useTable("analysis_plan", company?.id);
@@ -187,6 +190,17 @@ export default function Configurazione({ onVai, subTabIniziale }) {
   // stampava lo stesso nome nelle due righe della tabella dei ruoli anche
   // quando il responsabile era un dipendente.
   const [ownerName, setOwnerName] = useState("");
+
+  // LA DESCRIZIONE DEI LOCALI
+  //
+  // Il 5.2 del manuale dichiarava i requisiti dell'Allegato II del
+  // Reg. CE 852/2004 e rimandava alla planimetria, ma non diceva mai com'e'
+  // fatto QUESTO locale. Il testo lo scrive il consulente; la relazione
+  // tecnica dell'ingegnere e la planimetria lo propongono.
+  const [premises, setPremises] = useState("");
+  const [premisesBusy, setPremisesBusy] = useState(false);
+  const [premisesErrore, setPremisesErrore] = useState("");
+  const [premisesNota, setPremisesNota] = useState("");
   const [haccpManager, setHaccpManager] = useState("");
   // Firma del responsabile: si allega come qualunque altro allegato, nello
   // storage dell'azienda; qui resta il percorso, e l'anteprima e' il PNG
@@ -285,6 +299,7 @@ export default function Configurazione({ onVai, subTabIniziale }) {
       setActiveEquipmentChecks(!!company.active_equipment_checks);
       setActiveMedicalSurveillance(!!company.active_medical_surveillance);
       setOwnerName(company.owner_name || company.haccp_manager || "");
+      setPremises(company.premises_description || "");
       setHaccpManager(company.haccp_manager || "");
       setFirmaPath(company.haccp_signature_path || "");
       setFirmaConsensoAl(company.haccp_signature_consent_at || "");
@@ -349,6 +364,7 @@ export default function Configurazione({ onVai, subTabIniziale }) {
     active_equipment_checks: activeEquipmentChecks,
     active_medical_surveillance: activeMedicalSurveillance,
     owner_name: ownerName.trim() || null,
+    premises_description: premises.trim() || null,
     haccp_manager: haccpManager,
     haccp_signature_path: firmaPath || null,
     haccp_signature_consent_at: firmaConsensoAl || null,
@@ -462,6 +478,87 @@ export default function Configurazione({ onVai, subTabIniziale }) {
   // viene salvato subito — altrimenti il file resterebbe nello storage senza
   // che nessuno sappia di chi è — mentre i campi letti restano nel modulo da
   // controllare: la visura propone, il consulente conferma col Salva.
+  // La descrizione dei locali, letta da un documento.
+  //
+  // Due fonti, e dicono cose diverse. Dalla PLANIMETRIA si leggono i vani,
+  // la loro destinazione, come comunicano fra loro, dove stanno porte e
+  // attrezzature: e' la meta' che oggi manca del tutto. Dalla RELAZIONE
+  // TECNICA dell'ingegnere vengono i materiali delle superfici,
+  // l'aerazione, l'acqua e gli scarichi, che da un disegno non si possono
+  // dedurre — e inventarli vorrebbe dire scrivere nel manuale cose non
+  // vere. Quello che il documento non dice resta marcato DA COMPLETARE,
+  // perche' un buco visibile si chiede al cliente, uno riempito a caso no.
+  const leggiLocali = async (file) => {
+    setPremisesErrore("");
+    setPremisesNota("");
+    if (!file) return;
+    if (file.size > 12 * 1024 * 1024) {
+      setPremisesErrore("File troppo grande (limite 12 MB).");
+      return;
+    }
+    setPremisesBusy(true);
+    try {
+      const { data: b64, media_type } = await fileInBase64(file);
+      const { data, error: err } = await supabase.functions.invoke("clever-responder", {
+        body: { file_base64: b64, media_type, tipo: "locali", company_id: company?.id },
+      });
+      if (err) {
+        // supabase-js nasconde il motivo vero dietro "non-2xx status code":
+        // il messaggio utile sta nel corpo della risposta.
+        let dettaglio = err.message || "Lettura non riuscita";
+        try {
+          const corpo = await err.context?.json?.();
+          if (corpo?.errore) dettaglio = corpo.errore;
+        } catch { /* il corpo non c'era */ }
+        throw new Error(dettaglio);
+      }
+      if (data?.errore) throw new Error(data.errore);
+      const testo = String(data?.descrizione || "").trim();
+      if (!testo) throw new Error("Dal documento non e' stata ricavata nessuna descrizione: scrivila a mano.");
+      setPremises(testo);
+      const mancanti = Array.isArray(data?.mancanti) ? data.mancanti.filter(Boolean) : [];
+      setPremisesNota(mancanti.length
+        ? "Testo proposto. Dal documento non risultano: " + mancanti.join(", ") + ". Nel testo sono segnati DA COMPLETARE: chiedili al cliente, poi salva."
+        : "Testo proposto. Rileggilo, correggilo dove serve e premi Salva.");
+    } catch (e2) {
+      setPremisesErrore("Lettura non riuscita: " + (e2?.message || e2));
+    } finally {
+      setPremisesBusy(false);
+    }
+  };
+
+  const onLocaliFile = async (e) => {
+    const f = e.target.files?.[0] || null;
+    await leggiLocali(f);
+    e.target.value = "";
+  };
+
+  // La planimetria che sta gia' nell'app: quella caricata per il monitoraggio
+  // infestanti e' lo stesso disegno. Farla ricaricare sarebbe chiedere due
+  // volte la stessa cosa.
+  const planimetriaInApp = [...planimetrie]
+    .sort((a, b) => String(b.plan_date || "").localeCompare(String(a.plan_date || "")))
+    .find((x) => x.attachment_path);
+
+  const leggiDallaPlanimetria = async () => {
+    setPremisesErrore("");
+    setPremisesNota("");
+    if (!planimetriaInApp) return;
+    setPremisesBusy(true);
+    try {
+      const url = await getAttachmentUrl(planimetriaInApp.attachment_path);
+      if (!url) throw new Error("La planimetria non e' raggiungibile.");
+      const risposta = await fetch(url);
+      const blob = await risposta.blob();
+      const nome = planimetriaInApp.attachment_path.split("/").pop();
+      setPremisesBusy(false);
+      await leggiLocali(new File([blob], nome, { type: blob.type || "application/pdf" }));
+    } catch (e2) {
+      setPremisesErrore("Lettura non riuscita: " + (e2?.message || e2));
+      setPremisesBusy(false);
+    }
+  };
+
   const onVisuraFile = async (e) => {
     const f = e.target.files?.[0] || null;
     setVisuraErrore("");
@@ -982,6 +1079,58 @@ export default function Configurazione({ onVai, subTabIniziale }) {
             <fieldset className="config-group">
               <legend>Firma del datore di lavoro</legend>
               <ArchivioFirme ambito="azienda" />
+            </fieldset>
+
+            <fieldset className="config-group">
+              <legend>Descrizione dei locali</legend>
+              <p className="sub" style={{ marginTop: 0 }}>
+                Il manuale la stampa in testa al paragrafo 5.2, prima dei requisiti dell'Allegato II
+                del Reg. CE 852/2004: così il documento descrive quello che c'è, e poi dichiara a
+                quali requisiti risponde. Scrivila nello stesso ordine per tutte le aziende:
+                ubicazione e accessi, vani con la loro destinazione, pavimenti pareti e soffitti,
+                illuminazione e aerazione, acqua e scarichi, servizi igienici e spogliatoi, deposito
+                rifiuti, separazione dei percorsi fra crudo e cotto.
+              </p>
+
+              {isConsultant && (
+                <div style={{ margin: "10px 0", padding: "10px 12px", border: "1px solid #E1E5DF", borderRadius: 10, background: "#F7F9F6" }}>
+                  <p className="sub" style={{ margin: 0 }}>
+                    Dalla <strong>relazione tecnica</strong> dell'ingegnere si ricavano superfici,
+                    aerazione, acqua e scarichi; dalla <strong>planimetria</strong> i vani e la loro
+                    destinazione. Puoi caricare l'una, l'altra o tutt'e due: quello che il documento
+                    non dice resta scritto «da completare», non viene inventato.
+                  </p>
+                  <label className="field-label" style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8 }}>
+                    <Paperclip size={14} />
+                    {premisesBusy ? "Lettura in corso…" : "Carica la relazione tecnica o la planimetria (PDF o foto, max 12 MB)"}
+                    <input type="file" accept="application/pdf,image/*" disabled={premisesBusy} onChange={onLocaliFile} />
+                  </label>
+                  {planimetriaInApp && (
+                    <button
+                      type="button" className="link-btn" style={{ marginTop: 6 }}
+                      disabled={premisesBusy}
+                      onClick={leggiDallaPlanimetria}
+                    >
+                      Usa la planimetria già caricata per gli infestanti
+                    </button>
+                  )}
+                  {premisesNota && <p className="sub" style={{ marginTop: 6, color: "#1f6b3a" }}>{premisesNota}</p>}
+                  {premisesErrore && <p className="sub" style={{ marginTop: 6, color: "#a33" }}>{premisesErrore}</p>}
+                </div>
+              )}
+
+              <textarea
+                value={premises}
+                onChange={(e) => setPremises(e.target.value)}
+                disabled={!isConsultant}
+                rows={12}
+                className="full-input"
+                placeholder={"L'attività è ubicata al piano terra di un edificio in via ...\n\nI locali sono così distribuiti: ...\n\nPavimenti e pareti sono ...\n\nL'aerazione è ...\n\nL'acqua proviene da ...\n\nI servizi igienici ...\n\nI rifiuti ...\n\nI percorsi ..."}
+              />
+              <p className="sub" style={{ marginTop: 6 }}>
+                Lasciandola vuota il manuale stampa il 5.2 come prima, con i soli requisiti generali,
+                e la verifica che precede la generazione te lo segnala.
+              </p>
             </fieldset>
 
             <fieldset className="config-group">
