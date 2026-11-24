@@ -402,6 +402,32 @@ export function controlli(dossier) {
   if ((dossier.analisi || []).filter((r) => r.active !== false).length === 0) {
     avvisi.push("Nessun controllo analitico programmato: il capitolo 9 resterebbe senza il programma dell'azienda. Si compila nella scheda Controlli analitici.");
   }
+  // Coerenza fra cicli scelti e dotazione: un ciclo che parla di una
+  // macchina che l'azienda non ha e' la prima cosa che un ispettore nota
+  // (manuale Caffe' Battaglia, novembre 2026: abbattimento e granite senza
+  // abbattitore e granitore fra gli impianti).
+  const attivi = cicliDelManuale(cicli, azienda);
+  const nomiImpianti = impianti.map((u) => String(u.label || "")).join(" | ");
+  const haImpianto = (re) => re.test(nomiImpianti);
+  const REGOLE = [
+    { ciclo: /abbattiment/i, impianto: /abbatt/i, cosa: "l'abbattitore" },
+    { ciclo: /gelat/i, impianto: /gelat|pozzett/i, cosa: "la vetrina o il pozzetto del gelato" },
+    { ciclo: /granit/i, impianto: /granit/i, cosa: "il granitore" },
+    { ciclo: /pasticceria fresca|farcitur/i, impianto: /vetrin|banco|frigo/i, cosa: "una vetrina refrigerata per la pasticceria" },
+  ];
+  attivi.forEach((c) => {
+    REGOLE.forEach((r) => {
+      if (r.ciclo.test(c.name || "") && !haImpianto(r.impianto)) {
+        avvisi.push(`Il ciclo «${c.name}» è nel manuale ma fra gli impianti non c'è ${r.cosa}: censiscilo in Temperature o spegni il ciclo per questa azienda.`);
+      }
+    });
+    if (/tavola calda|rosticceria|mantenimento/i.test(c.name || "") && !impianti.some((u) => Number(u.min_temp) >= 50)) {
+      avvisi.push(`Il ciclo «${c.name}» prevede l'esposizione a caldo, ma nessun impianto ha un intervallo da 60 °C in su: censisci la vetrina calda.`);
+    }
+  });
+  if (!azienda?.codice_ateco) avvisi.push("Manca il codice ATECO: si legge dalla visura e si inserisce in Configurazione.");
+  if (!azienda?.pec) avvisi.push("Manca la PEC dell'azienda: si inserisce in Configurazione.");
+  if ((dossier.dipendenti || []).length === 0) avvisi.push("Nessun addetto censito: nel gruppo di lavoro resterebbe una riga vuota. Si inseriscono in Dipendenti.");
   if (cicli.length === 0) avvisi.push("Il catalogo dei cicli è vuoto per questo settore.");
   if (procedure.length === 0) avvisi.push("Il catalogo delle procedure è vuoto per questo settore.");
   return avvisi;
@@ -773,7 +799,7 @@ export function corpoManuale(dossier) {
   ], [3000, 6360]));
   b.push(par("", { after: 160 }));
   b.push(p("I prodotti preparati hanno una doppia destinazione d'uso: consumo immediato all'interno del locale e vendita da asporto. Per l'asporto il prodotto è confezionato in contenitori idonei al contatto con gli alimenti; il personale informa il cliente che il prodotto è destinato al consumo in tempi brevi e che, se non consumato subito, va conservato in frigorifero."));
-  b.push(p("Ogni preparato che non viene impiegato subito è coperto o riposto in contenitore chiuso e porta un cartellino con la denominazione e la data di produzione. È la regola che tiene in piedi tutto il resto: senza data, un contenitore in frigorifero non si può né usare con fiducia né scartare con ragione, e la decisione finisce per dipendere dall'aspetto e dall'odore. Salvo diversa indicazione scritta nella scheda di lavorazione, i semilavorati si impiegano entro 48 ore dalla preparazione; oltre quel termine si eliminano."));
+  b.push(p("Ogni preparato che non viene impiegato subito è coperto o riposto in contenitore chiuso e porta un cartellino con la denominazione e la data di produzione. Senza l'indicazione della data di produzione non è possibile stabilire se un preparato sia ancora utilizzabile: la decisione non deve mai basarsi sul solo aspetto o odore del prodotto. Salvo diversa indicazione scritta nella scheda di lavorazione, i semilavorati si impiegano entro 48 ore dalla preparazione; oltre quel termine si eliminano."));
   b.push(p(inApp
     ? "Le preparazioni e le etichette si registrano nell'app, che conserva per ogni lotto la data di produzione, gli ingredienti impiegati e i lotti delle materie prime da cui proviene."
     : "Le preparazioni e le etichette si annotano sul modulo cartaceo di produzione, conservato insieme agli altri registri."));
@@ -1267,5 +1293,22 @@ export function corpoManuale(dossier) {
     { italic: true, size: 20 }));
   b.push(p("La redazione tecnica è indicata a fini di tracciabilità del documento: la responsabilità dell'adozione e dell'applicazione del piano di autocontrollo resta in capo all'Operatore del Settore Alimentare.", { italic: true, size: 20 }));
 
-  return b.join("");
+  // Le procedure si numerano per QUESTO manuale, come i cicli.
+  //
+  // In catalogo i codici sono fissi (PRO 01... PRO 21) e alcune procedure
+  // valgono solo per certe aziende: stampandoli cosi' il manuale saltava da
+  // PRO 15 a PRO 19. Qui ogni procedura stampata prende il numero della sua
+  // posizione, e ogni richiamo nel testo segue: un richiamo fra parentesi a
+  // una procedura che in questo manuale non c'e' (es. «(PRO 21)» per la
+  // bonifica del pesce in un bar che non la fa) si toglie.
+  const nuovoCodice = {};
+  procedureAttive.forEach((pr, i) => {
+    const m = /PRO\s*(\d+)/i.exec(pr.code || "");
+    if (m) nuovoCodice[Number(m[1])] = "PRO " + String(i + 1).padStart(2, "0");
+  });
+  return b.join("").replace(/( ?\()?PRO (\d+)(\))?/g, (tutto, apre, n, chiude) => {
+    const nuovo = nuovoCodice[Number(n)];
+    if (nuovo) return (apre || "") + nuovo + (chiude || "");
+    return apre && chiude ? "" : tutto;
+  });
 }
