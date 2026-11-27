@@ -660,7 +660,17 @@ export function corpoManuale(dossier) {
   b.push(h1("2. Premessa e campo di applicazione"));
   b.push(p(`Il presente Manuale di Autocontrollo appartiene a ${azienda.name || "—"} e si applica a tutte le attività di deposito, preparazione, cottura, somministrazione e vendita di alimenti e bevande che si svolgono presso la sede di ${azienda.sede_operativa || "—"}.`));
   b.push(p("Nell'esercizio si svolgono i seguenti cicli di lavorazione:"));
-  cicliAttivi.forEach((c) => b.push(punto(`${c.numero}. ${c.name}` + (c.intro ? " — " + c.intro : ""))));
+  // L'elenco dei cicli, qui, e' un elenco: nome e classificazione.
+  //
+  // Prima stampava anche l'introduzione per esteso di ogni ciclo, la stessa
+  // che il capitolo 7 ripete parola per parola qualche decina di pagine dopo.
+  // Tredici cicli, tredici capoversi scritti due volte: e' la prima causa
+  // della prolissita' del manuale, e una ripetizione non aggiunge sicurezza,
+  // toglie attenzione. Qui si dice che cosa si fa in azienda; perche' e come
+  // lo si controlla sta nel capitolo 7, dove serve.
+  cicliAttivi.forEach((c) => b.push(punto(
+    `${c.numero}. ${c.name}` + (c.classification ? ` — ${c.classification}` : "")
+  )));
   b.push(p("Il manuale è redatto al fine di soddisfare gli obblighi dei Regolamenti comunitari in materia di igiene degli alimenti, e in particolare l'obbligo di predisporre, attuare e mantenere procedure permanenti basate sui principi del sistema HACCP di cui all'art. 5 del Reg. (CE) n. 852/2004."));
   b.push(p("Il titolare si impegna ad acquistare le materie prime esclusivamente da fornitori qualificati e da canali ufficiali, quale prima garanzia di salubrità del prodotto somministrato o venduto."));
   b.push(p("Il manuale non sostituisce il documento di valutazione dei rischi previsto dal D.Lgs. 81/08, che l'impresa redige separatamente.", { italic: true, size: 20 }));
