@@ -593,7 +593,7 @@ export function corpoManuale(dossier) {
   ]));
   b.push(par("", { after: 160 }));
   b.push(h2("Matrice delle revisioni"));
-  b.push(griglia(["Revisione", "Data", "Motivo della revisione", "Redatto", "Resp. HACCP"], [
+  b.push(griglia(["Revisione", "Data", "Motivo della revisione", "Redazione tecnica", "Resp. HACCP"], [
     [revisione.numero || "00", data(revisione.data) || "__/__/____", revisione.motivo || "Prima emissione",
      revisione.redattoDa || azienda.consultant_name || "", azienda.haccp_manager || ""],
     [" ", " ", " ", " ", " "],
